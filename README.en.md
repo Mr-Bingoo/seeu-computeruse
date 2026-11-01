@@ -12,7 +12,7 @@ macOS only (won't run on Windows or Linux)
 
 </div>
 
-<!-- Demo video: to be recorded (writing a note in Notes in the background while the user keeps working). Drag the MP4 here when editing the README on GitHub. -->
+https://github.com/user-attachments/assets/8993eb21-783d-4337-a71e-95238e9f2305
 
 The name comes from CU (Computer Use — letting AI operate a computer), pronounced the same: *see first, then act*.
 

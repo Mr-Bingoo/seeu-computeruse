@@ -12,7 +12,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/8993eb21-783d-4337-a71e-95238e9f2305
+<!-- 演示视频 : 中文版待传。在 GitHub 网页编辑 README,把 MP4 拖进去拿到链接,换掉这一行。 -->
 
 SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思是「先看清，再动手」。
 
