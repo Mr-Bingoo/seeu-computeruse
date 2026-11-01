@@ -4,7 +4,7 @@
 
 A few plain sentences per release: what's new, what changed, and whether you need to do anything. Update with `python3 -m seeu update`; see your version with `python3 -m seeu version`.
 
-## v1.0.0 (unreleased)
+## v1.0.0 (2026-11-02)
 
 First public release.
 
@@ -13,3 +13,4 @@ First public release.
 - **Setup**: MCP and Skill support; `python3 -m seeu install auto` connects Claude, Codex, Cursor, Trae and VS Code in one step.
 - **Hard-coded safety rules**: never touches terminals, passwords or privacy settings, and never submits, pays or sends messages for you.
 - **Mouse borrowing, three modes**: on (default, with a notice) / ask me / off.
+- **macOS only**: Windows and Linux versions are being researched.
