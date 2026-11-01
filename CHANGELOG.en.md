@@ -4,7 +4,7 @@
 
 A few plain sentences per release: what's new, what changed, and whether you need to do anything. Update with `python3 -m seeu update`; see your version with `python3 -m seeu version`.
 
-## v1.0.0 (2026-11-02)
+## v1.0.0 (2026-11-01)
 
 First public release.
 
