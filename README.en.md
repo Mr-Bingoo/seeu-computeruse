@@ -12,7 +12,7 @@ macOS only (won't run on Windows or Linux)
 
 </div>
 
-https://github.com/user-attachments/assets/8993eb21-783d-4337-a71e-95238e9f2305
+https://github.com/user-attachments/assets/e313c2c9-f3df-4547-acc6-54ef6f8462c7
 
 The name comes from CU (Computer Use — letting AI operate a computer), pronounced the same: *see first, then act*.
 
