@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>SeeU 测试 · 注册改密码</title></head>
+<body style="font:15px -apple-system,sans-serif;padding:24px">
+<h2>注册 / 改密码(C-0.5 拦框测试)</h2>
+<p><label>用户名 <input id="u" name="username" placeholder="手机号"></label></p>
+<p><label>密码 <input type="password" name="pw" autocomplete="current-password"></label></p>
+<p><label>新密码 <input type="password" name="newpw" autocomplete="new-password"></label></p>
+<p><label>确认密码 <input type="text" name="pw2"></label>(明文显示的)</p>
+<p><label>短信验证码 <input type="tel" autocomplete="one-time-code"></label> <button id="send">获取验证码</button></p>
+<p><label>图形码 <input name="captcha" placeholder="右图字符"></label></p>
+<p id="out">还没点</p>
+<script>document.getElementById("send").onclick=()=>document.getElementById("out").textContent="点了获取验证码";</script>
+</body></html>

@@ -1,0 +1,23 @@
+<!-- SeeU 小程序图标(11-01 用户在 seeu/参考/小程序图标/预览3.html 定:深色底、箭头 23、反光 0.88、尖端闪光、光晕、不带名牌) -->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d2a40"/><stop offset="1" stop-color="#111017"/></linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="g"><stop offset="0" stop-color="#7F77DD" stop-opacity="1"/><stop offset="1" stop-color="#7F77DD" stop-opacity="0"/></radialGradient>
+    <linearGradient id="s" gradientUnits="userSpaceOnUse" x1="12.5" y1="16.5" x2="0.8" y2="0.6">
+      <stop offset="0.6267" stop-color="#fff" stop-opacity="0"/><stop offset="0.88" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="f"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".35" stop-color="#fff" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <clipPath id="c"><path d="M0.5 1.5 L4 17.5 C4.6 19.8 4.6 19.8 6.2 18.2 L9.2 13.5 L14.8 12.6 C17 12.1 17 12.1 15.3 10.6 L2 0 C0 -0.8 0 -0.8 0.5 1.5 Z"/></clipPath>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-opacity=".25"/></filter>
+    <filter id="as" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx=".3" dy=".6" stdDeviation=".5" flood-color="#000" flood-opacity=".35"/></filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#p)" filter="url(#sh)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#hl)"/>
+  <rect x="101" y="101" width="822" height="822" rx="184" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="3"/>
+  <g transform="translate(318.8 295.8) scale(23)">
+    <circle cx="6" cy="8" r="11.5" fill="url(#g)" opacity="0.6"/>
+    <g filter="url(#as)"><path d="M0.5 1.5 L4 17.5 C4.6 19.8 4.6 19.8 6.2 18.2 L9.2 13.5 L14.8 12.6 C17 12.1 17 12.1 15.3 10.6 L2 0 C0 -0.8 0 -0.8 0.5 1.5 Z" fill="#7F77DD" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></g>
+    <g clip-path="url(#c)"><rect x="-2" y="-2" width="22" height="24" fill="url(#s)"/></g>
+    <circle cx="0.8" cy="0.6" r="3.4" fill="url(#f)"/>
+    <path d="M0.8 -2.6 L1.3 0.1 L4 0.6 L1.3 1.1 L0.8 3.8 L0.3 1.1 L-2.4 0.6 L0.3 0.1Z" fill="#fff"/>
+  </g></svg>

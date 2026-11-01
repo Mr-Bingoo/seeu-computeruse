@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px -apple-system, "PingFang SC", sans-serif; width: 300px; margin: 0; padding: 12px; color: #1f1f1f; }
+  h1 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #aaa; display: inline-block; }
+  .ok { background: #3aa76d; } .bad { background: #e24b4a; }
+  .muted { color: #777; font-size: 12px; }
+  .site { margin: 10px 0; padding: 8px; background: #f3f2ef; border-radius: 8px; word-break: break-all; }
+  button { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+  button.main { background: #7F77DD; border-color: #7F77DD; color: #fff; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; max-height: 160px; overflow: auto; }
+  li { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; gap: 6px; }
+  .foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e3e1db; color: #777; font-size: 11.5px; line-height: 1.6; }
+  .foot a { color: #7F77DD; }
+  li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #2a2a2a; color: #eee; } .site { background: #3a3a3a; } .muted { color: #aaa; }
+    button { background: #333; color: #eee; border-color: #555; }
+  }
+</style>
+</head>
+<body>
+  <h1><span id="dot" class="dot"></span>SeeU 浏览器助手</h1>
+  <div id="status" class="muted">检查连接中…</div>
+  <div class="site">
+    <div class="muted">当前网站</div>
+    <div id="origin">—</div>
+    <div style="margin-top:6px"><button id="toggle" class="main" hidden></button></div>
+  </div>
+  <div class="muted">已允许的网站(SeeU 只能碰这些;Safari 开关那条路也认这份)</div>
+  <ul id="list"></ul>
+  <div class="foot">只和本机 SeeU 通信,不联网上传;只操作你允许的网站。<a href="#" id="privacy">隐私说明</a></div>
+  <script src="popup.js"></script>
+</body>
+</html>

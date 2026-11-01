@@ -1,0 +1,8 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>SeeU 测试 · 每日签到</title></head>
+<body style="font:15px -apple-system,sans-serif;padding:24px">
+<h2>每日签到</h2><p>今日状态:<b id="st">未签到</b></p><p>积分:<b id="pt">100</b></p>
+<button id="b">立即签到</button>
+<script>
+document.getElementById("b").onclick=()=>{document.getElementById("st").textContent="已签到";
+document.getElementById("pt").textContent="110";document.getElementById("b").disabled=true;document.getElementById("b").textContent="今日已签到";};
+</script></body></html>

@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>SeeU 测试 · 打字</title></head>
+<body style="font:15px -apple-system,sans-serif;padding:24px">
+<h2>SeeU 抢键盘测试页</h2>
+<textarea id="t" rows="6" cols="60" placeholder="SeeU 后台往这里打字"></textarea>
+<p id="st"></p>
+<script>
+// 每次按键记一条:键名 + 是不是程序发的(isTrusted 一律 true,分不出来,只记时间和键)
+window.__log = [];
+document.getElementById("t").addEventListener("keydown", e => window.__log.push([Date.now(), e.key]));
+setInterval(() => document.getElementById("st").textContent =
+  "hasFocus=" + document.hasFocus() + " visible=" + document.visibilityState + " 字数=" + document.getElementById("t").value.length, 500);
+</script></body></html>

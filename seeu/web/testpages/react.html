@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>SeeU 测试 · React 表单</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script></head>
+<body style="font:15px -apple-system,sans-serif;padding:24px"><div id="root"></div>
+<script>
+const e=React.createElement;
+function App(){
+  const [name,setName]=React.useState("");const [city,setCity]=React.useState("北京");
+  const [agree,setAgree]=React.useState(false);const [msg,setMsg]=React.useState("");
+  return e("div",null,
+    e("h2",null,"React 受控表单"),
+    e("p",null,e("label",null,"昵称 ",e("input",{value:name,onChange:ev=>setName(ev.target.value),placeholder:"输入昵称"}))),
+    e("p",null,e("label",null,"城市 ",e("select",{value:city,onChange:ev=>setCity(ev.target.value)},["北京","上海","广州"].map(c=>e("option",{key:c},c))))),
+    e("p",null,e("label",null,e("input",{type:"checkbox",checked:agree,onChange:ev=>setAgree(ev.target.checked)})," 我同意")),
+    e("button",{onClick:()=>setMsg("React 收到:昵称="+name+" 城市="+city+" 同意="+agree)},"检查一下"),
+    e("p",{id:"out"},msg));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+</script></body></html>

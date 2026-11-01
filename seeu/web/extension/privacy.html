@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>SeeU 浏览器助手 · 隐私说明</title>
+<style>
+  body { font: 15px/1.75 -apple-system, "PingFang SC", sans-serif; max-width: 680px; margin: 40px auto; padding: 0 16px; color: #1f1f1f; }
+  h1 { font-size: 22px; font-weight: 500; } h2 { font-size: 17px; font-weight: 500; margin-top: 28px; }
+  .muted { color: #666; font-size: 13px; } code { background: #f1efe8; padding: 1px 5px; border-radius: 4px; }
+  @media (prefers-color-scheme: dark) { body { background: #222; color: #eee; } .muted { color: #aaa; } code { background: #333; } }
+</style>
+</head>
+<body>
+<h1>SeeU 浏览器助手 · 隐私说明</h1>
+<p>一句话:插件<b>不联网</b>,只和你电脑上的 SeeU 说话;只碰你<b>允许过的网站</b>;代码<b>全部公开</b>。</p>
+
+<h2>1. 不联网</h2>
+<p>插件不连接任何服务器,不上传、不收集任何数据。它只通过 Chrome 官方的「本机消息」功能,和你电脑上的 SeeU 程序交换消息,
+消息不出你的电脑。别的插件、别的网站都连不上这条通道(只认这个插件的编号)。</p>
+
+<h2>2. 明确的边界:只碰你允许的网站</h2>
+<ul>
+  <li>装好后插件<b>什么网站都碰不了</b>。你在某个网页上点插件图标、选「允许这个网站」,它才能操作这个网站。</li>
+  <li>允许名单随时在插件弹窗里能看、能删。没允许的网站,插件连网址都看不到。</li>
+  <li>要碰一个网站得两关都过:Chrome 自己的权限系统给了授权(只能你亲手点),而且它在 SeeU 的允许名单里。
+      名单就存在你电脑上(<code>~/.seeu/seeu_web/allow.json</code>),Safari 那条路也认同一份;在哪边移除,两边都不碰了。</li>
+</ul>
+
+<h2>3. 不碰的东西</h2>
+<ul>
+  <li>密码框、新密码框、验证码框、银行卡框:不读、不填。改密码、输验证码这一步请你自己来。</li>
+  <li>不替你提交表单、不替你下单付款:要提交,必须由调用它的人明确去点那个按钮。</li>
+  <li>Chrome 自己的设置页、应用商店:Chrome 本身就不许任何插件碰。</li>
+</ul>
+
+<h2>4. 看得见它在干活</h2>
+<p>插件每次替 SeeU 做事,浏览器右上角的图标都会出现一个紫点,几秒后消失。</p>
+
+<h2>5. 代码公开</h2>
+<p>插件、本机中转程序、SeeU 的全部代码都在 SeeU 文件夹里(<code>seeu/web/</code>),开源后在 GitHub 上,谁都可以看。
+不想用了:在 <code>chrome://extensions</code> 里移除插件,再运行 <code>python3 -m seeu.web.install uninstall</code> 撤销本机登记。</p>
+
+<p class="muted">SeeU · @Mr_Bingoo</p>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "SeeU 浏览器助手",
+  "version": "0.1.0",
+  "description": "让本机的 SeeU 在你允许的网站上后台读网页、点按钮、填表。只跟本机程序通信,不联网上传。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt4zBdFBlW8bSq/3ChakJcSaksMMcC7QVtdCMRdPrBpqmG6ovSoUdj7fCoT6leArSi6Plw+X431mpDRoganQSW7x3v5Mzl5OL2xztWxv6Bo4H4XEHma5GrHBRJxh8dQQMEAADBqimst1/yDLZf4weCoQokViGw0XBT9yqBLAPhqCmqcS8i89EJXny4VRUf9SEU6hfjEu+PiiuFLBB+/ZZIhFPT7R6pskRc7+THluqESLj5RaWkRLgrTAQZb9sOy0UUDF2CYvGpdjkSZ8CkPE2R/tlYr884tNJbEPcmI1MPxdGnJDbO6PZClpu5Y+GaEjewrF9xNLr25ob01sLVjxuIwIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "scripting",
+    "storage",
+    "activeTab"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "SeeU",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "minimum_chrome_version": "116"
+}
