@@ -12,7 +12,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/3d0603b8-7cf2-4c57-82be-97ff768e5289
+https://github.com/user-attachments/assets/1f2ebec2-cc0f-4bc9-a2b4-63e60c1cb8c9
 
 SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思是「先看清，再动手」。
 
