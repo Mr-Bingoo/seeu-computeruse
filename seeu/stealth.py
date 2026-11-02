@@ -22,7 +22,7 @@
 - 藏用 System Events `set visible false`;`NSRunningApplication.hide()` 对 Chrome 没用。
 - 打字前自检只在能问到时才拦(开关没开 = 问不到 = 照常打,记在 last_check)。
 """
-import os, subprocess, sys, time
+import json, os, subprocess, sys, time
 from dataclasses import dataclass
 from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
@@ -185,7 +185,7 @@ def safe_type(h, text, **kw):
     ok, why = precheck(h)
     if not ok:
         todo = {"front": "等你离开浏览器再继续", "visible": "把它藏回去(stealth.hide)再继续", "no_focus": "先点输入框(bgclick.tap)再打",
-                "called_out": "运行 python3 -m seeu.stealth restart %s 重开" % _short(h.app)}.get(why, "")
+                "called_out": "跟 AI 说一声就能重开(也可以终端 python3 -m seeu.stealth restart %s)" % _short(h.app)}.get(why, "")
         raise StealthStop(f"卡在:往 {h.app} 打字前 原因:{last_check['note']}。怎么办:{todo}")
     from seeu import bgclick as bg
     bg.focus_without_raise(h.pid, h.wid)
@@ -271,12 +271,41 @@ class pause:
         return False
 
 
+CALLED_FILE = home("seeu_called_out.json")    # 11-02:被叫出来记一笔;AI 代重开只认这里记过的(防关掉用户自己开的浏览器)
+
+
+def mark_called(app, on=True):
+    try:
+        d = json.load(open(CALLED_FILE, encoding="utf-8")) if os.path.exists(CALLED_FILE) else {}
+    except Exception:
+        d = {}
+    if on:
+        d[app] = time.time()
+    else:
+        d.pop(app, None)
+    try:
+        with open(CALLED_FILE + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False)
+        os.replace(CALLED_FILE + ".tmp", CALLED_FILE)
+    except Exception:
+        pass
+
+
+def was_called_out(app, hours=24):
+    try:
+        t = json.load(open(CALLED_FILE, encoding="utf-8")).get(app)
+    except Exception:
+        return False
+    return bool(t) and time.time() - t < hours * 3600
+
+
 def _called_out(h):
     """记下被叫出来 → bgclick/bgkey 停手;卡片 + 提示条;后台取证。"""
     from seeu import bgclick as bg
     bg.CALLED_OUT[h.pid] = (h.app, time.time())
+    mark_called(h.app)
     cmd = getattr(h, "restart_cmd", "") or f"python3 -m seeu.stealth restart {_short(h.app)}"   # 调试端口那份(VS Code 等)有自己的重开命令
-    todo = f"SeeU 已停手。你看完后运行 {cmd} 重开" + ("(标签照原样开回来)" if "stealth" in cmd else "")
+    todo = f"SeeU 已停手。你看完后跟 AI 说一声就能重开" + ("(标签照原样开回来)" if "stealth" in cmd else "") + f";也可以终端 {cmd}"
     try:
         from seeu import isee
         isee.stuck(h.app, "隐身干活", f"{h.app} 被叫到桌面上了(藏回去也会抢你的键盘)", todo=todo)
@@ -297,7 +326,7 @@ def adopt(browser="Safari", watch=True):
     if not _running(app):
         raise RuntimeError(f"{app} 没开着,用 stealth.launch 拉起")
     if not is_hidden(app):
-        raise StealthStop(f"{app} 现在露在桌面上,不是隐身状态;要隐身干活先运行 python3 -m seeu.stealth restart {_short(app)}")
+        raise StealthStop(f"{app} 现在露在桌面上,不是隐身状态;要隐身干活先重开(跟 AI 说一声,或终端 python3 -m seeu.stealth restart {_short(app)})")
     mw = bg.main_window(app)
     if not mw:
         raise RuntimeError(f"{app} 开着但找不到窗口(没开页面?)")
@@ -363,6 +392,7 @@ def restart(target="Safari", urls=None):
             raise RuntimeError(f"{app} {QUIT_WAIT_S} 秒没退出(可能弹了「要不要关掉 N 个标签」之类的框),请手动退出后再运行一次")
     for pid in [p for p, v in bg.CALLED_OUT.items() if v[0] == app]:
         bg.CALLED_OUT.pop(pid, None)
+    mark_called(app, False)
     h = launch(app, first, watch=False)
     rest = [u for u in urls if u != first]
     if rest:

@@ -180,6 +180,12 @@ def suggestion(app, hard=False):
     return unlock(app) if hard else None
 
 
+def allow_how(o):
+    """不在允许名单时怎么办(11-02 用户定:先让 AI 在聊天里问、答应了 AI 自己加;终端命令放后面当后备)。
+    MCP 按里面的「seeu allow 网址」认出网站,提示 AI 去问用户。"""
+    return f"把这个网站加进 SeeU 允许名单(AI 问你时答应就行;也可以终端 python3 -m seeu allow {o or '网址'})"
+
+
 def unlock(app, url=None):
     """这一步辅助功能做不到时,开什么能做。返回一句话;Firefox 这类没有增强路的照实说。"""
     n = _name(app)
@@ -187,7 +193,7 @@ def unlock(app, url=None):
         st = aejs.state(n)
         if st == "on":
             if url and not aejs.is_allowed(url) and not isee.active():
-                return f"把这个网站加进 SeeU 允许名单(python3 -m seeu allow {aejs.origin(url) or '网址'}),或开 I See 模式"
+                return allow_how(aejs.origin(url)) + ",或开 I See 模式"
             return None
         if st == "denied":
             return "系统设置 → 隐私与安全性 → 自动化 里允许控制 Safari"
@@ -195,11 +201,11 @@ def unlock(app, url=None):
     if n in CHROMIUM:
         parts = []
         if not plugin_ready(app):
-            parts.append(f"装 SeeU 插件({PRIVACY};安装:python3 -m seeu.web.install)")
+            parts.append(f"装 SeeU 插件({PRIVACY};跟 AI 说一声它来装,也可以终端 python3 -m seeu.web.install)")
         if aejs.supported(n) and aejs.state(n) != "on":
             parts.append("或打开 Chrome 开关:" + aejs.howto(n))
         elif aejs.supported(n) and url and not aejs.is_allowed(url) and not isee.active():
-            parts.append(f"或把这个网站加进 SeeU 允许名单(python3 -m seeu allow {aejs.origin(url) or '网址'})")
+            parts.append("或" + allow_how(aejs.origin(url)))
         return ";".join(parts) or None
     return f"{n} 只能走辅助功能;换 Safari 或 Chrome 打开这个网页能做"
 
@@ -221,7 +227,7 @@ def _explain(ex, step, app):
     if todo is None and code == "not_allowed_ae" and _cdp(app):     # SeeU 专用那份(调试端口):只差名单
         import re as _re
         o = _re.search(r"((?:https?|file)://[^)\s)]*)", str(ex))
-        todo = f"把这个网站加进 SeeU 允许名单(python3 -m seeu allow {o.group(1) if o else '网址'}),或开 I See 模式"
+        todo = allow_how(o.group(1) if o else None) + ",或开 I See 模式"
     if todo is None:     # 读不到 / 做不到 / 不支持:说开什么能做;都不行就只能人来
         u = unlock(app, ((_last.get(app) or {}).get("url")))
         if u:
@@ -296,7 +302,7 @@ def see(app, tab=None, max_items=400):
             elif tab is None:
                 o = aejs.origin(t["url"])
                 note = (note + ";" if note else "") + (
-                    f"这个网站({o})不在 SeeU 允许名单里,开关那条路没用,改用辅助功能(要用开关:python3 -m seeu allow {o})"
+                    f"这个网站({o})不在 SeeU 允许名单里,开关那条路没用,改用辅助功能(要用开关:{allow_how(o)})"
                     if o else f"当前标签是浏览器自己的页面({t['url']},如起始页),开关那条路不读")
             else:
                 ex = WebError(f"这个网站({aejs.origin(t['url'])})不在 SeeU 允许名单里,开关那条路不碰", "not_allowed_ae")
@@ -417,7 +423,11 @@ def _stuck(app, step, r):
     why = reason.split("原因:", 1)[-1].split("。怎么办:")[0] if "原因:" in reason else reason
     todo = reason.split("怎么办:", 1)[-1] if "怎么办:" in reason else (r.get("unlock") or "这一步你自己来")
     helps = r.get("code") in ("not_allowed", "not_allowed_ae") or "I See" in (r.get("unlock") or "")
-    if helps:
+    if r.get("code") == "not_allowed_ae":     # 11-02:加名单比开 I See 安全,先说这个
+        todo = "回对话里答应 AI 把这个网站加进名单;或点上面的「I See」"
+    elif r.get("code") == "not_allowed":
+        todo = "在网页上点 SeeU 图标「允许这个网站」;或点上面的「I See」"
+    elif helps:
         todo = "点上面的「I See」,开了会自动换别的路再试"
     try:
         from seeu_lib import watch_window as ww
@@ -631,7 +641,24 @@ def _wait_screen_free(timeout=60):
 
 
 def open(app, url, active=False, timeout=20):
-    """后台开一个标签页(active=False 不切过去),等加载完。返回 {id, allowed, loaded}。"""
+    """后台开一个标签页(active=False 不切过去),等加载完。返回 {id, allowed, loaded}。
+    11-02 用户定:网站不在名单、AI 要回对话里问用户时,悬浮窗展开卡片写「等你答应」(下一步动作会自动清掉)。"""
+    r = _open(app, url, active, timeout)
+    if r.get("allowed") is False and r.get("route") in ("开关", "调试端口"):
+        try:
+            from seeu_lib import watch_window as ww
+            from seeu.i18n import lang
+            o = aejs.origin(url) or url
+            if lang() == "en":
+                ww.stuck(_name(app), "Open tab", f"{o} isn't on SeeU's allow list", "Say yes in the chat to let the AI add it", False)
+            else:
+                ww.stuck(_name(app), "开标签页", f"{o} 不在 SeeU 允许名单里", "回对话里答应 AI 把它加进名单", False)
+        except Exception:
+            pass
+    return r
+
+
+def _open(app, url, active=False, timeout=20):
     h = _cdp(app)
     if h:                               # 调试端口:后台建标签,不露窗口
         from seeu import cdp
@@ -656,8 +683,15 @@ def open(app, url, active=False, timeout=20):
         loaded = aejs.wait_loaded(n, tid, timeout)
         _last.pop(app, None)
         return dict(id=tid, allowed=isee.active() or aejs.is_allowed(url), loaded=loaded, route="开关")
-    import subprocess
-    subprocess.run(["open", "-g", "-a", n, url], check=False)
+    aejs.open_bg(n, url)                # 浏览器没开着:冷启动会抢前台,抢了就切回去(11-02 用户实测)
+    if n in aejs.SAFARI and _ae_on(app):   # 刚拉起来开关才查得到:接着按开关那条路给标签编号
+        try:
+            cur = aejs.current(n)
+            loaded = aejs.wait_loaded(n, cur["id"], timeout)
+            return dict(id=cur["id"], allowed=isee.active() or aejs.is_allowed(url), loaded=loaded, route="开关")
+        except aejs.AEError:
+            pass
+    aejs.show(n)                        # 开关走不了:辅助功能要看得见窗口,放出来(不抢前台)
     return dict(id=None, allowed=None, loaded=None, note="没有插件和开关:用系统命令后台打开,读的时候要它在前面那个标签页")
 
 

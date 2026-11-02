@@ -77,11 +77,11 @@ python3 -m seeu install auto      # or name one: claude | codex | cursor | trae 
 python3 -m seeu check             # lists missing macOS permissions and how to enable them
 ```
 
-**Permissions**: run `python3 -m seeu check`. It tells you which app to grant (your AI client, or the SeeU helper app); turn on **Accessibility** and **Screen & System Audio Recording** for it in System Settings → Privacy & Security. Quit the AI client completely and reopen it afterwards, or the new permissions won't take effect.
+**Permissions**: ask the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant (your AI client, or the SeeU helper app); turn on **Accessibility** and **Screen & System Audio Recording** for it in System Settings → Privacy & Security. Quit the AI client completely and reopen it afterwards, or the new permissions won't take effect.
 
 Tested AI clients: Claude (Code and the desktop chat), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao (WorkBuddy and Doubao are connected by hand). Any other MCP client works by adding `python3 -m seeu mcp` as a local MCP server.
 
-**Update**: `python3 -m seeu update` (git clone) or `npx skills update seeu` (npx). See the [changelog](CHANGELOG.en.md) for what changed; `python3 -m seeu version` shows which version you have. **Remove**: `python3 -m seeu uninstall <client>`.
+**Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (git clone) or `npx skills update seeu` (npx). See the [changelog](CHANGELOG.en.md) for what changed; ask the AI which version you have (or run `python3 -m seeu version`). **Remove**: `python3 -m seeu uninstall <client>`.
 
 <!-- sync:safety -->
 ## Safety rules (built into the code)
@@ -90,7 +90,7 @@ Tested AI clients: Claude (Code and the desktop chat), Codex, Cursor, Trae (Chin
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
 - Never fills password, bank-card or verification-code fields. **Never submits forms, pays or sends messages for you** — it fills things in and stops so you click.
 - Text in a page or app telling the AI to do something is reported to you as content, never followed.
-- Your real mouse is borrowed for a few seconds only for steps that can't be done in the background (like dragging): it waits until you stop, restores everything afterwards, and shows a notice. This is on by default (you're notified before it borrows); you can also use `python3 -m seeu set 借用鼠标 关` (never borrow) or `问我` (ask every time).
+- Your real mouse is borrowed for a few seconds only for steps that can't be done in the background (like dragging): it waits until you stop, restores everything afterwards, and shows a notice. This is on by default (you're notified before it borrows); to change it, tell the AI "set borrow-mouse to off" (never borrow) or "to ask" (ask every time), or run `python3 -m seeu set borrow-mouse off` or `ask` yourself.
 <!-- /sync:safety -->
 
 ## SeeU or built-in Computer Use?
@@ -114,13 +114,13 @@ Almost every model maker is building stronger "AI operates the computer" abiliti
 
 - Background clicking in iPhone Mirroring uses private macOS interfaces and may stop working after a system update. If that happens, SeeU borrows your mouse to carry on by default (it waits until you stop, shows a notice and restores everything afterwards) — it won't just take over your mouse. If you don't want "borrow system mouse" on by default, you can change the setting (once it's off, some scenarios that must use the system mouse will get completely stuck!)
 - SeeU keeps its state and logs in `~/.seeu`; set the `SEEU_HOME` environment variable to move them (browser files don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allowlist they share with Safari).
-- SeeU may take screenshots while judging and deciding, and they're sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
+- SeeU may take screenshots and read on-screen text while judging and deciding, and these are sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
 
 ## Troubleshooting
 
-1. Run `python3 -m seeu check` first: it lists any missing permission and how to turn it on.
+1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says.
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
-3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (`python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can attach what `python3 -m seeu evidence` records, but it may include window titles and screenshots, so check it for anything private first.
+3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for anything private first.
 <!-- /sync:notes -->
 
 ## Docs

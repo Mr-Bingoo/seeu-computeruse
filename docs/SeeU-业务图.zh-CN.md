@@ -349,7 +349,7 @@ stateDiagram-v2
   Island --> Badge: 只剩一个
   note right of Badge
     任何时候只写「SeeU」
-    圆点颜色 = 你设的颜色,呼吸 = 在干活
+    圆点颜色 = 你设置的颜色,呼吸 = 在干活
   end note
   note left of Win
     AI 在用时:「正在…」下面灰字写原因
@@ -368,7 +368,7 @@ stateDiagram-v2
   Off: 关
   On: 开
   [*] --> Off
-  Off --> On: 你亲手点悬浮窗按钮(SeeU 不点自己)/ 跟 AI 说「开 I See」/ 命令行打开
+  Off --> On: 你亲手点悬浮窗按钮(SeeU 不点自己,AI 不替你开)/ 你自己用命令行打开
   On --> Off: 你关掉
   On --> Off: 默认 24 小时到期自动关(浏览器额外权限还开着就提醒你关)
   state On {

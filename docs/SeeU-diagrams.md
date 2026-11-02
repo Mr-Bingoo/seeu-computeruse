@@ -368,7 +368,7 @@ stateDiagram-v2
   Off: Off
   On: On
   [*] --> Off
-  Off --> On: You click the floating window button yourself (SeeU never clicks its own) / tell the AI "turn on I See" / turn it on from the command line
+  Off --> On: You click the floating window button yourself (SeeU never clicks its own; the AI won't turn it on for you) / you turn it on from the command line
   On --> Off: You turn it off
   On --> Off: Turns off automatically after 24 h by default (reminds you if the browser's extra permission is still on)
   state On {

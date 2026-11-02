@@ -298,8 +298,7 @@ def open_tab(app, url):
     Chrome:用 open -g(AppleScript 开会抢前台切桌面);开完前台被换了就切回去。"""
     if app in SAFARI:
         if not tabs(app):
-            subprocess.run(["open", "-g", "-a", app, url], check=False)
-            time.sleep(1.5)
+            open_bg(app, url, 1.5)
             return current(app)["id"]
         s = (f'on run argv\ntell application "{app}" to tell window 1\nset t to make new tab at end of tabs with '
              f'properties {{URL:item 1 of argv}}\nreturn ((id of it) as text) & ":" & ((count of tabs) as text)\nend tell\nend run')
@@ -316,24 +315,76 @@ def open_tab(app, url):
             new = None
         if new:
             break
-    _restore_front(front)
+    _restore_front(front, app)
     if not new:
         raise AEError("开了网址,但没找到新标签页", "no_tab")
     return new
 
 
 def _frontmost():
+    """11-02 实测:没有事件循环的进程(MCP 服务、命令行)里 frontmostApplication 会卡在旧值,先转一下事件循环再读。"""
     try:
         import AppKit
+        AppKit.NSRunLoop.currentRunLoop().runUntilDate_(AppKit.NSDate.dateWithTimeIntervalSinceNow_(0.01))
         return AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
     except Exception:
         return None
 
 
-def _restore_front(app_obj):
-    """前台被浏览器抢了就还给原来的 App(桌面会跟着切回去)。"""
+def open_bg(app, url, watch_s=3.0):
+    """用 open -g 在后台开网址。11-02 用户实测:浏览器没开着时冷启动,前台程序虽没换,新窗口却被摆在当前窗口正下方、
+    压住其他所有窗口,看着就是「跳到前台」→ 没开着就 -j 隐藏启动(同 ⌘H);开关那条路隐藏着也能干活,
+    走不了开关的由调用方 show() 放出来。另外盯 watch_s 秒,前台真被浏览器抢了就还给原来的 App。"""
+    front = _frontmost()
+    cold = not running(app)
+    bare = cold or not _shown_windows(app)      # 开着但一个窗口都没露:新窗口一样会压住别的窗口
+    subprocess.run(["open", "-g"] + (["-j"] if cold else []) + ["-a", app, url], check=False)
+    t0 = time.time()
+    while time.time() - t0 < watch_s:
+        time.sleep(0.25)
+        _restore_front(front, app)
+    fr = _frontmost()
+    if bare and (fr is None or fr.localizedName() != app):
+        hide(app)
+
+
+def _shown_windows(app):
+    try:
+        import Quartz
+        ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements, 0)
+        return sum(1 for w in ws if w.get("kCGWindowOwnerName") == app and w.get("kCGWindowLayer") == 0)
+    except Exception:
+        return 1                                # 查不到就当露着,不去藏
+
+
+def hide(app):
+    try:
+        import AppKit
+        for a in AppKit.NSWorkspace.sharedWorkspace().runningApplications():
+            if a.localizedName() == app and not a.isHidden():
+                a.hide()
+    except Exception:
+        pass
+
+
+def show(app):
+    """把隐藏着的浏览器放出来,不抢前台(辅助功能那条路要看得见窗口)。"""
+    try:
+        import AppKit
+        for a in AppKit.NSWorkspace.sharedWorkspace().runningApplications():
+            if a.localizedName() == app and a.isHidden():
+                a.unhide()
+    except Exception:
+        pass
+
+
+def _restore_front(app_obj, thief=None):
+    """前台被浏览器抢了就还给原来的 App(桌面会跟着切回去)。
+    thief = 浏览器名:只有抢到前台的正是它才切回去(11-02:用户这几秒里自己切了别的程序,不能把人拽回去)。"""
     try:
         now = _frontmost()
+        if thief and (now is None or now.localizedName() != thief):
+            return
         if app_obj is not None and now is not None and now.processIdentifier() != app_obj.processIdentifier():
             app_obj.activateWithOptions_(0)
     except Exception:

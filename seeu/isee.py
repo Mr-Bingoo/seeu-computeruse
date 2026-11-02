@@ -6,7 +6,7 @@
   这些不中途停,记成「跳过」,报告里统一列。
 
 开法(三种,任选):
-  设置文件 seeu/设置.json 里 "I See" 写 "开"(底层存储,AI 帮你开也是改这里)
+  设置文件 seeu/设置.json 里 "I See" 写 "开"(底层存储;11-02 起只让用户自己开(悬浮窗 I See 按钮),AI 只能关)
   命令:python3 -m seeu isee on [小时]   /  off  /  status  /  report
   定时任务:环境变量 SEEU_ISEE=1(只管这一个进程,优先于设置文件;=0 强制关)
 默认 24 小时后自动失效(设置文件里 "I See 到期")。到期后第一次用 SeeU 会弹提示条提醒关浏览器开关。
@@ -38,7 +38,7 @@ MAX_TRIES, MAX_SECS = 3, 60          # 每个卡点最多换几条路、最多�
 _PANE = "x-apple.systempreferences:com.apple.preference.security?"
 # 卡住时「怎么办」只能从这里给:SeeU 自己要用的东西。(名字, 怎么做, 能直接打开的设置页 或 None)
 FIXES = {
-    "plugin": ("装 SeeU 浏览器插件", "python3 -m seeu.web.install,装完在网页上点浏览器右上角的 SeeU 图标「允许这个网站」", None),
+    "plugin": ("装 SeeU 浏览器插件", "跟 AI 说一声它来装(也可以终端 python3 -m seeu.web.install),装完在网页上点浏览器右上角的 SeeU 图标「允许这个网站」", None),
     "aejs_safari": ("打开 Safari 开关", "Safari 菜单 → 设置 → 高级 → 勾「显示网页开发者功能」;再到 开发 菜单 → 勾「允许来自 Apple 事件的 JavaScript」", None),
     "aejs_chrome": ("打开 Chrome 开关", "Chrome 菜单 查看 → 开发者 → 勾「允许 Apple 事件中的 JavaScript」", None),
     "accessibility": ("给辅助功能授权", "系统设置 → 隐私与安全性 → 辅助功能 → 打开运行 SeeU 的程序(终端 / Claude)", _PANE + "Privacy_Accessibility"),
@@ -270,8 +270,40 @@ def _expired_notice():
         pass
 
 
+AI_PROCS = ("claude", "codex", "cursor", "trae", "windsurf", "gemini", "workbuddy", "doubao", "copilot", "aider", "opencode")
+
+
+def from_ai():
+    """11-02:这条命令是不是 AI 客户端在跑(父进程链里有 AI 客户端,或 Claude Code 的环境变量)。"""
+    if os.environ.get("CLAUDECODE") or os.environ.get("CODEX_SANDBOX") or os.environ.get("CURSOR_TRACE_ID"):
+        return True
+    import subprocess
+    pid = os.getppid()
+    for _ in range(20):
+        try:
+            out = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], capture_output=True, text=True, timeout=3).stdout.strip()
+        except Exception:
+            return False
+        if not out:
+            return False
+        ppid, comm = out.split(None, 1)
+        name = comm.lower()
+        if any(k in os.path.basename(name) or f"/{k}" in name for k in AI_PROCS) or "visual studio code" in name:
+            return True
+        if ppid in ("0", "1"):
+            return False
+        pid = int(ppid)
+    return False
+
+
 def main(argv):
     cmd = argv[0] if argv else "status"
+    if cmd == "on" and from_ai():
+        from seeu.i18n import lang
+        print("Only you can turn on I See: click the I See button on the SeeU overlay (or run this in the macOS Terminal app). "
+              "The AI can't turn it on for you." if lang() == "en" else
+              "I See 只能你自己开:点 SeeU 悬浮窗上的「I See」按钮(或在系统自带的「终端」里运行这条命令)。AI 不能替你开。")
+        sys.exit(3)
     if cmd == "on":
         hours = float(argv[1]) if len(argv) > 1 else DEFAULT_HOURS
         res = on(hours)

@@ -459,6 +459,8 @@ def real_allowed(allow=None):
 
 
 SETTABLE = {"借用鼠标": {"开": "开", "on": "开", "问我": "问我", "ask": "问我", "关": "关", "off": "关"}}
+SET_ALIAS = {"borrow-mouse": "借用鼠标"}     # 11-02:英文文档写 set borrow-mouse on|ask|off,设置.json 里照旧存中文
+EN_VAL = {"开": "on", "问我": "ask", "关": "off"}
 
 
 def settings_cmd(args):
@@ -466,10 +468,12 @@ def settings_cmd(args):
     from seeu.i18n import lang
     en = lang() == "en"
     if not args:
-        print(("Borrow mouse" if en else "借用鼠标") + f": {_settings().get('借用鼠标') or '开'}  (开 = on / 问我 = ask / 关 = off)")
+        v = _settings().get('借用鼠标') or '开'
+        print(f"borrow-mouse: {EN_VAL[v]}  (on / ask / off)" if en else f"借用鼠标: {v}  (开 = on / 问我 = ask / 关 = off)")
         return 0
+    args = [SET_ALIAS.get(args[0].lower(), args[0])] + list(args[1:])
     if len(args) != 2 or args[0] not in SETTABLE or args[1].lower() not in SETTABLE[args[0]]:
-        print("Usage: python3 -m seeu set 借用鼠标 开|问我|关" if en else "用法:python3 -m seeu 设置 借用鼠标 开|问我|关")
+        print("Usage: python3 -m seeu set borrow-mouse on|ask|off" if en else "用法:python3 -m seeu 设置 借用鼠标 开|问我|关")
         return 2
     import json
     from collections import OrderedDict
@@ -481,7 +485,7 @@ def settings_cmd(args):
         json.dump(d, f, ensure_ascii=False, indent=2)
         f.write("\n")
     os.replace(tmp, _SETTINGS)
-    print(("Set: 借用鼠标 = " if en else "已改:借用鼠标 = ") + d[args[0]])
+    print(f"Set: borrow-mouse = {EN_VAL[d[args[0]]]}" if en else "已改:借用鼠标 = " + d[args[0]])
     return 0
 
 

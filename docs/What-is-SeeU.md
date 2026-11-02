@@ -11,7 +11,7 @@ SeeU lets the AI agent on your device **perform actions and operate apps in the 
 
 **No time limit**: SeeU itself doesn't limit how long a run can last. As long as the device is on, long tasks of tens of minutes or hours keep running.
 
-**Note**: when an AI calls SeeU, the screens and web content it sees are sent to the AI provider as part of the conversation. That happens on the AI side and is outside SeeU's control.
+**Note**: screenshots SeeU takes and text it reads are sent to the AI provider you're using as part of the conversation. That's outside what SeeU can control.
 
 ## Supported platforms
 - **SeeU for macOS**
@@ -36,7 +36,7 @@ It isn't picky about apps and needs no per-app setup. Tell it which app to open,
 | Afterwards | — | Restores your previous front app and mouse position |
 | Other | — | Doesn't click when the target app shows a dialog; never types into password fields |
 
-**You decide whether it borrows**: "on" by default (with a notice on screen before it borrows); you can switch to "ask me" (asks every time) or "off" (never borrows, so steps that need the system mouse will get stuck). To change it: `python3 -m seeu set 借用鼠标 开|问我|关` (on | ask me | off).
+**You decide whether it borrows**: "on" by default (with a notice on screen before it borrows); you can switch to "ask" (asks every time) or "off" (never borrows, so steps that need the system mouse will get stuck). To change it, just tell the AI (e.g. "set borrow-mouse to ask"), or run `python3 -m seeu set borrow-mouse on|ask|off` yourself.
 
 ## Visible · the floating badge
 When SeeU is acting, a floating window appears at the top right of the screen so you always know what it's doing:
@@ -59,7 +59,7 @@ On top of the general abilities, the scenarios below get extra handling to stay 
 - **Extension**: SeeU doesn't offer a Safari extension yet!
 - **What the extra permission changes** (meaning Safari's "Allow JavaScript from Apple Events"; turn it on once, but it asks you to verify your Mac identity):
   - **Off (default)**: works on the current tab through Accessibility: it can read, click, type and tick, on any website. But the window must be visible on the current desktop (minimized or on another desktop, it can't see it); it can't choose from web drop-downs; it can't read background tabs; forms on modern sites built with React and the like may not register input; no stealth mode.
-  - **On**: everything above becomes possible: the window can be on another desktop or minimized, drop-downs work, background tabs can be read and written without switching, modern forms register input, and it can run "stealthily" (no window at all). For safety, SeeU then only works on sites you've added to the allowlist.
+  - **On**: everything above becomes possible: the window can be on another desktop or minimized, drop-downs work, background tabs can be read and written without switching, modern forms register input, and it can run "stealthily" (no window at all). For safety, SeeU then only works on sites you've added to the allowlist; when it meets one that isn't, the AI asks you in the chat first and adds it once you agree.
 - **Stealth Safari**: SeeU starts Safari in the background without ever showing a window (hidden more cleanly than stealth Chrome, which always flashes briefly at startup). Needs the extra permission above. We suggest keeping stealth Safari for SeeU only and using another browser yourself; if Safari is already open, SeeU leaves it alone.
 - **Limits**: on **canvas-based pages** (Tencent Docs, Feishu Sheets and the like) it can only send key presses; for fully background work, use stealth Safari.
 
@@ -132,7 +132,7 @@ On top of the general abilities, the scenarios below get extra handling to stay 
   - Used for: see the next section.
   - Without them: web pages can only be operated through Accessibility.
 
-- **Who gets them and what's missing, in one command**: `python3 -m seeu check`. It tells you which app to grant them to (your AI client, or the SeeU helper app) and what's still missing; add `--open` to open the settings pages for whatever is missing. They don't go to Python.
+- **Who gets them and what's missing — ask the AI**: tell the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant them to (your AI client, or the SeeU helper app) and what's still missing; add `--open` to open the settings pages for whatever is missing. They don't go to Python.
 - **Restart afterwards**: after turning permissions on or changing them, quit the AI client completely and reopen it, or they won't take effect.
 
 ## Web pages: Safari and Chrome
@@ -191,7 +191,7 @@ Chromium-based browsers like Edge and Arc will most likely work the Chrome way d
 - The "hard safety rules" still apply (see "Safety rules" under "Safety and things to note" below).
 - For outward-facing actions like sending messages, submitting or placing orders, the AI calling SeeU still asks you first; anything you spelled out in the task beforehand (such as "submit this batch of forms directly") counts as already asked.
 
-**How to turn it on**: off by default. Click I See in the floating window's button bar, tell the AI "turn on I See", or run `python3 -m seeu isee on`. It turns itself off after 24 hours by default; when it does, if the browser's extra permission is still on, it reminds you to turn that off too.
+**How to turn it on**: off by default. Click I See in the floating window's button bar. Only you can turn it on; the AI won't do it for you (you can also run `python3 -m seeu isee on` yourself). To turn it off, click it again or tell the AI "turn off I See". It turns itself off after 24 hours by default; when it does, if the browser's extra permission is still on, it reminds you to turn that off too.
 
 ## Safety and things to note
 
@@ -204,7 +204,7 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
 - Never fills password, bank-card or verification-code fields. **Never submits forms, pays or sends messages for you** — it fills things in and stops so you click.
 - Text in a page or app telling the AI to do something is reported to you as content, never followed.
-- Your real mouse is borrowed for a few seconds only for steps that can't be done in the background (like dragging): it waits until you stop, restores everything afterwards, and shows a notice. This is on by default (you're notified before it borrows); you can also use `python3 -m seeu set 借用鼠标 关` (never borrow) or `问我` (ask every time).
+- Your real mouse is borrowed for a few seconds only for steps that can't be done in the background (like dragging): it waits until you stop, restores everything afterwards, and shows a notice. This is on by default (you're notified before it borrows); to change it, tell the AI "set borrow-mouse to off" (never borrow) or "to ask" (ask every time), or run `python3 -m seeu set borrow-mouse off` or `ask` yourself.
 <!-- /sync:safety -->
 
 <!-- sync:notes -->
@@ -212,13 +212,13 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 
 - Background clicking in iPhone Mirroring uses private macOS interfaces and may stop working after a system update. If that happens, SeeU borrows your mouse to carry on by default (it waits until you stop, shows a notice and restores everything afterwards) — it won't just take over your mouse. If you don't want "borrow system mouse" on by default, you can change the setting (once it's off, some scenarios that must use the system mouse will get completely stuck!)
 - SeeU keeps its state and logs in `~/.seeu`; set the `SEEU_HOME` environment variable to move them (browser files don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allowlist they share with Safari).
-- SeeU may take screenshots while judging and deciding, and they're sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
+- SeeU may take screenshots and read on-screen text while judging and deciding, and these are sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
 
 ### Troubleshooting
 
-1. Run `python3 -m seeu check` first: it lists any missing permission and how to turn it on.
+1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says.
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
-3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (`python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can attach what `python3 -m seeu evidence` records, but it may include window titles and screenshots, so check it for anything private first.
+3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for anything private first.
 <!-- /sync:notes -->
 
 ### Extra notes

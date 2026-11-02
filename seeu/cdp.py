@@ -578,6 +578,8 @@ def restart(target):
         quit(h)
     for pid in [p for p, v in bg.CALLED_OUT.items() if v[0] == app]:
         bg.CALLED_OUT.pop(pid, None)
+    from seeu import stealth
+    stealth.mark_called(app, False)
     return launch(app, *[f for f in files if f and os.path.exists(f)])
 
 

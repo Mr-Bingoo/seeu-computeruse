@@ -371,7 +371,7 @@ def check_called_out(pid):
     if hit:
         b = "Chrome" if "Chrome" in hit[0] else hit[0]
         raise CalledOut(f"卡在:往 {hit[0]} 点击/按键 原因:{hit[0]} 被叫出来过(藏回去也会抢键盘),SeeU 已停手 "
-                        f"怎么办:运行 python3 -m seeu.stealth restart {b} 重开(标签照原样开回来)")
+                        f"怎么办:跟 AI 说一声就能重开,标签照原样开回来(也可以终端 python3 -m seeu.stealth restart {b})")
 
 
 def click(pid, wid, win_xy, sx, sy, auth=False, focus=False, hold=0.05):
