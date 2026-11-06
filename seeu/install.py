@@ -422,6 +422,16 @@ def _mine(rec, text):
     return bool(rec) or SERVER in str(text)
 
 
+_GONE_RE = re.compile(r"\bno\b[^\n]*\bserver\b[^\n]*\bfound\b|not found|does ?n[o']t exist", re.I)   # 「没有这条」的各种说法
+_SCOPE_RE = re.compile(r"scope:\s*(user|local|project)\b|-s\s+(user|local|project)\b", re.I)
+
+
+def _claude_scope(text):
+    """从 `claude mcp get` 的输出里认这条接在哪个范围(「Scope: User config」或末尾那句「… remove "seeu" -s user」);认不出返回 None。"""
+    m = _SCOPE_RE.search(str(text))
+    return (m.group(1) or m.group(2)).lower() if m else None
+
+
 def uninstall_json(key):
     c = JSON_CLIENTS[key]
     st = _load()
@@ -477,6 +487,7 @@ def uninstall(key):
         _p(f"没找到 {c['cmd']} 命令,不用移除")
         return 0
     cfg = os.path.expanduser(c["config"])
+    found_scope, none_there = None, False
     if not rec:                             # 11-06 体检 C4:没有接入记录 → 先看那条是不是指着这份 SeeU,不是就不删
         try:
             code, out = _run([c["cmd"], "mcp", "get", NAME], timeout=60)
@@ -494,6 +505,7 @@ def uninstall(key):
             _skill_remove(key, rec)
             _p("\n没有要移除的。")
             return 0
+        found_scope, none_there = (_claude_scope(out) if code == 0 else None), code != 0
     if key == "codex":
         same = rec.get("backup") and rec.get("after_sha") and _sha(cfg) == rec["after_sha"]
         if not same and rec.get("backup"):
@@ -510,11 +522,41 @@ def uninstall(key):
                 return 1
             _p("· MCP 已拿掉" + ("。接入后你改过别的设置,所以没整份恢复;顺序可能被打乱,内容没变" if rec else ""))
     else:
-        scopes = [rec["scope"]] if rec.get("scope") else ["user", "local"]
+        # 11-07 C-1.1.4(复查留下的):没有接入记录时原来把 user、local 两个范围各删一遍 —— 查到并核对过的只有 get 显示的那一条,
+        # 另一个范围里同名的可能是用户手配的。现在:有记录按记录的范围;没记录按 get 显示的范围;
+        # 范围认不出就不带范围删(只有一处时照删;两处同名时 claude 自己会停下来让选,不会多删)。
+        # 11-07 独立复查后补:①记录里没写范围(老记录)也先问一次 get;②删完再问一次,别的范围里还有一条也指着这份 SeeU 就接着删
+        #   (最多三个范围),不是这份的不碰;③删失败而且不是「本来就没有」→ 明说没拿掉、返回 1、接入记录留着。
+        cwd = rec.get("cwd") or None
+
+        def ask():
+            try:
+                c, o = _run(["claude", "mcp", "get", NAME], timeout=60, cwd=cwd)
+            except Exception:
+                return None
+            return (_claude_scope(o) or "") if c == 0 and SERVER in str(o) else None
+
+        scope = rec.get("scope") or found_scope
+        if not none_there and not scope and rec:
+            scope = ask() or None                        # 老记录:问不出来就不带范围删
         done = False
-        for sc in scopes:
-            code, out = _run(["claude", "mcp", "remove", "-s", sc, NAME], cwd=rec.get("cwd") or None)
-            done = done or code == 0
+        for _ in range(0 if none_there else 3):
+            code, out = _run(["claude", "mcp", "remove"] + (["-s", scope] if scope else []) + [NAME], cwd=cwd)
+            if code != 0:
+                # 11-07 第二轮复查:带范围删时 claude 的说法是「No user-scoped MCP server found …」这类,各版本还不一样;
+                # 认不出说法时不猜,再问一次:设置里已经没有指着这份 SeeU 的那条了,就当「本来就没有」照旧走完
+                # (不然用户自己先删过的话,这里报没拿掉、记录留着,「接入」又说先移除,两头走不通)。
+                if done or _GONE_RE.search(out) or ask() is None:
+                    break
+                _p(f"· 没拿掉({out[-300:] or '命令出错'})。手动:claude mcp remove {NAME} -s user(或 local / project)")
+                return 1
+            done = True
+            if rec.get("scope"):
+                break                                    # 有记录、记了范围:只删那一条
+            more = ask()                                 # None = 没有了 / 剩下的不是这份 SeeU 接的
+            if more is None:
+                break
+            scope = more or None
         _p("· MCP 已拿掉" if done else "· 设置里本来就没有 SeeU")
     _skill_remove(key, rec)
     st.pop(key, None)

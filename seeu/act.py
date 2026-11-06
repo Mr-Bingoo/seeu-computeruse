@@ -764,6 +764,9 @@ def tap(app, target, real=True, allow=None):
     if web.is_browser(app) or web.is_cdp(app):     # 浏览器 / SeeU 专用那份网页壳 App:按网页里的编号/名字点,见 seeu/web
         return web.tap(app, target)
     x, y, e = _resolve(app, target)
+    blocked = _tap_secret_block(app, e, x, y)      # 11-07:点「粘贴」按钮 / 右键菜单里的粘贴项 = 粘贴,光标在密码框里就不点
+    if blocked:
+        return blocked
     rx, ry = _rel(app, x, y)   # 窗口被挪了也点得准:每条路动手前按窗口当时位置重算(10-14 跨桌面实测窗口被挪过)
     steps = []
     if e is not None and ("AXPress" in e["actions"] or "AXPick" in e["actions"]):
@@ -815,7 +818,10 @@ def long_press(app, target, ms=1000):
         # 按编号长按浏览器原来是 KeyError(网页清单里没有屏幕位置),现在也是这句。
         return dict(outcome="refused", route=None, tried=[], png=None,
                     reason="浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号")
-    x, y, _ = _resolve(app, target)
+    x, y, e = _resolve(app, target)
+    blocked = _tap_secret_block(app, e, x, y)      # 11-07 复查:长按 50 毫秒就是一次点击,跟 tap 查同一条
+    if blocked:
+        return blocked
     rx, ry = _rel(app, x, y)
     return _ladder(app, [("后台长按", lambda: _shown(app, "click", rx, ry,
                                                   lambda x, y: bg.long_press(app, x, y, ms=ms)))])
@@ -1097,6 +1103,146 @@ def _key_enters(key, mods=()):
     return safety.key_enters(key, mods)
 
 
+def _edit_shortcut(item):
+    """菜单项自己的快捷键是不是 ⌘V / ⌘X / ⌘Z(跟界面语言无关)。是 → "粘贴" / "按键",不是 → None。"""
+    ch = str(ax.attr(item, "AXMenuItemCmdChar") or "").upper()
+    try:
+        no_cmd = int(ax.attr(item, "AXMenuItemCmdModifiers") or 0) & 8
+    except (TypeError, ValueError):
+        no_cmd = 0
+    if ch in ("V", "X", "Z") and not no_cmd:
+        return "粘贴" if ch == "V" else "按键"
+    return None
+
+
+_LABEL_ROLES = {"AXStaticText", "AXImage", "AXCell", "AXGroup", "AXUnknown"}   # 点到的多半是按钮 / 菜单项里面的字、图标、小分组:再往上看
+_UP_STOP = {"AXWindow", "AXSheet", "AXDrawer", "AXApplication", "AXWebArea", "AXScrollArea", "AXToolbar", "AXTabGroup", "AXSplitGroup",
+            "AXMenu", "AXMenuBar", "AXList", "AXTable", "AXOutline", "AXBrowser"}   # 往上找到这些大容器就停(窗口标题里有 paste 不算)
+PASTE_UP = 3             # 往上最多看几层
+
+
+def _paste_like(el, name=None):
+    """按下这个控件是不是等于粘贴 / 剪切 / 撤销:名字写着粘贴,或是带那几个快捷键的菜单项。返回 "粘贴" / "按键" / None。
+    名字 = 标题 + 描述;纯文字控件(按钮里那行字)再带上它显示的字。输入框里的内容不算名字。"""
+    role = ax.attr(el, "AXRole")
+    if name is None:
+        name = f'{ax.attr(el, "AXTitle") or ""} {ax.attr(el, "AXDescription") or ""}'
+        if role == "AXStaticText":
+            name += f' {ax.attr(el, "AXValue") or ""}'
+    if PASTE_MENU.search(name):
+        return "粘贴"
+    if role == "AXMenuItem":
+        return _edit_shortcut(el)
+    return None
+
+
+def _paste_target(el, name=None):
+    """点这个控件是不是等于粘贴:先看它自己;它只是字 / 图标 / 小分组时,再往上看 PASTE_UP 层(到窗口这类大容器就停)。
+    11-07 复查:网页视图、自绘界面里按钮常常是「按钮(叫粘贴)套一行字」,清单里两项都有,只看自己的话点里面那行字就绕过去了。"""
+    what = _paste_like(el, name)
+    if what or ax.attr(el, "AXRole") not in _LABEL_ROLES:
+        return what
+    cur = el
+    for _ in range(PASTE_UP):
+        cur = ax.attr(cur, "AXParent")
+        if cur is None or ax.attr(cur, "AXRole") in _UP_STOP:
+            return None
+        what = _paste_like(cur)
+        if what:
+            return what
+    return None
+
+
+def _tap_secret_block(app, e, x, y):
+    """11-07 C-1.1.4(复查留下的):点击也可能等于粘贴 —— 工具栏上叫「粘贴」的按钮、右键菜单里展开的粘贴项,都不经过 act.menu。
+    目标是这类控件、而光标在密码框 / 验证码框里 → 返回 refused 结果,否则 None。
+    按编号 / 名字点的直接看那个控件;按位置点的先问辅助功能那个位置是什么(只读)。
+    镜像、模拟器读不到控件,查不了;问不到是什么控件的照旧放行(在别处点一下本来就是离开密码框的办法)。"""
+    if _is_canvas(app):
+        return None
+    what = None
+    try:
+        if e is not None:
+            name = f'{e.get("title") or ""} {e.get("desc") or ""}'
+            if e.get("role") == "AXStaticText":
+                name += f' {e.get("value") or ""}'
+            what = _paste_target(e["el"], name)
+        else:
+            el = ax.element_at(ax.app_element(_pid(app))[0], x, y)
+            what = _paste_target(el) if el is not None else None
+    except Exception:
+        what = None
+    return _secret_block(app, what) if what else None
+
+
+ACTIVATE_KEYS = {"return", "enter", "space"}     # 会「按下」当前焦点所在按钮的键
+
+
+PAGE_SCHEMES = {"http", "https", "file"}                 # 网页区的地址是这几种才算「网页里」
+NEUTRAL_SCHEMES = {"", "about-blank", "blob", "data", "javascript"}   # 说明不了是谁的页(内嵌的空白框等):接着往上找
+FOCUS_WALK_MAX = 200                                     # 从焦点往上最多找几层(实测简单网页 11 层;很深的网页也到不了这个数)
+
+
+def _web_scheme(webarea):
+    """网页区地址的协议(小写)。about: 分两种:about:blank / about:srcdoc(网页里嵌的空白框)记成 "about-blank",
+    其余 about:(Firefox 的 about:addons、about:preferences 这类浏览器自己的页)照原样返回 "about"。"""
+    url = str(ax.attr(webarea, "AXURL") or "").strip()
+    m = re.match(r"([a-z][a-z0-9+.-]*):", url, re.I)
+    sc = m.group(1).lower() if m else ""
+    if sc == "about" and re.match(r"about:(blank|srcdoc)\b", url, re.I):
+        return "about-blank"
+    return sc
+
+
+def _el_name(el, default="按钮"):
+    name = str(ax.attr(el, "AXTitle") or ax.attr(el, "AXDescription") or "").strip()
+    return name[:40] or str(ax.attr(el, "AXRole") or "")[2:] or default
+
+
+def _browser_ui_focus(app, key="return"):
+    """浏览器里按回车 / 空格之前:键盘焦点是不是落在**不是网页**的地方,按下去等于替用户点了浏览器自己的按钮。
+    是 → 返回那个东西的名字,否则 None(放行)。
+    11-07 C-1.1.4(复查留下的老问题,跟「浏览器里不长按」同理):把焦点挪到工具栏的插件图标上再回车,
+    等于点了「允许这个网站」这类按钮 = AI 替自己批准。
+    从焦点往上找网页区,看它的地址:
+      http / https / file 的网页里 → 放行;
+      浏览器自己的页(插件弹出页 / 侧边栏、设置页、扩展管理页:chrome-extension://、chrome:// …)→ 拒(11-07 复查:这些也是「网页区」,只看角色会放行);
+      根本不在网页区里(工具栏、弹窗等原生控件):输入框(地址栏、查找栏)和读不到 / 只读到外壳的放行,其余拒;
+      另外:不在网页里、而所在窗口 / 对话框有「默认按钮」时,回车会直接触发它(不管焦点在哪)→ 回车也拒(空格不触发,不管)。
+    往上找满 FOCUS_WALK_MAX 层还没结果 = 没看清,放行(不拿「不在网页里」去误导)。
+    浏览器自己的界面是原生控件,不用开「网页结构」开关也读得到;读不到的基本就是网页里面。"""
+    try:
+        app_el = ax.app_element(_pid(app))[0]
+        f = ax.attr(app_el, "AXFocusedUIElement")
+        cur, n, in_web = f, 0, False
+        while cur is not None and n < FOCUS_WALK_MAX:
+            if ax.attr(cur, "AXRole") == "AXWebArea":
+                sc = _web_scheme(cur)
+                if sc in PAGE_SCHEMES:
+                    return None
+                if sc not in NEUTRAL_SCHEMES:
+                    return f"{_el_name(f)}({sc} 页)"
+                in_web = True
+            cur = ax.attr(cur, "AXParent")
+            n += 1
+        if cur is not None:
+            return None                                   # 找满上限还没到顶:没看清,放行
+        if in_web:
+            return None                                   # 在网页区里,只是地址说明不了是谁的(about:blank、读不到地址):照旧放行
+        role = ax.attr(f, "AXRole") if f is not None else None
+        if key in ("return", "enter"):
+            for w in ((ax.attr(f, "AXTopLevelUIElement"), ax.attr(f, "AXWindow")) if f is not None else ()) + (ax.attr(app_el, "AXFocusedWindow"),):
+                d = ax.attr(w, "AXDefaultButton") if w is not None else None
+                if d is not None:
+                    return f"{_el_name(d)}(对话框的默认按钮)"
+        if f is None or role in ax.TEXT_ROLES or role in _GENERIC_FOCUS:
+            return None
+        return _el_name(f)
+    except Exception:
+        return None
+
+
+
 def _secret_block(app, what):
     """光标在密码框 / 新密码框 / 验证码框里 → 返回一条 refused 结果,否则 None。
     认法:辅助功能读目标 App 的焦点控件(同 type());读不到时再看系统的「密码输入状态」是不是这个 App 占着。
@@ -1132,6 +1278,14 @@ def press(app, key, *mods):
         r = _secret_block(app, "粘贴" if paste else "按键")
         if r:
             return r
+    from seeu import web
+    nk = safety.norm_key(key)
+    if nk in ACTIVATE_KEYS and web.is_browser(web.canon(app)):
+        name = _browser_ui_focus(app, nk)      # 放在密码框检查后面:那一步已经替 Chrome 开过「网页结构」开关
+        if name:
+            return dict(outcome="refused", route=None, tried=[], png=None,
+                        reason=f"焦点在浏览器自己的按钮「{name}」上(不在网页里),SeeU 不替你按回车 / 空格"
+                               f"(这一步请你自己来;只想关掉弹窗可以按 Esc)")
 
     def act():
         g = _geo(app)
@@ -1154,13 +1308,9 @@ def menu(app, *path):
 
     def guard(item):
         # ……再按菜单项自己的快捷键认(11-07 复查:文字只认中英文,日文、德文界面的「粘贴」认不出;快捷键跟语言无关)。⌘X 剪切同理。
-        ch = str(ax.attr(item, "AXMenuItemCmdChar") or "").upper()
-        try:
-            no_cmd = int(ax.attr(item, "AXMenuItemCmdModifiers") or 0) & 8
-        except (TypeError, ValueError):
-            no_cmd = 0
-        if ch in ("V", "X", "Z") and not no_cmd:
-            r = _secret_block(app, "粘贴" if ch == "V" else "按键")
+        what = _edit_shortcut(item)
+        if what:
+            r = _secret_block(app, what)
             if r:
                 raise ax.AXRefused(r["reason"])
 
@@ -1199,6 +1349,9 @@ def _keep_front(app, fn):
 def drag(app, pts, hold_ms=0, allow=None):
     """拖动:macOS 没有后台拖动的路,直接走真鼠标。pts = 屏幕点列表。"""
     x0, y0 = pts[0]
+    blocked = _tap_secret_block(app, None, x0, y0)     # 11-07 复查:起点终点同一处的拖动也是一次点击
+    if blocked:
+        return blocked
 
     def act(ig):
         _cursor(app, "move", x0, y0, mode="real", force=True)

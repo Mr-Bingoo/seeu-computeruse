@@ -236,7 +236,8 @@ def _px_to_screen(app, px, py):
 
 def _image(png):
     """缩到长边 IMG_MAX 再 base64。缩失败就发原图。"""
-    out = os.path.join(tempfile.gettempdir(), f"seeu_mcp_{os.getpid()}.png")
+    from seeu import act
+    out = os.path.join(act._tmp(), "mcp_send.png")      # 11-07:原来放系统临时目录,每个进程留一张、没人清;现在跟截图一起、隔天一起清
     try:
         subprocess.run(["sips", "-Z", str(IMG_MAX), png, "--out", out], capture_output=True, timeout=10, check=True)
         src = out

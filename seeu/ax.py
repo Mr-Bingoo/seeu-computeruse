@@ -41,6 +41,7 @@ objc.loadBundleFunctions(
         ("AXUIElementSetMessagingTimeout", b"i@f"),
         ("AXValueCreate", b"@in^{CFRange=qq}"),
         ("AXUIElementGetPid", b"i@o^i"),
+        ("AXUIElementCopyElementAtPosition", b"i@ffo^@"),
     ])
 
 MSG_TIMEOUT = 2.0          # 单次 AX 调用最多等几秒(App 卡死时不陪着卡)
@@ -101,6 +102,18 @@ def trusted():
 def attr(el, name):
     err, v = _AX["AXUIElementCopyAttributeValue"](el, name, None)
     return v if err == 0 else None
+
+
+def element_at(app_el, x, y):
+    """这个 App 在屏幕点 (x, y) 处的控件(只读,不动任何东西);问不到返回 None。11-07:act.tap 按位置点之前用它认「是不是粘贴」。"""
+    fn = _AX.get("AXUIElementCopyElementAtPosition")
+    if fn is None or app_el is None:
+        return None
+    try:
+        err, el = fn(app_el, float(x), float(y), None)
+    except Exception:
+        return None
+    return el if not err else None
 
 
 def attr_names(el):

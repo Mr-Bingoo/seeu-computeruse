@@ -732,8 +732,35 @@ def _not_terminal(h, s):
         raise CDPError("VS Code 的焦点在内置终端里,往里打字等于能执行任何命令,SeeU 不碰(这一步请你自己来)", "refused")
 
 
-_SECRET_JS = ("(function(){var e=document.activeElement;"
-              "while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;"
+# 11-07 C-1.1.4(复查留下的):焦点在内嵌框(iframe)里时,外层页面的 activeElement 只是那个框本身,原来就当成普通元素放行了
+# (支付的银行卡框、第三方登录框多半嵌在 iframe 里)。现在:同一个网站的内嵌框 → 钻进去接着看;
+# 别的网站的内嵌框(里面不让看)→ 只能看框自己的名字 / 地址 / 权限,像密码、登录、支付、验证的就拦。认不出的照旧放行(嵌进来的编辑器、播放器要能用)。
+# 词表(11-07 独立复查后重写):
+#   _FW_WORD 要独立成词(前后不挨着字母):短词和容易撞的词(auth 撞 author、pay 撞 payload、card 撞 discard、log in 撞 blog index…);
+#   _FW_ANY  出现就算:够长、不容易撞的词和中文。
+#   地址只看主机名 + 路径:问号后面常带着本页网址(评论框、播放器的 origin=…),本页地址里有 password / pay 会把无关的框全拦了。
+_FW_WORD = (r"log[-_ ]?[io]n|sign[-_ ]?(?:in|on|up)|auth(?:n|z|enticat\w*|oriz\w*)?|otp|sso|2fa|mfa|3ds|cvc|cvv"
+            r"|pay(?:ments?|pal|s)?|accounts?|challenge|cards?|card[-_ ]?number|bank\w*|identity")
+_FW_ANY = (r"pass(?:word|wd|code|phrase)|pwd|oauth|verif|captcha|secure|checkout|billing|credit[-_ ]?card"
+           r"|(?:ali|wechat|apple|google|union)[-_ ]?pay"
+           # 11-07 第二轮复查:连写的名字(ptlogin_iframe、weblogin、loginframe)原来全漏;驼峰(loginIframe、paymentFrame)在判断前先拆开
+           r"|[a-z]login(?![a-z])|(?:^|[^a-z])login(?:i?frame|form|box|page|dialog|modal|popup|widget|wrap)|passport|cashier|tenpay"
+           r"|密码|密碼|登录|登入|登錄|验证|驗證|认证|認證|口令|支付|付款|收银|银行|銀行|信用卡|卡号|卡號|账号|帐号|賬號|帳號")
+_FRAME_WORDS = "(?:^|[^a-z])(?:" + _FW_WORD + ")(?![a-z])|" + _FW_ANY
+SECRET_FRAME = "别的网站嵌进来的密码 / 支付框(里面看不清)"
+SECRET_DEEP = "嵌套太深、看不清是什么的框"
+_SECRET_JS = ("(function(){var W=/" + _FRAME_WORDS + "/i,e=document.activeElement,n=0;"
+              "while(e){"
+              "if(n++>40)return '" + SECRET_DEEP + "';"
+              "if(e.shadowRoot&&e.shadowRoot.activeElement){e=e.shadowRoot.activeElement;continue;}"
+              "var g=(e.tagName||'').toUpperCase();"
+              "if(g==='IFRAME'||g==='FRAME'){var d=null;try{d=e.contentDocument}catch(x){}"
+              "if(d&&d.activeElement){e=d.activeElement;continue;}"
+              "var u='';try{var U=new URL(e.src);u=U.hostname+' '+U.pathname}catch(x){}"
+              "var s=[e.title,e.name,e.id,u,e.getAttribute('allow'),e.getAttribute('aria-label')].join(' ')"
+              ".replace(/([a-z0-9])([A-Z])/g,'$1 $2');"
+              "return W.test(s)?'" + SECRET_FRAME + "':'';}"
+              "break;}"
               "if(!e)return '';var t=(e.type||'').toLowerCase(),"
               "a=(e.getAttribute&&e.getAttribute('autocomplete')||'').toLowerCase();"
               "if(t==='password')return '密码框';if(a.indexOf('one-time-code')>=0)return '验证码框';"

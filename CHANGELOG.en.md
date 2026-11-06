@@ -4,6 +4,19 @@
 
 A few plain sentences per release: what's new, what changed, and whether you need to do anything. To update, just tell the AI to "update SeeU" (or run `python3 -m seeu update`); ask the AI which version you have (or run `python3 -m seeu version`).
 
+## v1.1.5 (2026-11-07)
+
+Updating no longer stops because you changed a setting, and a few leftover edge cases from the last review are closed.
+
+- **You can update after changing settings**: the settings file lives next to the code, so once you changed a setting (or clicked the I See button on the overlay), update stopped with "you have changed these files". When the settings file is the only change, update now goes ahead: your changed settings are kept, and options added by the new version get their defaults. If the update is interrupted (terminal closed, power lost), your settings aren't lost either — they are put back the next time you run update.
+- **⚠️ This one update may still need a manual step**: the updater that runs is the old one already on your Mac. If it still says "You have changed these SeeU files" and the only file listed is `seeu/设置.json`, run `git stash`, `python3 -m seeu update`, `git stash pop` in the SeeU folder, in that order. After this release it's no longer needed.
+- **Clicking "Paste" counts as pasting**: with the cursor in a password or verification-code field, only ⌘V and Paste in the menu bar were blocked; clicking an on-screen button named "Paste", or Paste / Cut / Undo in a context menu (by click, long-press or drag), got around it. Those are now refused too.
+- **In browsers, no Return or Space while the focus is outside the page**: when the keyboard focus is on a toolbar button, an extension's popup, a browser settings page or a dialog the browser itself shows, those two keys would click the button for you (for example "Allow this site"). They are now refused; Esc and Tab still work. Inside pages and in the address bar nothing changes.
+- **Password fields inside embedded frames are recognised**: in SeeU's own hidden Chrome, nothing was checked while the cursor was inside a frame embedded in the page. A frame from the same site is now looked into; one embedded from another site (common for payments and third-party sign-in, and its contents can't be inspected) is judged by its name and address — if it looks like sign-in, payment or verification, SeeU won't type or press keys into it. A frame with a plain name still isn't recognised, so there the rule relies on the AI.
+- **Removing the Claude entry is more precise**: with no install record, both the "all projects" and the "this project" entries named seeu used to be deleted. Now only entries confirmed to point at this copy of SeeU are removed (both, if both do); if removal fails you're told so instead of seeing "removed".
+- **Small fixes**: the downsized screenshot sent to the AI is no longer left in the system temp folder; Chinese file names in "you have changed these files" are no longer shown as escape sequences.
+- **What you need to do**: fully quit your AI client and open it again after updating.
+
 ## v1.1.4 (2026-11-07)
 
 Continuing the review from the last release: the remaining safety gaps are closed, and one long-standing problem is fixed — the I See button on the overlay didn't actually work.

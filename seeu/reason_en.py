@@ -8,6 +8,14 @@ import re
 
 # (中文片段, 英文)。顺序无所谓,用的时候按中文长度从长到短换。
 PHRASES = [
+    # —— 11-07 C-1.1.4 新增的原因
+    ("焦点在浏览器自己的按钮", "the keyboard focus is on the browser's own control "),
+    ("上(不在网页里),SeeU 不替你按回车 / 空格(这一步请你自己来;只想关掉弹窗可以按 Esc)",
+     " (outside the web page) — SeeU won't press Return / Space on it (please do this step yourself; to just dismiss a dialog, press Esc)"),
+    ("别的网站嵌进来的密码 / 支付框(里面看不清)", "login / payment frame embedded from another site (its contents can't be inspected)"),
+    ("嵌套太深、看不清是什么的框", "field nested too deeply to tell what it is"),
+    ("(对话框的默认按钮)", " (the dialog's default button)"),
+    (" 页)", " page)"),
     # —— 11-06 C-1.1.3 新增的原因
     ("浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号",
      "long-press is not available in browsers (it clicks by screen position, which would bypass the allow list); use seeu_tap with a number for things on the page"),
