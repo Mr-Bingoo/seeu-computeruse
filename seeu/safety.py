@@ -5,6 +5,7 @@
   1. 危险快捷键:清空废纸篓、不进废纸篓直接删除、锁屏、注销、强制退出。
   2. 危险打字内容:下载后直接运行、sudo、删整个硬盘/家目录、抹盘、fork 炸弹。只拦明显危险的,普通 rm 不拦。
   3. 终端类 App(终端、iTerm2、Warp、Ghostty、kitty、Alacritty、WezTerm):不点、不打字、不按键。
+     11-06 加:脚本编辑器、自动操作(Automator)、快捷指令 —— 能直接运行脚本,同样不碰。
   4. 系统权限 / 密码弹窗(「想要控制」授权框、管理员密码框、互联网 App 打开确认、辅助功能授权提示、指纹确认)
      和系统设置里的隐私与安全性 / 密码页面:不点、不打字。
   4b. 存密码的 App(钥匙串访问、密码 App、1Password 等,10-30 加):不点、不打字。
@@ -46,7 +47,9 @@ BLOCKED_KEYS = {
 
 # 11-06 体检:bgkey.KEYCODE 里 backspace / esc 跟 delete / escape 是同一个键,调试端口那条路修饰键还认 command / option…
 # 原来按字面查表,换个叫法就绕开(backspace+cmd+shift = 清空废纸篓)→ 查表前一律归一成标准叫法。
-KEY_ALIAS = {"backspace": "delete", "esc": "escape", "del": "delete"}
+KEY_ALIAS = {"backspace": "delete", "esc": "escape", "del": "delete",
+             # 11-07:调试端口那条路(cdp.KEYS)的写法带下划线,归成同一个叫法
+             "forward_delete": "forwarddelete", "page_up": "pageup", "page_down": "pagedown"}
 MOD_ALIAS = {"command": "cmd", "meta": "cmd", "super": "cmd", "win": "cmd", "⌘": "cmd",
              "option": "alt", "opt": "alt", "⌥": "alt",
              "control": "ctrl", "ctl": "ctrl", "⌃": "ctrl",
@@ -66,6 +69,31 @@ def norm_mods(mods=()):
         m = str(m).strip().lower()
         out.append(MOD_ALIAS.get(m, m))
     return out
+
+
+_EDIT_KEYS = {"return", "enter", "delete", "forwarddelete", "space"}
+# 只挪光标 / 离开输入框、不改内容的键。多字符键名不在这里的一律当成「会改内容」(11-07 第二轮复查:
+# 调试端口那条路把向前删叫 forward_delete,原来按「在名单里才算」写,这个写法就漏了 —— 反过来写,键名再对不上也是往严的方向错)
+_NAV_KEYS = {"tab", "escape", "left", "right", "up", "down", "home", "end", "pageup", "pagedown"} | {f"f{i}" for i in range(1, 21)}
+_CTRL_MOVE = set("abefnplv")        # 系统输入框里 ⌃ + 这几个字母只挪光标 / 翻页;别的 ⌃ 字符键都会删字或插字(⌃H/D/K/O/T/Y、⌃' ⌃" ⌃/ …)
+
+
+def key_enters(key, mods=()):
+    """这个按键会不会往当前输入框里放东西、改它或提交它(11-07,密码框 / 验证码框里这些键不按;act.press 和 cdp.key 共用)。
+    算:单个字符、空格;回车、删除(带不带 ⌘ / ⌃ 都算:⌘⌫ 删到行首,⌘↩ / ⌃↩ 常常也是提交);⌘V、⌘X、⌘Z(撤销 / 重做也改内容);
+        ⌃ + 字符(只挪光标的那几个除外);⌥Tab(插入制表符);不认识的多字符键名。
+    不算:Tab、Esc、方向键、Home / End、翻页键、F 键和别的 ⌘ 快捷键(关窗口、刷新、全选、复制…)—— 登录页常常一打开光标就在
+        密码框里,这些键要留着,不然连离开这个框都做不到。"""
+    k, m = norm_key(key), set(norm_mods(mods))
+    if k in _EDIT_KEYS:
+        return True
+    if "cmd" in m:
+        return k in ("v", "x", "z")
+    if k in _NAV_KEYS:
+        return k == "tab" and "alt" in m
+    if "ctrl" in m:
+        return not (len(k) == 1 and k in _CTRL_MOVE)
+    return True
 
 
 def check_keys(key, mods=()):
@@ -103,6 +131,13 @@ TERMINALS = {
     # 11-06 体检补:
     "WarpPreview": "dev.warp.Warp-Preview", "Hyper": "co.zeit.hyper", "Tabby": "org.tabby",
 }
+# 11-06 C-1.1.3(二次复查第 6 条):能直接运行脚本 / 命令的系统自带 App,理由跟终端一样(往里打字、点「运行」= 执行任何命令)。
+# 按包名认(中文系统上名字是「脚本编辑器」「自动操作」「快捷指令」;包名 11-06 在本机核对过)。
+SCRIPT_APPS = {
+    "com.apple.ScriptEditor2": "脚本编辑器(Script Editor)", "com.apple.Automator": "自动操作(Automator)",
+    "com.apple.shortcuts": "快捷指令(Shortcuts)",
+}
+SCRIPT_APP_NAMES = {"Script Editor", "脚本编辑器", "Automator", "自动操作", "Shortcuts", "快捷指令"}   # 读不到包名时按名字兜底
 # 系统权限 / 密码弹窗(进程名;只有 UserNotificationCenter 那类「想要控制」10-25 真见过,其余按公开资料)
 SYSTEM_PROMPTS = {
     "UserNotificationCenter": "系统授权弹窗",
@@ -245,6 +280,8 @@ def why_not(pid):
     name, bundle = _info(pid)
     if name in TERMINALS or bundle in TERMINALS.values():
         return f"{name} 是终端,往里打字等于能执行任何命令"
+    if bundle in SCRIPT_APPS or (not bundle and name in SCRIPT_APP_NAMES):
+        return f"{SCRIPT_APPS.get(bundle) or name} 能直接运行脚本,往里打字等于能执行任何命令"
     if name in SYSTEM_PROMPTS:
         return f"这是{SYSTEM_PROMPTS[name]}({name})"
     if bundle in PASSWORD_APPS:

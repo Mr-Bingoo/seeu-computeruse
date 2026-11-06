@@ -4,6 +4,18 @@
 
 A few plain sentences per release: what's new, what changed, and whether you need to do anything. To update, just tell the AI to "update SeeU" (or run `python3 -m seeu update`); ask the AI which version you have (or run `python3 -m seeu version`).
 
+## v1.1.4 (2026-11-07)
+
+Continuing the review from the last release: the remaining safety gaps are closed, and one long-standing problem is fixed — the I See button on the overlay didn't actually work.
+
+- **The I See button works now**: since v1.1.0, to stop the AI from turning on I See for you, SeeU refuses an "on" command that looks like it came from an AI. But the overlay itself is often started by the SeeU inside your AI client, so your own click on the button was refused too — it lit up and went dark again. Now the one command sent by the overlay itself is accepted; the AI still can't turn it on from the command line.
+- **No key presses or paste in password and verification-code fields**: only "type" was blocked before, so pressing keys one at a time, ⌘V, or Paste from the menu got around it. While the cursor is in such a field, character keys, Space, Return, Delete, cut, undo and paste are now refused; Tab, Esc, arrows and other shortcuts still work, so the field can be left. SeeU's own hidden Chrome used to refuse even Tab inside a password field; it now behaves the same way. In iPhone Mirroring and emulators SeeU can't tell what kind of field it is, so there this still relies on the AI.
+- **Password fields on Chrome pages are really recognised now**: with your own Chrome in the background, SeeU couldn't read which field the cursor was in, so "never types into password or verification-code fields" didn't actually hold on Chrome pages. SeeU now asks Chrome to expose the page structure before checking; the first check takes about 2 seconds (same for Edge, Brave and other browsers on that engine). Inside apps built with Electron it still can't tell, so there the rule relies on the AI.
+- **No long-press in browsers**: a long-press clicks by screen position, so it could act on pages outside the allow list and reach the extension icon in the toolbar. Things on a page are clicked by number anyway; long-press is now refused in browsers. iPhone Mirroring, emulators and ordinary apps are unaffected.
+- **Script Editor, Automator and Shortcuts are off limits**: they can run scripts directly, same reasoning as terminals.
+- **Uninstall only removes the entry SeeU added**: `python3 -m seeu remove <client>` used to delete any entry named seeu, which could be one you configured by hand or one added by another copy of SeeU. An entry with no install record that doesn't point at this copy is now left alone, and you're told how to remove it yourself.
+- **What you need to do**: fully quit your AI client and open it again after updating.
+
 ## v1.1.3 (2026-11-06)
 
 After v1.1.2 went out we reviewed everything once more. This release closes the safety gaps that review found, and corrects a few places where the docs promised too much.
@@ -15,7 +27,7 @@ After v1.1.2 went out we reviewed everything once more. This release closes the 
 - **Scrolling in web pages goes the right way**: the tool description says negative means down, but pages scrolled up. Without the Apple-events switch or the extension, page scrolling used to simply fail; it now falls back to the background scroll wheel.
 - **Long-press has a limit**: at most 10 seconds. A very large value used to hang the whole service.
 - **OpenCV and numpy added to the install instructions**: screenshots and result checks need them, and they were missing. `python3 -m seeu check` now checks for both.
-- **Docs made accurate**: the safety rules now separate what is hard-coded from the rules written for the AI. Not submitting, paying or sending messages for you belongs to the second kind; the code doesn't block it. In iPhone Mirroring and emulators SeeU can't recognise password fields, so that also relies on the AI there. The retry described in v1.1.1 ("taps the search box first") passed the wrong coordinates; that is fixed here, but it still hasn't been exercised on a real device.
+- **Docs made accurate**: the safety rules now separate what is hard-coded from the rules written for the AI. Not submitting, paying or sending messages for you belongs to the second kind; the code doesn't block it. In iPhone Mirroring and emulators SeeU can't recognise password fields, so that also relies on the AI there. The retry described in v1.1.1 ("taps the search box first") passed the wrong coordinates; that is fixed here and has been verified on a real device.
 - **What you need to do**: fully quit your AI client and open it again after updating. Run `python3 -m seeu check` once; if it says the image libraries are missing, install them with the command it shows.
 
 ## v1.1.2 (2026-11-06)

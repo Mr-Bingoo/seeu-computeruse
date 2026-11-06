@@ -164,7 +164,8 @@ TOOLS = [
     _tool("seeu_menu", "Click a menu-bar item, path e.g. [\"File\",\"New\"] (in the app's UI language). Some menus bring the "
           "app to the front — prefer buttons in the window when possible.",
           {"app": APP, "path": {"type": "array", "items": {"type": "string"}}, "why": WHY}, ("app", "path")),
-    _tool("seeu_long_press", "Long-press (e.g. to open a context menu in iPhone Mirroring). Target by number, or px, py on the screenshot.",
+    _tool("seeu_long_press", "Long-press (e.g. to open a context menu in iPhone Mirroring). Target by number, or px, py on the screenshot. "
+          "Not available in browsers (use seeu_tap by number there).",
           {"app": APP, "target": TARGET, "px": PX, "py": PY, "ms": {"type": "number", "description": "Milliseconds, default 1000, at most 10000"},
            "why": WHY}),
     _tool("seeu_mirror_home", "Go to the iPhone home screen in iPhone Mirroring (and make sure Spotlight is closed).", {"why": WHY}, ()),
@@ -415,7 +416,12 @@ LONG_PRESS_MAX_MS = 10000
 def do_long_press(a):
     import seeu
     ms = max(50, min(int(a.get("ms") or 1000), LONG_PRESS_MAX_MS))    # 11-06:原来没上限,一个大数就把服务卡住
-    r = seeu.long_press(a["app"], _target(a), ms=ms)
+    from seeu import web
+    if web.is_browser(web.canon(a["app"])):
+        # 11-07:浏览器里不长按(见 act.long_press)。先判这个再算目标:浏览器没有截图,给 px/py 会先报「还没截图」,AI 看不到真正的原因
+        r = seeu.long_press(a["app"], (0, 0), ms=ms)
+    else:
+        r = seeu.long_press(a["app"], _target(a), ms=ms)
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
 

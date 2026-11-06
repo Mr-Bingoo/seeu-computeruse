@@ -8,6 +8,15 @@ import re
 
 # (中文片段, 英文)。顺序无所谓,用的时候按中文长度从长到短换。
 PHRASES = [
+    # —— 11-06 C-1.1.3 新增的原因
+    ("浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号",
+     "long-press is not available in browsers (it clicks by screen position, which would bypass the allow list); use seeu_tap with a number for things on the page"),
+    ("里,SeeU 不往里按键(这一步请你自己来)", " — SeeU won't press keys into it (please do this step yourself)"),
+    ("里,SeeU 不往里粘贴(这一步请你自己来)", " — SeeU won't paste into it (please do this step yourself)"),
+    ("能直接运行脚本,往里打字等于能执行任何命令", "can run scripts directly; typing there could run any command"),
+    ("能直接运行脚本,安全底线不碰", "can run scripts directly; blocked by the safety rules"),
+    ("脚本编辑器(Script Editor)", "Script Editor"), ("自动操作(Automator)", "Automator"), ("快捷指令(Shortcuts)", "Shortcuts"),
+    ("不是浏览器,SeeU 的网页工具不碰它", " is not a browser; SeeU's web tools won't touch it"),
     # —— 11-06 体检新增的原因
     ("不在 SeeU 允许名单里,还没打开。怎么办:", " is not on SeeU's allow list, so it was not opened. What to do: "),
     ("不在 SeeU 允许名单里,没拉起浏览器。怎么办:", " is not on SeeU's allow list, so the browser was not started. What to do: "),

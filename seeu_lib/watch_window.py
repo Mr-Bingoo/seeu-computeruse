@@ -1983,8 +1983,15 @@ def serve():
             toggle_view()
         elif name == "isee":
             st["isee"] = not st["isee"]
+            st["isee_click_t"] = time.time()         # 命令写设置文件要一小会,这几秒先不拿文件里的旧值盖回来(见主循环)
             # 交给 seeu 的命令去改(开的时候顺带体检浏览器开关,可能等系统授权框;放子进程,不卡住显示)
-            subprocess.Popen([sys.executable, "-m", "seeu", "isee", "on" if st["isee"] else "off"], cwd=ROOT,
+            old = st.get("isee_proc")                  # 11-07 复查:上一条还没跑完就结束它(连点两下时「开」比「关」慢,会后写、停在开)
+            if old is not None and old.poll() is None:
+                try:
+                    old.terminate()
+                except Exception:
+                    pass
+            st["isee_proc"] = subprocess.Popen([sys.executable, "-m", "seeu", "isee", "on" if st["isee"] else "off"], cwd=ROOT,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             _log(f"按钮 I See → {st['isee']}")
             if is_card() and (in_browser() and st["b_expanded"] or not in_browser()):
@@ -2209,7 +2216,14 @@ def serve():
 
     def isee_toggle():
         st["isee"] = not st["isee"]
-        subprocess.Popen([sys.executable, "-m", "seeu", "isee", "on" if st["isee"] else "off"], cwd=ROOT,
+        st["isee_click_t"] = time.time()
+        old = st.get("isee_proc")                  # 11-07 复查:上一条还没跑完就结束它(连点两下时「开」比「关」慢,会后写、停在开)
+        if old is not None and old.poll() is None:
+            try:
+                old.terminate()
+            except Exception:
+                pass
+        st["isee_proc"] = subprocess.Popen([sys.executable, "-m", "seeu", "isee", "on" if st["isee"] else "off"], cwd=ROOT,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         _log(f"岛上按钮 I See → {st['isee']}")
 
@@ -2411,6 +2425,10 @@ def serve():
                 elif len(msg) == 2 and msg[0] == "btn":       # 测试用:不动鼠标按按钮(light / light_bg / view / collapse …)
                     if msg[1] == "collapse":
                         st["close_anim"] = st.get("close_anim") or now     # 跟真点一样先播合拢
+                    elif msg[1] == "isee" and not st["isee"]:
+                        # 11-07 复查:发这条消息就能把 I See 打开(命令是本进程拉起的,seeu.isee.from_overlay 分不出真点还是消息)。
+                        # 开 I See 只认真鼠标点;关可以(AI 本来就能关)。
+                        _log("btn isee(开)不接受:I See 只能用户亲手点开")
                     else:
                         on_button(msg[1])
                 elif msg and msg[0] == "reset":
@@ -2425,7 +2443,7 @@ def serve():
             if now - st["live_t"] > 1.0:             # 项目开跑时可能改了开关初始值;I See 可能在别处开关
                 st["live"], st["live_t"] = live(), now
                 ise = isee_on()
-                if ise != st["isee"]:
+                if ise != st["isee"] and now - st.get("isee_click_t", 0) > 3.0:   # 刚点过按钮的 3 秒内不盖(11-06:命令还没写完文件会闪一下)
                     st["isee"] = ise
                     cap_view.setNeedsDisplay_(True)
                     view.setNeedsDisplay_(True)

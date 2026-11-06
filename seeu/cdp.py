@@ -432,6 +432,8 @@ def _check_allowed(app, path):
         raise CDPError(f"{app} 是正在运行 SeeU 的程序,安全底线不碰(防 AI 自己批准自己)", "refused")
     if app in safety.TERMINALS or b in safety.TERMINALS.values():
         raise CDPError(f"{app} 是终端,安全底线不碰", "refused")
+    if b in safety.SCRIPT_APPS or (not b and app in safety.SCRIPT_APP_NAMES):
+        raise CDPError(f"{app} 能直接运行脚本,安全底线不碰", "refused")
 
 
 def _prep_profile(app, profile):
@@ -702,6 +704,8 @@ KEYS = {"enter": ("Enter", "Enter", 13, "\r"), "return": ("Enter", "Enter", 13, 
         "home": ("Home", "Home", 36, ""), "end": ("End", "End", 35, ""),
         "page_up": ("PageUp", "PageUp", 33, ""), "page_down": ("PageDown", "PageDown", 34, "")}
 KEYS.update({f"f{i}": (f"F{i}", f"F{i}", 111 + i, "") for i in range(1, 13)})
+# 11-07:工具说明里写的是不带下划线的写法(跟 bgkey 一样),原来在这条路上报「不认识的键」
+KEYS.update({"forwarddelete": KEYS["forward_delete"], "pageup": KEYS["page_up"], "pagedown": KEYS["page_down"]})
 
 
 def _key_spec(key):
@@ -736,19 +740,28 @@ _SECRET_JS = ("(function(){var e=document.activeElement;"
               "if(a.indexOf('cc-')===0)return '银行卡框';return ''})()")
 
 
-def _chrome_guard(h, s):
-    """隐身 Chrome 上按键 / 打字之前(11-06 体检:原来这两个动作不查名单、不查密码框,
-    名单外网站的表单有焦点时按回车就提交了):当前页不在允许名单(I See 没开)→ 拒;焦点在密码 / 验证码 / 银行卡框 → 拒。"""
-    if h.app != "Google Chrome":
+def _chrome_guard(h, s, enters=True):
+    """调试端口上按键 / 打字之前(11-06 体检:原来这两个动作不查名单、不查密码框,
+    名单外网站的表单有焦点时按回车就提交了):隐身 Chrome 当前页不在允许名单(I See 没开)→ 拒;焦点在密码 / 验证码 / 银行卡框 → 拒。
+    11-07 复查,跟 act.press 对齐:①密码框这一条只管「往框里放东西 / 改它 / 提交它」的键(enters,规则见 safety.key_enters),
+    Tab、Esc、方向键放行 —— 原来任何键都拒,登录页一打开光标就在密码框里时连离开都做不到;
+    ②网页壳 App(VS Code 这类,不是 Chrome)原来完全不查,现在同样查(只认得出标准写法的密码框,词表比插件窄)。"""
+    if h.app == "Google Chrome":
+        from seeu import isee
+        from seeu.web import aejs
+        url = s.eval("location.href") or ""
+        if not isee.active() and not aejs.is_allowed(url):
+            o = aejs.origin(url) or url
+            raise CDPError(f"这个网站({o})不在 SeeU 允许名单里,不往里按键 / 打字"
+                           f"(AI 问你时答应就行;也可以终端 python3 -m seeu allow {o})", "refused")
+    if not enters:
         return
-    from seeu import isee
-    from seeu.web import aejs
-    url = s.eval("location.href") or ""
-    if not isee.active() and not aejs.is_allowed(url):
-        o = aejs.origin(url) or url
-        raise CDPError(f"这个网站({o})不在 SeeU 允许名单里,不往里按键 / 打字"
-                       f"(AI 问你时答应就行;也可以终端 python3 -m seeu allow {o})", "refused")
-    kind = s.eval(_SECRET_JS)
+    try:
+        kind = s.eval(_SECRET_JS)
+    except CDPError:
+        if h.app == "Google Chrome":
+            raise
+        kind = ""                       # 壳 App 的页面不让跑这句(少见):照旧不查,别因此把按键弄坏
     if kind:
         raise CDPError(f"光标在{kind}里,SeeU 不碰(这一步请你自己来)", "refused")
 
@@ -801,7 +814,7 @@ def key(h, k, *mods, tab=None):
         with session(h, tab) as s:
             _focus(s)
             _not_terminal(h, s)
-            _chrome_guard(h, s)
+            _chrome_guard(h, s, enters=safety.key_enters(k, mods))
             base = dict(key=name if not (m & 8 and len(name) == 1) else name.upper(), code=code,
                         windowsVirtualKeyCode=vk, nativeVirtualKeyCode=vk, modifiers=m)
             down = dict(base, type="keyDown", text=text, unmodifiedText=text) if text and not (m & 7) else dict(base, type="rawKeyDown")

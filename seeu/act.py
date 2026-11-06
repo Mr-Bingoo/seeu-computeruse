@@ -370,7 +370,8 @@ def _fine_expect(app, at=None, min_change=0.003):
 
     def factory():
         first = shoot(app)
-        keep = os.path.join(tempfile.gettempdir(), f"seeu_fine_{os.getpid()}.png")     # 每次覆盖,不留一堆文件
+        # 每次覆盖,不留一堆文件。11-07:放进本进程的截图临时目录(原来直接放系统临时目录,每个进程留一张、没人清)
+        keep = os.path.join(_tmp(), "fine_keep.png")
         shutil.copyfile(first, keep)
         box = _verify_box(app, keep)
         g = _geo(app)
@@ -805,6 +806,15 @@ def tap(app, target, real=True, allow=None):
 
 
 def long_press(app, target, ms=1000):
+    from seeu import web
+    app = web.canon(app)
+    if web.is_browser(app):
+        # 11-06 C-1.1.3(二次复查第 4 条):浏览器上的长按原来直接走下面的原生路线,按屏幕位置能对名单外的页面
+        # (含 SeeU 专用的隐身 Chrome)发后台点击,也点得到工具栏上的插件图标(「允许这个网站」= AI 替自己批准)。
+        # 网页层的点击本来就只收编号、不收坐标(tap 给坐标会报找不到),长按跟它对齐:浏览器里一律不做。
+        # 按编号长按浏览器原来是 KeyError(网页清单里没有屏幕位置),现在也是这句。
+        return dict(outcome="refused", route=None, tried=[], png=None,
+                    reason="浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号")
     x, y, _ = _resolve(app, target)
     rx, ry = _rel(app, x, y)
     return _ladder(app, [("后台长按", lambda: _shown(app, "click", rx, ry,
@@ -839,10 +849,12 @@ def type(app, text, enter=False, fallback=True, allow=None):
         safety.check_text(text)
     except safety.Refused as ex:
         return dict(outcome="refused", route=None, tried=[], png=None, reason=str(ex))
-    kind = _focus_secret(app)
+    h = _cdp_handle(app)
+    # 11-07 第二轮复查:有 SeeU 专用那份(调试端口)在跑时不走辅助功能这一查 —— 按名字找到的多半是用户自己那份同名浏览器,
+    # 查的不是要打字的那个进程(还会给用户那份开网页结构开关、白等);专用那份由 cdp._chrome_guard 把关。
+    kind = None if h else _focus_secret(app)
     if kind:
         return dict(outcome="refused", route=None, tried=[], png=None, reason=f"光标在{kind}里,SeeU 不往里打字(这一步请你自己来)")
-    h = _cdp_handle(app)
     if h:                               # C-1.0:SeeU 专用那份(调试端口)藏着打,回车也走它
         from seeu import cdp
         r = cdp.type(h, text)
@@ -953,15 +965,60 @@ def _ocr_has_tail(app, text):
         return None
 
 
+_AX_WEB_ON = {}           # 进程号 → 上次替它打开「网页结构」开关的时间
+AX_WEB_WAIT_S = 4.0       # 开关打开后网页结构要一两秒才出来(11-07 实测 Chrome 约 2 秒;页面重、机器忙会更久),最多等这么久
+AX_WEB_RETRY_S = 45.0     # 开关会被关回去(浏览器一阵没人读就自己关、窗口管理工具也会改):又读不到时隔这么久再开一次
+_GENERIC_FOCUS = {None, "AXWebArea", "AXGroup", "AXScrollArea", "AXWindow", "AXApplication", "AXUnknown"}
+
+
+def _is_chromium_browser(pid):
+    """Chromium 内核的浏览器(Chrome、Edge、Brave、Arc…):网页里的控件默认不交给辅助功能,要先打开开关才读得到。
+    只认浏览器。Electron 做的 App 不替它开(11-07 第二轮复查:开了以后 VS Code 这类会当成读屏软件接入、可能切模式或弹提示,
+    打字核实的路也会跟着变)—— 那里跟镜像、模拟器一样认不出是什么框,靠 AI 遵守。"""
+    try:
+        from AppKit import NSRunningApplication
+        from seeu import web
+        a = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(pid))
+        n = web._by_bundle(str(a.bundleIdentifier() or "")) if a is not None else None
+        return bool(n) and n not in web.OTHERS            # Safari、Firefox 这几个不用开关
+    except Exception:
+        return False
+
+
+def _focus_vague(f):
+    """焦点没读到具体控件:空的,或只是外壳。外壳是网页区而且里面已经有内容 = 网页结构已经交出来了,只是光标不在哪个框里,不算。"""
+    if f is None:
+        return True
+    role = ax.attr(f, "AXRole")
+    if role == "AXWebArea" and (ax.attr(f, "AXChildren") or []):
+        return False
+    return role in _GENERIC_FOCUS
+
+
 def _focus_secret(app):
     """目标 App 当前焦点是不是密码框 / 新密码框 / 验证码框(是 → 返回叫法,不是或读不到 → None)。
     11-06 体检:原来打字只查系统的「密码输入状态」,验证码框是普通文本框、不触发那个状态,
-    后台点进去之后照打。镜像、模拟器读不到控件,查不了。"""
+    后台点进去之后照打。镜像、模拟器读不到控件,查不了。
+    11-07 复查(真机实测):Chrome 在后台时焦点控件读出来是空的,网页里的密码框 / 验证码框等于没查 ——
+    要先写「网页结构」那两个开关(跟 web._ax_app 同一招),约 2 秒后才读得到。读得到就不等;又读不到时隔 AX_WEB_RETRY_S 再开一次。"""
     if _is_canvas(app):
         return None
     try:
-        el, _ = ax.app_element(_pid(app))
+        el, pid = ax.app_element(_pid(app))
         f = ax.attr(el, "AXFocusedUIElement")
+        if _focus_vague(f) and time.time() - _AX_WEB_ON.get(pid, 0) > AX_WEB_RETRY_S and _is_chromium_browser(pid):
+            _AX_WEB_ON[pid] = time.time()
+            for k in ("AXManualAccessibility", "AXEnhancedUserInterface"):
+                try:
+                    ax.set_attr(el, k, True)              # 都会报「不支持」,但会生效(10-20 实测)
+                except Exception:
+                    pass
+            t0 = time.time()
+            while time.time() - t0 < AX_WEB_WAIT_S:
+                time.sleep(0.25)
+                f = ax.attr(el, "AXFocusedUIElement")
+                if not _focus_vague(f):
+                    break
         if f is None:
             return None
         return ax.secret_kind(ax.attr(f, "AXRole"), ax.attr(f, "AXSubrole"), ax.attr(f, "AXTitle"),
@@ -1030,6 +1087,35 @@ def _cdp_handle(app):
         return None
 
 
+_ENTER_KEYS = {"space", "return", "enter", "delete", "forwarddelete"}
+PASTE_MENU = re.compile(r"粘贴|粘貼|貼上|贴上|\bpaste\b", re.I)
+
+
+def _key_enters(key, mods=()):
+    """这个按键会不会往当前输入框里放东西 / 改它 / 提交它。规则在 safety.key_enters(调试端口那条路也用同一份)。"""
+    from seeu import safety
+    return safety.key_enters(key, mods)
+
+
+def _secret_block(app, what):
+    """光标在密码框 / 新密码框 / 验证码框里 → 返回一条 refused 结果,否则 None。
+    认法:辅助功能读目标 App 的焦点控件(同 type());读不到时再看系统的「密码输入状态」是不是这个 App 占着。
+    镜像、模拟器读不到控件,查不了(跟打字一样)。"""
+    kind = _focus_secret(app)
+    if not kind and not _is_canvas(app):
+        try:
+            from seeu_lib import input_guard as ig
+            pid = ig.secure_input_pid()
+            if pid and pid == _pid(app):
+                kind = "密码框"
+        except Exception:
+            pass
+    if kind:
+        return dict(outcome="refused", route=None, tried=[], png=None,
+                    reason=f"光标在{kind}里,SeeU 不往里{what}(这一步请你自己来)")
+    return None
+
+
 def press(app, key, *mods):
     from seeu import safety
     try:
@@ -1040,6 +1126,12 @@ def press(app, key, *mods):
     if h:
         from seeu import cdp
         return cdp.key(h, key, *mods)
+    # 11-06 C-1.1.3(二次复查第 5 条):原来只有 type() 查密码框 / 验证码框,逐个按键或 ⌘V 粘贴能绕过去
+    if _key_enters(key, mods):
+        paste = safety.norm_key(key) in ("v", "y") and {"cmd", "ctrl"} & set(safety.norm_mods(mods))
+        r = _secret_block(app, "粘贴" if paste else "按键")
+        if r:
+            return r
 
     def act():
         g = _geo(app)
@@ -1054,8 +1146,26 @@ def menu(app, *path):
         safety.check_menu(path)
     except safety.Refused as ex:
         return dict(outcome="refused", route=None, tried=[], png=None, reason=str(ex))
+    # 11-06 C-1.1.3:菜单里的「粘贴」跟 ⌘V 是同一件事。先按文字认(哪一级写着粘贴都算)……
+    if any(PASTE_MENU.search(str(p)) for p in path):
+        r = _secret_block(app, "粘贴")
+        if r:
+            return r
+
+    def guard(item):
+        # ……再按菜单项自己的快捷键认(11-07 复查:文字只认中英文,日文、德文界面的「粘贴」认不出;快捷键跟语言无关)。⌘X 剪切同理。
+        ch = str(ax.attr(item, "AXMenuItemCmdChar") or "").upper()
+        try:
+            no_cmd = int(ax.attr(item, "AXMenuItemCmdModifiers") or 0) & 8
+        except (TypeError, ValueError):
+            no_cmd = 0
+        if ch in ("V", "X", "Z") and not no_cmd:
+            r = _secret_block(app, "粘贴" if ch == "V" else "按键")
+            if r:
+                raise ax.AXRefused(r["reason"])
+
     who = _pid(app) if bg.split_target(app)[1] else app   # 带「标题」的按进程号找菜单栏(同名多实例)
-    return _ladder(app, [("菜单", lambda: _keep_front(app, lambda: ax.menu(who, *path)))], min_change=0.001)
+    return _ladder(app, [("菜单", lambda: _keep_front(app, lambda: ax.menu(who, *path, guard=guard)))], min_change=0.001)
 
 
 MENU_FRONT_WATCH_S = 1.2   # 菜单按下后盯多久前台(App 自己激活常晚几百毫秒)

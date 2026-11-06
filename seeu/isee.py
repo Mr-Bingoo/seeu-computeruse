@@ -302,9 +302,35 @@ def from_ai():
     return False
 
 
+def from_overlay(port=None):
+    """11-06 C-1.1.3:这条命令是不是悬浮窗进程亲自拉起的(= 用户点了悬浮窗 / 岛上的 I See 按钮)。
+    认法:**直接**父进程是 watch_window serve,而且正占着悬浮窗的端口;隔一层(祖父进程)不算。
+    原因:悬浮窗常由 AI 客户端里的 SeeU 服务拉起,父进程链上有客户端 → from_ai() 为真 → 按钮一直开不了
+    (v1.1.0 加 from_ai 后没测过按钮,11-06 用真实进程链核对出来)。读不到、超时一律当「不是」。"""
+    import subprocess
+    if port is None:
+        try:
+            from seeu_lib import watch_window as ww
+            port = ww.PORT
+        except Exception:
+            port = 47833
+    ppid = os.getppid()
+    if ppid <= 1:
+        return False
+    try:
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", str(ppid)], capture_output=True, text=True, timeout=3).stdout
+        if "watch_window" not in cmd or "serve" not in cmd.split():
+            return False
+        r = subprocess.run(["/usr/sbin/lsof", "-nP", "-a", "-p", str(ppid), f"-iUDP:{int(port)}"],
+                           capture_output=True, text=True, timeout=5)
+        return r.returncode == 0 and f":{int(port)}" in r.stdout
+    except Exception:
+        return False
+
+
 def main(argv):
     cmd = argv[0] if argv else "status"
-    if cmd == "on" and from_ai():
+    if cmd == "on" and not from_overlay() and from_ai():
         from seeu.i18n import lang
         print("Only you can turn on I See: click the I See button on the SeeU overlay (or run this in the macOS Terminal app). "
               "The AI can't turn it on for you." if lang() == "en" else

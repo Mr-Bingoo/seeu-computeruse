@@ -416,6 +416,12 @@ def install_json(key):
     return 0 if n else 1
 
 
+def _mine(rec, text):
+    """设置里这条叫 seeu 的是不是这份 SeeU 接的:有接入记录,或内容里指着这份的 mcp_server.py。
+    11-06 体检 C4:原来没有接入记录也照删,可能删掉用户手配的、或另一份 SeeU 接的那条。"""
+    return bool(rec) or SERVER in str(text)
+
+
 def uninstall_json(key):
     c = JSON_CLIENTS[key]
     st = _load()
@@ -433,6 +439,11 @@ def uninstall_json(key):
     servers = d.get(c["root"], {})
     if NAME not in servers:
         _p("· 设置里本来就没有 SeeU")
+    elif not _mine(rec, json.dumps(servers[NAME], ensure_ascii=False)):
+        _p(f"· 设置里有一条叫 seeu 的,但不是这份 SeeU 接的(没有接入记录,也没指着 {SERVER}),没动。"
+           f"\n  真要删:打开 {cfg},手动删掉「{c['root']}」里的 seeu")
+        _p("\n没有要移除的。")
+        return 0
     else:
         servers.pop(NAME)
         if not servers:
@@ -466,6 +477,23 @@ def uninstall(key):
         _p(f"没找到 {c['cmd']} 命令,不用移除")
         return 0
     cfg = os.path.expanduser(c["config"])
+    if not rec:                             # 11-06 体检 C4:没有接入记录 → 先看那条是不是指着这份 SeeU,不是就不删
+        try:
+            code, out = _run([c["cmd"], "mcp", "get", NAME], timeout=60)
+        except Exception as ex:             # 查不出来(超时等):没有记录又看不清是谁的,就不删
+            _p(f"· 查不出设置里那条 seeu 是谁接的({type(ex).__name__}),没动。稍后再试,或手动:{c['cmd']} mcp remove {NAME}")
+            return 1
+        # 只认「没有这条服务」的说法;「命令 / 文件找不到」这类不算(那是命令本身出错,照样不删)
+        gone = code != 0 and re.search(r"no mcp server|no (such )?server|seeu[^\n]*not found|not found[^\n]*seeu", out, re.I)
+        if code != 0 and not gone:          # 命令本身出错(老版本没有 get、报别的错):同样看不清是谁的,不删
+            _p(f"· 查不出设置里有没有 seeu、是谁接的({out[-200:] or '命令出错'}),没动。手动:{c['cmd']} mcp remove {NAME}")
+            return 1
+        if code == 0 and not _mine(rec, out):
+            _p(f"· 设置里有一条叫 seeu 的,但不是这份 SeeU 接的(没有接入记录,也没指着 {SERVER}),没动。"
+               f"\n  真要删:{c['cmd']} mcp remove {NAME}")
+            _skill_remove(key, rec)
+            _p("\n没有要移除的。")
+            return 0
     if key == "codex":
         same = rec.get("backup") and rec.get("after_sha") and _sha(cfg) == rec["after_sha"]
         if not same and rec.get("backup"):

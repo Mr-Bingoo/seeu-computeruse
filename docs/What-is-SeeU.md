@@ -202,9 +202,10 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 
 **Hard-coded, the AI can't get around them:**
 
-- Never touches terminals, the Privacy & Security pages of System Settings, system password / authorization dialogs, Keychain and password managers, or the AI client running SeeU itself (so the AI can't approve itself).
+- Never touches terminals, apps that run scripts directly (Script Editor, Automator, Shortcuts), the Privacy & Security pages of System Settings, system password / authorization dialogs, Keychain and password managers, or the AI client running SeeU itself (so the AI can't approve itself).
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
-- Never types into password or verification-code fields, and never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in SeeU's own instance of an Electron app, SeeU can't tell what kind of field it is, so there this rule relies on the AI.)
+- Never types into password or verification-code fields; while the cursor is in one it also won't press character keys, Return or Delete, or paste (keys for leaving the field — Tab, Esc, arrows — still work). It never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in Electron apps you installed yourself, SeeU can't tell what kind of field it is, so there this rule relies on the AI; in SeeU's own browser and Electron-app instances only standard password inputs are recognised.)
+- No long-press in browsers: a long-press clicks by screen position, which would bypass the web allow list; things on a page are clicked by number only.
 
 **Rules written for the AI, which it is expected to follow (the code doesn't block these):**
 

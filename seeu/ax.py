@@ -438,8 +438,9 @@ def select_all(app_name, target):
     return e
 
 
-def menu(app_name, *path):
-    """按菜单路径点:menu("文本编辑", "文件", "新建")。逐级展开的是 AX 子元素,不弹真菜单。"""
+def menu(app_name, *path, guard=None):
+    """按菜单路径点:menu("文本编辑", "文件", "新建")。逐级展开的是 AX 子元素,不弹真菜单。
+    guard(菜单项):按下之前调一次,要拦就抛 AXRefused(11-07:act.menu 用它按快捷键认「粘贴」)。"""
     app, pid = app_element(app_name)
     from seeu import safety
     safety.check_menu(path)
@@ -458,6 +459,8 @@ def menu(app_name, *path):
         cur = hit
     if attr(cur, "AXEnabled") is False:
         raise AXError(f"菜单「{'>'.join(path)}」是灰的")
+    if guard:
+        guard(cur)
     perform(cur, "AXPress")
 
 

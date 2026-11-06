@@ -120,6 +120,8 @@ def probe(app):
         r["block"] = safety.why_not(pid)
     elif app in safety.TERMINALS or r["bundle"] in safety.TERMINALS.values():
         r["block"] = f"{app} 是终端,往里打字等于能执行任何命令"
+    elif r["bundle"] in safety.SCRIPT_APPS or (not r["bundle"] and app in safety.SCRIPT_APP_NAMES):
+        r["block"] = f"{safety.SCRIPT_APPS.get(r['bundle']) or app} 能直接运行脚本,往里打字等于能执行任何命令"
     elif r["bundle"] in safety.PASSWORD_APPS:
         r["block"] = f"{safety.PASSWORD_APPS[r['bundle']]} 里存的是密码"
     if web.is_browser(app):
