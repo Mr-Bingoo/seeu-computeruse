@@ -274,7 +274,9 @@ def see(app, tab=None, max_items=400):
         try:
             out = _cd_see(app, h, tab, max_items, free)
         except WebError as ex:
-            if tab is not None or ex.code in ("refused", "called_out"):
+            # 11-06 用户定:SeeU 专用的隐身 Chrome 上,名单外的页面直接不读(原来记一句 note 就退到辅助功能把整页读出来;
+            # 这份是 AI 自己在开、自己在用,名单应该完全管住)。用户自己的浏览器照旧。
+            if tab is not None or ex.code in ("refused", "called_out", "not_allowed_ae"):
                 raise WebError(str(ex) if str(ex).startswith("卡在:") else _explain(ex, "读网页", app), ex.code)
             note = (f"{ex},改用别的路" if ex.code == "not_allowed_ae" else f"调试端口那条路没走通({ex}),改用别的路")
     if out is None and plugin_ready(app) and not _ae_tab(tab) and not (h and tab is not None):
@@ -544,6 +546,14 @@ def check(app, target, on=True, tab=None):
     return _ax_tap(app, it)
 
 
+def _typed_ok(st, text):
+    """打字后核对:网页里比好的 has(11-06 加)优先;老插件没有 has 就照旧拿回传的前 200 字比(超过 200 字的只比前 200)。"""
+    if isinstance(st.get("has"), bool):
+        return st["has"]
+    v, t = st.get("value") or "", str(text)
+    return t in v or (len(t) > 200 and len(v) >= 200 and t.startswith(v[:150]))
+
+
 @_guard
 def type(app, target, text, mode="replace", tab=None):
     """往输入框打字。mode=replace 清空再写 / append 接在后面。不按回车、不提交。"""
@@ -557,12 +567,12 @@ def type(app, target, text, mode="replace", tab=None):
         return _result(cur["route"], "refused", f"{_secret_name(it)},SeeU 不碰")
     if cur["route"] == "插件":
         st = call(app, "act", tab=cur["tab"]["id"], i=it["id"] - 1, action="type", value=str(text), mode=mode)
-        ok = str(text) in (st.get("value") or "")
+        ok = _typed_ok(st, text)
         return _result("插件", "delivered" if ok else "ineffective",
                        None if ok else "写完读回没看到这段字", state=st)
     if cur["route"] in ("开关", "调试端口"):
         st = _ae_act(app, cur, it, "type", str(text), mode)
-        ok = str(text) in (st.get("value") or "")
+        ok = _typed_ok(st, text)
         return _result(cur["route"], "delivered" if ok else "ineffective",
                        None if ok else "写完读回没看到这段字", state=st)
     return _ax_type(app, it, str(text), mode)
@@ -640,12 +650,29 @@ def _wait_screen_free(timeout=60):
         time.sleep(1)
 
 
-def open(app, url, active=False, timeout=20):
+def open(app, url, active=False, timeout=20, ask=True):
     """后台开一个标签页(active=False 不切过去),等加载完。返回 {id, allowed, loaded}。
     11-02 用户定:网站不在名单、AI 要回对话里问用户时,悬浮窗展开卡片写「等你答应」(下一步动作会自动清掉)。"""
-    r = _open(app, url, active, timeout)
-    if r.get("allowed") is False and r.get("route") in ("开关", "调试端口"):
+    # 11-06 体检:只有浏览器 / SeeU 专用那份能开网页(原来不查,app 传终端之类也照样 open -a),网址只收 http / https
+    if not (is_browser(app) or is_cdp(app)):
+        return dict(id=None, allowed=None, loaded=False, outcome="refused",
+                    reason=f"{_name(app)} 不是浏览器,SeeU 不用它开网址")
+    if not str(url or "").strip().lower().startswith(("http://", "https://")) or (is_browser(app) and not aejs.origin(url)):
+        return dict(id=None, allowed=None, loaded=False, outcome="refused", reason="只能打开 http / https 网址")
+    # 11-06 用户定:名单外的网站「先问、答应了再开」(原来先加载再问 —— 一加载就已经带着用户的登录状态访问过了)。
+    # I See 开着照旧直接开。只管浏览器;网页壳 App(VS Code 等)没有名单。
+    # ask=False:只给 stealth.restart 用 —— 把重开前本来就开着的标签照原样开回来(重开这件事本身已经问过用户)。
+    if ask and is_browser(app) and not isee.active() and not aejs.is_allowed(url):
+        o = aejs.origin(url)
+        r = dict(id=None, allowed=False, loaded=False, outcome="refused", route=None,
+                 reason=f"{o} 不在 SeeU 允许名单里,还没打开。怎么办:{allow_how(o)},然后再开一次;或开 I See 模式")
+    else:
+        r = _open(app, url, active, timeout)
+    if r.get("allowed") is False and r.get("route") in ("开关", "调试端口", None):
         try:
+            from seeu import bgclick as _bg
+            if not _bg._watch_on():         # 11-06:监看小窗关了 / SEEU_NO_WATCH 时不弹卡片(离线测试弹到了用户桌面上)
+                raise RuntimeError("watch off")
             from seeu_lib import watch_window as ww
             from seeu.i18n import lang
             o = aejs.origin(url) or url

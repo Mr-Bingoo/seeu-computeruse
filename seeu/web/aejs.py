@@ -253,10 +253,34 @@ def wait_loaded(app, tab=None, timeout=10.0):
 # C-0.5:跟插件合成一份。插件那边 = Chrome 授权 且 在这份名单里才碰;读写见 host.py 的 load_allow / edit_allow。
 
 def origin(url):
-    u = urlsplit(url or "")
-    if u.scheme not in ("http", "https", "file"):
+    """网址 → 「协议://主机[:端口]」,名单按它整串比。只认 http / https。
+    11-06 体检:①原来 file: 一律归成 "file://",允许一个本地文件 = 放行全盘 → 不再认 file(本地页面请起个本机网址);
+    ②统一写法:主机小写、去掉默认端口和「用户名@」、中文域名转 punycode(浏览器回报的就是这种写法,
+    原来 Example.COM、example.com:443 存进名单后永远对不上,还报成功)。"""
+    url = (url or "").strip()
+    # 反斜杠、空白、控制字符一律不认:浏览器把「\」当「/」(https://evil.com\@ok.com 实际去的是 evil.com),跟这里的解析对不上
+    if "\\" in url or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
         return None
-    return f"{u.scheme}://{u.netloc}" if u.scheme != "file" else "file://"
+    try:
+        u = urlsplit(url)
+        scheme = (u.scheme or "").lower()
+        if scheme not in ("http", "https"):
+            return None
+        host = (u.hostname or "").rstrip(".")
+        if not host:
+            return None
+        try:
+            host = host.encode("idna").decode("ascii")
+        except Exception:
+            pass
+        if ":" in host:                 # IPv6
+            host = f"[{host}]"
+        port = u.port
+    except ValueError:
+        return None
+    if port and port != {"http": 80, "https": 443}[scheme]:
+        return f"{scheme}://{host}:{port}"
+    return f"{scheme}://{host}"
 
 
 def _load_allow():
@@ -293,9 +317,18 @@ def allow(url, on=True):
 
 # ---------------------------------------------------------------- 开标签页
 
+def _check_url(url):
+    """交给系统 open 命令之前:只收 http / https。11-06 体检:原来什么都往 open 里传,
+    「-W」这类会被当成 open 的参数(一直等到 App 退出),文件路径、shortcuts:// 之类也照开。"""
+    u = str(url or "").strip()
+    if not u.lower().startswith(("http://", "https://")) or origin(u) is None:
+        raise AEError("只能打开 http / https 网址", "bad_url")
+
+
 def open_tab(app, url):
     """后台开一个新标签页,返回它的编号。Safari:AppleScript 加到最前窗口末尾(不抢前台,实测)。
     Chrome:用 open -g(AppleScript 开会抢前台切桌面);开完前台被换了就切回去。"""
+    _check_url(url)
     if app in SAFARI:
         if not tabs(app):
             open_bg(app, url, 1.5)
@@ -305,7 +338,8 @@ def open_tab(app, url):
         return _osa(s, url)
     before = {t["id"] for t in tabs(app)} if running(app) else set()
     front = _frontmost()
-    subprocess.run(["open", "-g", "-a", app, url], check=False)
+    _check_url(url)
+    subprocess.run(["open", "-g", "-a", app, url], check=False, timeout=15)
     new = None
     for _ in range(20):
         time.sleep(0.25)
@@ -338,7 +372,8 @@ def open_bg(app, url, watch_s=3.0):
     front = _frontmost()
     cold = not running(app)
     bare = cold or not _shown_windows(app)      # 开着但一个窗口都没露:新窗口一样会压住别的窗口
-    subprocess.run(["open", "-g"] + (["-j"] if cold else []) + ["-a", app, url], check=False)
+    _check_url(url)
+    subprocess.run(["open", "-g"] + (["-j"] if cold else []) + ["-a", app, url], check=False, timeout=15)
     t0 = time.time()
     while time.time() - t0 < watch_s:
         time.sleep(0.25)

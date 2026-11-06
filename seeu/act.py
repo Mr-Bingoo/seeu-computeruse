@@ -21,6 +21,7 @@
 镜像:默认不动窗口大小(10-28 改:钉 391×859 只是个别调用方要的,它们自己调尺寸);要每个进程第一次动作前自动钉,设 SEEU_BASELINE=1。
 """
 import os
+import re
 import sys
 import tempfile
 import time
@@ -32,7 +33,51 @@ ICON_ABOVE_LABEL = 30   # 镜像基准尺寸下,主屏图标中心在名字上�
 # 画面是视频流、辅助功能看不到里面按钮的 App:用识字代替控件清单
 CANVAS_APPS = {"iPhone Mirroring", "BlueStacks"}   # BlueStacks:安卓画面,同样只能识字(10-14)
 PROJECT = os.environ.get("SEEU_PROJECT", "SeeU")
-_TMP = tempfile.mkdtemp(prefix="seeu_")
+_TMP = [None]
+KEEP_SHOTS = 300    # 一个进程里只留最近这么多张截图(11-06 体检:原来只涨不落,长驻的 MCP 服务攒到十几 MB)。
+#                     库调用方拿到的截图路径只短期有效(一个动作核实要截 2~7 张),要留就自己拷走。
+
+
+def _tmp():
+    """截图临时目录:第一次截图才建(原来一 import 就建,只跑「设置」这类命令也留个空目录);
+    顺手删掉一天前别的进程留下的 seeu_* 目录(命令行打印的截图路径 AI 还要读,所以退出时不删,隔天再清)。"""
+    if _TMP[0] is None:
+        root = tempfile.gettempdir()
+        try:
+            import shutil
+            for n in os.listdir(root):
+                d = os.path.join(root, n)
+                if not (n.startswith("seeu_") and os.path.isdir(d) and time.time() - os.path.getmtime(d) > 86400):
+                    continue
+                m = re.match(r"seeu_(\d+)_", n)          # 目录名带进程号:那个进程还活着就不删(长驻的 MCP 服务一天没截图也别删它的)
+                if m and _pid_alive(int(m.group(1))):
+                    continue
+                shutil.rmtree(d, ignore_errors=True)
+        except Exception:
+            pass
+    if _TMP[0] is None or not os.path.isdir(_TMP[0]):    # 万一被别人删了(系统清临时目录等)就重建,别从此截不到图
+        _TMP[0] = tempfile.mkdtemp(prefix=f"seeu_{os.getpid()}_")
+    return _TMP[0]
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except Exception:
+        return True
+
+
+def _ocr(png):
+    """认字。seeu_lib.ocr 读不到图 / 识别失败抛的是 SystemExit(不是 Exception),
+    没人接就把整个进程带走(11-06 体检:MCP 服务认字失败一次就退出)→ 这里转成普通错误。"""
+    from seeu_lib import ocr
+    try:
+        return ocr.ocr(png)
+    except SystemExit as ex:
+        raise RuntimeError(f"认字失败:{ex}")
 _last = {}   # app -> 上一次 see() 的清单(按编号点用)
 _n = [0]
 
@@ -179,7 +224,13 @@ def shoot(app):
         # 10-30:App 没开窗口(访达实测)时挑到的是屏幕外 64×64 的占位小窗,截它同样干等 10 秒 → 直接跳过
         raise RuntimeError("App 没开窗口,截不到图")
     _n[0] += 1
-    png = os.path.join(_TMP, f"s{_n[0]}.png")
+    png = os.path.join(_tmp(), f"s{_n[0]}.png")
+    old = os.path.join(_tmp(), f"s{_n[0] - KEEP_SHOTS}.png")
+    if _n[0] > KEEP_SHOTS and os.path.exists(old):
+        try:
+            os.remove(old)
+        except OSError:
+            pass
     if not sc.capture_window(g["id"], png):
         raise RuntimeError("截图失败")
     return png
@@ -206,7 +257,10 @@ def _verify_box(app, png):
 def see(app):
     """返回 {png, items}。items 每项:id、kind(ax|ocr)、text、x/y(屏幕点中心)、以及 ax 项带 el/role。
     浏览器(Chrome / Safari …)转给 seeu.web:返回 {route, items, text, url, title, tab},没有 png。"""
-    from seeu import web
+    from seeu import web, safety
+    # 11-06 体检:看画面也过安全底线(原来终端、密码 App、隐私设置页都能被截图 + 读文字发给 AI;probe 是跳过的)。
+    # 被拦抛 safety.Refused(= ax.AXRefused)。
+    safety.check_app(app)
     if web.is_browser(app) or web.is_cdp(app):     # C-1.0:SeeU 专用那份网页壳 App(调试端口)也转过去
         return web.see(app)
     _ensure_base(app)
@@ -219,9 +273,8 @@ def see(app):
         png = None                      # 10-30:原生 App 藏着截不到图,照样按辅助功能读控件(Codex 实测 see 直接报错)
     items = []
     if canvas:
-        from seeu_lib import ocr
         g, s = _scale(app, png)
-        for e in ocr.ocr(png):
+        for e in _ocr(png):
             items.append(dict(kind="ocr", text=e["text"], x=g["x"] + e["x"] / s, y=g["y"] + e["y"] / s,
                               rx=e["x"] / s, ry=e["y"] / s))
     else:
@@ -384,6 +437,11 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
             tried.append((name, f"refused:{ex}"))
             return dict(outcome="refused", route=name, tried=tried, png=png, reason=str(ex))
         except Exception as ex:  # 这条路走不通(私有接口没了、控件不支持…)→ 下一条
+            if _user_busy(ex):
+                # 11-06 体检:借真鼠标前让路,发现用户正在用电脑。原来记成 failed(AI 的规矩是「先看再试」,会反复跟用户抢)
+                why = f"用户正在用电脑,SeeU 先不借鼠标(等用户停手再试):{ex}"
+                tried.append((name, f"refused:{why}"))
+                return dict(outcome="refused", route=name, tried=tried, png=png, reason=why, code="user_busy")
             tried.append((name, f"error:{ex}"))
             continue
         tried.append((name, outcome))
@@ -394,8 +452,31 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
     return dict(outcome=out, route=tried[-1][0] if tried else None, tried=tried, png=png)
 
 
-class _Refused(Exception):
-    pass
+def _user_busy(ex):
+    """这个异常是不是「让路时发现用户在用电脑」(seeu_lib.input_guard.GuardBlocked 一族)。"""
+    try:
+        from seeu_lib import input_guard as ig
+        # 只认这两种;GuardBlocked 的其它情况(被别的窗口挡住、有弹窗、点落在窗口外…)照旧算这条路出错
+        return isinstance(ex, (ig.UserTakeover, ig.GuardTimeout))
+    except Exception:
+        return False
+
+
+def _press_seen(app, e):
+    """按下 see / find 时拿到的那个控件本身。11-06 体检:原来传编号让 ax.press 重新遍历后按序号取,
+    see 和 tap 之间界面多一行、焦点窗口一换就按到另一个控件,而且多半报 delivered。
+    控件已经不在了会报错 → 阶梯换下一条路(按当时的位置后台点击)。"""
+    ax.check_safe(e)
+    if e["role"] != "AXMenuBarItem":
+        try:
+            ax._focus(app, e)
+        except Exception:
+            pass
+    acts = e["actions"]
+    act = "AXPress" if "AXPress" in acts else ("AXPick" if "AXPick" in acts else None)
+    if not act:
+        raise ax.AXError(f"{ax.describe(e)} 不支持按下")
+    ax.perform(e["el"], act)
 
 
 def _real_mouse(app, fn):
@@ -683,7 +764,7 @@ def tap(app, target, real=True, allow=None):
     rx, ry = _rel(app, x, y)   # 窗口被挪了也点得准:每条路动手前按窗口当时位置重算(10-14 跨桌面实测窗口被挪过)
     steps = []
     if e is not None and ("AXPress" in e["actions"] or "AXPick" in e["actions"]):
-        steps.append(("辅助功能按下", lambda: ax.press(app, e["id"])))
+        steps.append(("辅助功能按下", lambda: _press_seen(app, e)))
     steps.append(("后台点击", lambda: _shown(app, "click", rx, ry, lambda x, y: bg.tap(app, x, y))))
     if _is_canvas(app) and isinstance(target, str) and not target.isdigit():
         # 镜像主屏的 App 名字点不进,要点字上方的图标(10-14 实测「Settings」:点字没反应,上移 30 点就进了)
@@ -692,9 +773,14 @@ def tap(app, target, real=True, allow=None):
     factory = _fine_expect(app, (rx, ry))     # 镜像、模拟器读不到控件,光标、高亮这种小变化靠看点击处附近
     r = _ladder(app, steps, expect_factory=factory)
     r["xy"] = (round(x), round(y))
-    if r["outcome"] != "ineffective":
+    # 11-06 体检:后台那几条路全部「出错」(私有接口失效时 bgclick 抛错)原来直接报 failed,不借真鼠标,
+    # 跟「私有接口只当加速层、失效有退路」不符 → 出错跟没生效一样往下走。
+    #   「那个位置没有窗口」(按编号点了滚出窗口的控件)、隐身浏览器被叫出来,不算接口失效:借真鼠标也点不到,只会白抢一次前台。
+    broke = (r["outcome"] == "failed" and r["tried"] and all(str(t[1]).startswith("error:") for t in r["tried"])
+             and not any(k in str(t[1]) for t in r["tried"] for k in ("没有窗口", "叫出来")))
+    if r["outcome"] != "ineffective" and not broke:
         return r
-    if _focus_at(app, x, y):
+    if not broke and _focus_at(app, x, y):
         r.update(outcome="delivered", note="点的是输入框:画面没变,但光标已经进去了")
         return r
     if not real:
@@ -749,10 +835,14 @@ def type(app, text, enter=False, fallback=True, allow=None):
         safety.check_text(text)
     except safety.Refused as ex:
         return dict(outcome="refused", route=None, tried=[], png=None, reason=str(ex))
+    kind = _focus_secret(app)
+    if kind:
+        return dict(outcome="refused", route=None, tried=[], png=None, reason=f"光标在{kind}里,SeeU 不往里打字(这一步请你自己来)")
     h = _cdp_handle(app)
     if h:                               # C-1.0:SeeU 专用那份(调试端口)藏着打,回车也走它
         from seeu import cdp
         r = cdp.type(h, text)
+        # 这条路是例外:cdp.type 直接把字交给页面、恒返回 unverified,所以 unverified 也按回车(下面普通那条路只在 delivered 时按)
         if enter and r["outcome"] in ("delivered", "unverified"):
             time.sleep(0.3)
             r["enter"] = "sent" if cdp.key(h, "enter")["outcome"] in ("delivered", "unverified") else "failed"
@@ -772,6 +862,7 @@ def type(app, text, enter=False, fallback=True, allow=None):
         fallback = None                  # None = 本来要兜底,按设置没借(结果里写原因 / 「问我」档交给 AI 去问)
     if fallback and not browser and bg.split_target(app)[0] not in NO_FRONT_TYPING:
         steps.append(("前台打字", _real_mouse(app, lambda ig: _front_type(app, ig, text, False))))
+    before_txt = _focused_text(app)
     r = _ladder(app, steps, min_change=0.001, expect_factory=factory)
     if browser and r["outcome"] == "ineffective":
         r.update(outcome="unverified", reason="后台打了,但浏览器画面核实不到(可能已经打进去)。"
@@ -790,7 +881,14 @@ def type(app, text, enter=False, fallback=True, allow=None):
         if seen is False:
             r.update(outcome="partial", reason=f"画面变了,但没认到最后几个字「{tail}」,可能只打进一部分;没按回车")
             return r
-    if enter and r["outcome"] in ("delivered", "unverified"):
+    # 11-06 体检:截不到图(App 藏着)= unverified,但读得到输入框文字的可以直接核对结尾 → 对上了算 delivered
+    if r["outcome"] == "unverified" and tail and not browser:
+        txt = _focused_text(app)        # 要「跟打字前不一样」而且结尾对得上(框里原本就有同样结尾的字不算)
+        if txt is not None and txt != before_txt and tail in "".join(c for c in txt if c.isalnum()):
+            r.update(outcome="delivered", note="截不到图,按输入框里读到的文字核实")
+    # 🔴 回车只在核实打进去(delivered)时按。11-06 体检:原来 unverified 也按,浏览器核实不到、App 藏着截不到图时
+    # 可能把半句话发出去,跟上面「核实打进去了再按回车」的规矩相反。
+    if enter and r["outcome"] == "delivered":
         from seeu_lib import input_guard as ig
         try:
             time.sleep(0.3)
@@ -798,6 +896,9 @@ def type(app, text, enter=False, fallback=True, allow=None):
         finally:
             ig.note_injected()
         r["enter"] = "sent"
+    elif enter and r["outcome"] == "unverified":
+        r["enter"] = "skipped"
+        r["reason"] = ((r.get("reason") or "") + ";没核实到字打进去,所以没按回车(先 see 看一眼,字在就单独按一次回车)").lstrip(";")
     return r
 
 
@@ -845,6 +946,23 @@ def _ocr_has_tail(app, text):
         got = "".join(str(it[0] if isinstance(it, (list, tuple)) else it.get("text", "")) for it in ocr.ocr(png))
         return _tail_seen(text, got)
     except (Exception, SystemExit):   # seeu_lib.ocr 认不出会 SystemExit
+        return None
+
+
+def _focus_secret(app):
+    """目标 App 当前焦点是不是密码框 / 新密码框 / 验证码框(是 → 返回叫法,不是或读不到 → None)。
+    11-06 体检:原来打字只查系统的「密码输入状态」,验证码框是普通文本框、不触发那个状态,
+    后台点进去之后照打。镜像、模拟器读不到控件,查不了。"""
+    if _is_canvas(app):
+        return None
+    try:
+        el, _ = ax.app_element(_pid(app))
+        f = ax.attr(el, "AXFocusedUIElement")
+        if f is None:
+            return None
+        return ax.secret_kind(ax.attr(f, "AXRole"), ax.attr(f, "AXSubrole"), ax.attr(f, "AXTitle"),
+                              ax.attr(f, "AXDescription"), ax.attr(f, "AXPlaceholderValue"), ax.attr(f, "AXHelp"))
+    except Exception:
         return None
 
 
@@ -1051,6 +1169,9 @@ def mirror_open_app(name, app="iPhone Mirroring"):
 
 def _report(r):
     if isinstance(r, Exception):
+        if isinstance(r, ax.AXRefused):         # 11-06:安全底线拦的(含 see 被拦)报 refused、退出码 3
+            print(f"refused  {r}")
+            return 3
         print(f"failed  {r}")
         return 1
     print(f"{r['outcome']}  路线={r.get('route')}  试过={r.get('tried')}  截图={r.get('png')}")

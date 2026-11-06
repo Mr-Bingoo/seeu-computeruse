@@ -52,11 +52,18 @@ class Handle:
 
 
 def _osa(s, timeout=15):
-    return subprocess.run(["osascript", "-e", s], capture_output=True, text=True, timeout=timeout).stdout.strip()
+    """跑一句 AppleScript,返回输出;出错 / 超时返回空串(11-06 体检:原来超时异常直接往外抛,launch / precheck 都没接)。"""
+    try:
+        return subprocess.run(["osascript", "-e", s], capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except subprocess.TimeoutExpired:
+        return ""
 
 
 def _running(app):
-    return subprocess.run(["pgrep", "-x", app], capture_output=True).returncode == 0
+    try:
+        return subprocess.run(["pgrep", "-x", app], capture_output=True, timeout=5).returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
 
 
 def _front():
@@ -65,11 +72,28 @@ def _front():
 
 def _proc(app, pid=None):
     """System Events 里的进程:给了 pid 按 pid 找(C-1.0:VS Code 进程名是 Code、跟 App 名对不上,同名多份也不会藏错)。"""
+    if not pid and app == "Google Chrome":
+        # 11-06 体检:Chrome 一律先按 SeeU 专用那份的进程号找。原来按名字,用户后来又开了自己的 Chrome 时,
+        # 藏 / 查的可能是用户那一份。
+        pid = _chrome_pid()
     return f"(first process whose unix id is {int(pid)})" if pid else f'process "{app}"'
 
 
 def is_hidden(app, pid=None):
-    return _osa(f'tell application "System Events" to get visible of {_proc(app, pid)}') != "true"
+    """藏好了没有。🔴 只有明确读到「不可见」才算藏着。11-06 体检:原来是「读到的不是 true 就算藏着」,
+    osascript 出错(没给 System Events 自动化授权、进程没了)输出是空的也算藏好 → 打字前自检形同虚设。"""
+    return _visible(app, pid) == "false"
+
+
+def _visible(app, pid=None):
+    """System Events 读到的可见性:"true" / "false" / ""(读不到:出错、超时、进程没了)。"""
+    return _osa(f'tell application "System Events" to get visible of {_proc(app, pid)}')
+
+
+def is_shown(app, pid=None):
+    """明确读到「可见」才算露着。看门狗用这个:读不到那一轮跳过,别因为一次 osascript 出错就判成被叫出来
+    (打字前自检、adopt 用 is_hidden:明确读到「不可见」才放行。两边都往保守的方向偏)。"""
+    return _visible(app, pid) == "true"
 
 
 def hide(app, tries=HIDE_TRIES, pid=None):
@@ -83,22 +107,97 @@ def hide(app, tries=HIDE_TRIES, pid=None):
 
 
 def _chrome_pid():
-    r = subprocess.run(["pgrep", "-f", f"Google Chrome.app/Contents/MacOS/Google Chrome --user-data-dir={CHROME_PROFILE}"],
-                       capture_output=True, text=True).stdout.split()
+    try:
+        r = subprocess.run(["pgrep", "-f", f"Google Chrome.app/Contents/MacOS/Google Chrome --user-data-dir={CHROME_PROFILE}"],
+                           capture_output=True, text=True, timeout=5).stdout.split()
+    except subprocess.TimeoutExpired:
+        return None
     return int(r[0]) if r else None
 
 
-def launch(browser="Safari", url=None, wait_s=20, watch=True):
+def _quit_chrome():
+    """只退 SeeU 专用那份 Chrome(按进程号发退出信号,再按专用配置目录兜底)。11-06 体检:原来用
+    「tell application "Google Chrome" to quit」按名字退,用户自己也开着 Chrome 时可能关到用户那份。"""
+    import signal
+    pid = _chrome_pid()
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+        t0 = time.time()
+        while _chrome_pid() and time.time() - t0 < 5:
+            time.sleep(0.2)
+    subprocess.run(["pkill", "-f", f"user-data-dir={CHROME_PROFILE}"], timeout=5)
+
+
+def launch(browser="Safari", url=None, wait_s=20, watch=True, restore=False):
     """隐身拉起浏览器并(可选)开页面。浏览器已经开着 → 抛 StealthBusy(不碰用户的)。返回 Handle。
     watch=True:顺手开看门狗(被叫出来就停手,见 guard)。"""
-    h = _launch(browser, url, wait_s)
+    h = _launch(browser, url, wait_s, restore)
     if watch:
         guard(h)
     return h
 
 
-def _launch(browser, url, wait_s):
+def _user_clicked_within(secs):
+    """用户最近 secs 秒内有没有亲手点过鼠标 / 按过键(只晃鼠标不算)。读不到当作没有。"""
+    try:
+        import Quartz
+        st = Quartz.kCGEventSourceStateHIDSystemState
+        return min(Quartz.CGEventSourceSecondsSinceLastEventType(st, t) for t in (
+            Quartz.kCGEventLeftMouseDown, Quartz.kCGEventRightMouseDown, Quartz.kCGEventKeyDown)) < secs
+    except Exception:
+        return False
+
+
+def _give_front_back(before, t_start, own_pid=None, watch_s=1.6):
+    """拉起隐身浏览器之后:前台被换了就还给原来的程序。
+    11-06 实测(用户全程没碰电脑):隐身 Chrome 一拉起,前台从 Claude 变成访达 / BlueStacks,而且不还回来 ——
+    Chrome 启动时自己抢了前台,被我们藏掉后系统把前台交给了「下一个」,不一定是原来那个。
+    盯 watch_s 秒(变化是藏完之后才发生的);这段时间里用户亲手点过 / 按过键,就当是用户自己切的,不动。"""
+    if not before:
+        return
+    try:
+        from seeu_lib import input_guard as ig
+        end = time.time() + watch_s
+        while time.time() < end:
+            now = ig.frontmost_app()
+            if now and now["pid"] != before["pid"]:
+                if now["pid"] != own_pid and _user_clicked_within(time.time() - t_start):
+                    return
+                ig._activate_pid(before["pid"], before.get("bundle"))
+            time.sleep(0.2)
+    except Exception:
+        pass
+
+
+def _launch(browser, url, wait_s, restore=False):
+    """拉起并藏好,然后把前台还给原来的程序(见 _give_front_back)。"""
+    before = None
+    t_start = time.time()
+    try:
+        from seeu_lib import input_guard as ig
+        before = ig.frontmost_app()
+    except Exception:
+        pass
+    h = _launch0(browser, url, wait_s, restore)
+    _give_front_back(before, t_start, getattr(h, "pid", None))
+    return h
+
+
+def _launch0(browser, url, wait_s, restore=False):
+    """restore=True:restart 把原来开着的标签开回来,不再过「名单外先问」那一关。"""
     from seeu import bgclick as bg
+    if url and not restore:
+        # 11-06:拉起之前先过「只开网页网址 + 名单外先问」这一关(原来 Safari 是拉起来之后才被拒,留下一个没人管的隐藏 Safari;
+        # Chrome 的启动网址则什么都不查)。restore = restart 把原来的标签开回来,不查。
+        from seeu import isee, web
+        from seeu.web import aejs
+        aejs._check_url(url)
+        if not isee.active() and not aejs.is_allowed(url):
+            o = aejs.origin(url)
+            raise RuntimeError(f"{o} 不在 SeeU 允许名单里,没拉起浏览器。怎么办:{web.allow_how(o)},然后再来;或开 I See 模式")
     if browser in ("Safari",):
         if _running("Safari"):
             raise StealthBusy("Safari 已经开着(多半是你在用),隐身 Safari 只给 SeeU 用,不碰它。先退出 Safari,或改用 Chrome 隐身")
@@ -108,7 +207,9 @@ def _launch(browser, url, wait_s):
         tab = None
         if url:
             from seeu import web
-            tab = web.open("Safari", url)
+            tab = web.open("Safari", url, ask=not restore)
+            if isinstance(tab, dict) and tab.get("outcome") == "refused":    # 11-06:名单外的网站现在是「先问再开」
+                raise RuntimeError(tab.get("reason") or "这个网址没打开")
             hide("Safari")
             # 隐身拉起的 Safari 当前标签是 Start Page,web.open 开的标签不是当前标签 → 切过去(踩过)
             _osa(f'tell application "Safari" to set current tab of front window to (last tab of front window)')
@@ -130,7 +231,7 @@ def _launch(browser, url, wait_s):
         while time.time() - t0 < wait_s:                  # 窗口一出现就藏(实测露约 0.2~0.4 秒)
             pid = pid or _chrome_pid()
             if pid and _has_window(pid):
-                hide("Google Chrome", tries=1)
+                hide("Google Chrome", tries=1, pid=pid)
                 break
             time.sleep(0.05)
         if pid is None:
@@ -167,8 +268,8 @@ def precheck(h):
     if _front() == h.app:
         last_check = dict(ok=False, reason="front", note=f"{h.app} 在前台,可能你在用,不打")
         return False, "front"
-    if not is_hidden(h.app):
-        last_check = dict(ok=False, reason="visible", note=f"{h.app} 的窗口露在桌面上,不打")
+    if not is_hidden(h.app, h.pid):
+        last_check = dict(ok=False, reason="visible", note=f"{h.app} 的窗口露在桌面上(或读不到它藏没藏好),不打")
         return False, "visible"
     from seeu import bgkey
     ok = bgkey._focus_ok(h.app)
@@ -231,7 +332,7 @@ def guard(h, on_called_out=None):
                 time.sleep(GUARD_EVERY_S)
                 continue
             try:
-                out = _has_window(h.pid) or (n % GUARD_ASK_EVERY == 0 and not is_hidden(h.app, h.pid))
+                out = _has_window(h.pid) or (n % GUARD_ASK_EVERY == 0 and is_shown(h.app, h.pid))
             except Exception:
                 out = False
             if out:
@@ -371,6 +472,13 @@ def restart(target="Safari", urls=None):
     if urls is None:
         urls, cur = tab_urls(app) if _running(app) else ([], None)
     urls = list(dict.fromkeys(urls))
+    # 11-06:现在只开 http / https;原来开着的本地文件标签(file://)开不回来,先说一声,别让重开卡在半路
+    skip = [u for u in urls if not u.lower().startswith(("http://", "https://"))]
+    if skip:
+        print(f"[SeeU] 这些标签不是网页网址,重开后不会开回来:{skip}", file=sys.stderr)
+        urls = [u for u in urls if u not in skip]
+    if cur in skip:
+        cur = None
     first = cur or (urls[0] if urls else None)
     ev = _evidence.pop(app, None)
     if ev:
@@ -381,10 +489,10 @@ def restart(target="Safari", urls=None):
     if _running(app):
         if isinstance(target, Handle):
             quit(target)
+        elif app == "Google Chrome":
+            _quit_chrome()
         else:
             _osa(f'tell application "{app}" to quit')
-            if app == "Google Chrome":
-                subprocess.run(["pkill", "-f", f"user-data-dir={CHROME_PROFILE}"])
         t0 = time.time()
         while (_running(app) if app == "Safari" else _chrome_pid()) and time.time() - t0 < QUIT_WAIT_S:
             time.sleep(0.3)
@@ -393,19 +501,22 @@ def restart(target="Safari", urls=None):
     for pid in [p for p, v in bg.CALLED_OUT.items() if v[0] == app]:
         bg.CALLED_OUT.pop(pid, None)
     mark_called(app, False)
-    h = launch(app, first, watch=False)
+    h = launch(app, first, watch=False, restore=True)
     rest = [u for u in urls if u != first]
     if rest:
         from seeu import web
         with pause(h):                    # 开标签 Chrome 会露一下窗口,别让看门狗当成被叫出来
             for u in rest:
                 try:
-                    web.open(app, u)
+                    r = web.open(app, u, ask=False)
+                    if isinstance(r, dict) and r.get("outcome") == "refused":     # 不是网页网址(如 file://、浏览器自带页)
+                        print(f"[SeeU] 没重开这个标签 {u}: {r.get('reason')}", file=sys.stderr)
                 except Exception as e:
                     print(f"[SeeU] 重开标签失败 {u}: {e}", file=sys.stderr)
             if first and app == "Safari":     # 切回原来那个标签(web.open 开的会抢成当前标签时)
+                esc = first.replace("\\", "\\\\").replace('"', '\\"')
                 _osa(f'tell application "Safari" to set current tab of front window to '
-                     f'(first tab of front window whose URL is "{first}")')
+                     f'(first tab of front window whose URL is "{esc}")')
             elif first:
                 _osa(f'tell application "Google Chrome" to set active tab index of front window to 1')
     guard(h)
@@ -414,18 +525,20 @@ def restart(target="Safari", urls=None):
 
 def quit(h):
     """退出 SeeU 自己拉起的那份。"""
-    _osa(f'tell application "{h.app}" to quit')
-    time.sleep(2)
+    if h.app != "Google Chrome":
+        _osa(f'tell application "{h.app}" to quit')
+        time.sleep(2)
     if h.app == "Google Chrome":
-        subprocess.run(["pkill", "-f", f"user-data-dir={CHROME_PROFILE}"])
+        _quit_chrome()
         time.sleep(1)
         try:
             from seeu import cdp
             cdp.unregister("Google Chrome")
         except Exception:
             pass
-        if _chrome_pid() is None and not _running("Google Chrome"):
-            subprocess.run(["pkill", "-f", "chrome_crashpad_handler"])
+        # 11-06 体检:只清 SeeU 专用那份留下的崩溃上报进程。原来 pkill -f chrome_crashpad_handler 会把
+        # VS Code、Edge、Slack 等所有 Chromium 内核 App 的同名进程一起杀掉。
+        subprocess.run(["pkill", "-f", f"chrome_crashpad_handler.*{os.path.basename(CHROME_PROFILE)}"], timeout=5)
 
 
 def main(argv=None):

@@ -302,6 +302,8 @@ def do_check(a):
 
 def do_see(a):
     import seeu
+    from seeu import safety
+    safety.check_app(a["app"])        # 11-06:看画面也过安全底线(终端、密码 App、隐私设置页、宿主自己)
     app, web = a["app"], _web(a["app"])
     if web:
         v = web.see(app, tab=_tab(a.get("tab")))
@@ -328,11 +330,38 @@ def do_see(a):
     return out, False
 
 
+_asked = {}          # App → 上次这个 App 的动作返回 ask_user 的时间
+ASKED_TTL = 1800     # 用户可能过一会儿才回答
+
+
+def _allow(a):
+    """allow_real 只在「上一步真的问过用户」之后才认。11-06 体检:原来 AI 第一次调用就能自带 allow_real="auto",
+    「借用鼠标 = 问我」形同虚设,也没提示条。没问过就当没传(这一步照设置走,该问会返回 ask_user)。"""
+    v = str(a.get("allow_real") or "").strip().lower()
+    if not v:
+        return None
+    t = _asked.get(a.get("app"))
+    if t is None or time.time() - t > ASKED_TTL:
+        return None
+    if v != "auto":
+        _asked.pop(a.get("app"), None)      # 「仅此一次」用完作废,下次要借还得再问
+    if v == "auto":
+        _notice(("SeeU · 借用鼠标", "这一轮对话里 AI 可以直接借用鼠标了(你答应过)"),
+                ("SeeU · Borrow mouse", "The AI may borrow the mouse for this session (you agreed)"))
+    return v
+
+
+def _remember_ask(a, r):
+    if r.get("outcome") == "ask_user":
+        _asked[a.get("app")] = time.time()
+    return r
+
+
 def do_tap(a):
     import seeu
     app, web = a["app"], _web(a["app"])
     t = _target(a)
-    r = web.tap(app, t, tab=_tab(a.get("tab"))) if web and not isinstance(t, tuple) else seeu.tap(app, t, allow=a.get("allow_real"))
+    r = web.tap(app, t, tab=_tab(a.get("tab"))) if web and not isinstance(t, tuple) else _remember_ask(a, seeu.tap(app, t, allow=_allow(a)))
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
 
@@ -350,7 +379,7 @@ def do_type(a):
             tr = seeu.tap(app, _target(a), real=False)
             if tr.get("outcome") in ("failed", "refused"):
                 return ["Tapping the field failed:\n" + _result_text(tr)], True
-        r = seeu.type(app, a["text"], enter=bool(a.get("enter")), allow=a.get("allow_real"))
+        r = _remember_ask(a, seeu.type(app, a["text"], enter=bool(a.get("enter")), allow=_allow(a)))
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
 
@@ -403,6 +432,8 @@ def do_web_open(a):
     from seeu import web
     r = web.open(a["app"], a["url"])
     r.setdefault("outcome", "delivered" if r.get("loaded") else "unverified")
+    if r.get("outcome") == "refused":       # 11-06:不是浏览器 / 不是网页网址 / 名单外还没问用户 → 没打开
+        return [_result_text(r)], True
     txt = _result_text(r) + f"\ntab: {r.get('id')}"
     if r.get("id") is None:
         txt += "\n(no tab id yet: the browser just started and the extension isn't ready — wait a few seconds and find it with seeu_web_tabs)"
@@ -584,13 +615,27 @@ def call_tool(name, a):
     if not fn:
         return {"content": [{"type": "text", "text": f"unknown tool: {name}"}], "isError": True}
     t0 = time.time()
-    _show_why(name, a or {})
+    if not isinstance(a, dict):
+        a = {}
+    _show_why(name, a)
     try:
-        parts, err = fn(a or {})
-    except Exception as ex:        # WebError / AXError / RuntimeError …:原话给 AI(里面常带「卡在…原因…怎么办」)
+        parts, err = fn(a)
+    except (Exception, SystemExit) as ex:   # WebError / AXError / RuntimeError …:原话给 AI(里面常带「卡在…原因…怎么办」)
+        # 11-06 体检:SystemExit 也接(seeu_lib.ocr 认字失败抛它,原来整个服务跟着退出);安全底线拦的报 refused 不报 failed
         traceback.print_exc(file=sys.stderr)
-        parts, err = [f"outcome: failed\nreason: {to_en(str(ex))}"], True
-    _log(name, a or {}, not err, time.time() - t0)
+        out = "failed"
+        try:
+            from seeu import ax
+            # 安全底线拦的、名单外的网站、隐身浏览器被叫出来:都是 refused(停手转述给用户),不是 failed(先看再试)
+            if isinstance(ex, ax.AXRefused) or getattr(ex, "code", None) in ("refused", "not_allowed", "not_allowed_ae", "called_out"):
+                out = "refused"
+        except Exception:
+            pass
+        why = str(ex)
+        if isinstance(ex, KeyError):
+            why = f"missing argument: {why}"
+        parts, err = [f"outcome: {out}\nreason: {to_en(why)}" + _allow_hint({"reason": why})], True
+    _log(name, a, not err, time.time() - t0)
     content = [p if isinstance(p, dict) else {"type": "text", "text": str(p)} for p in parts]
     return {"content": content, "isError": bool(err)}
 
@@ -600,6 +645,8 @@ def call_tool(name, a):
 def handle(msg):
     """处理一条 JSON-RPC 消息,返回回复(通知返回 None)。"""
     mid, method, params = msg.get("id"), msg.get("method"), msg.get("params") or {}
+    if not isinstance(params, dict):
+        params = {}
     if mid is None:                     # 通知(notifications/initialized 等):不回
         return None
     if method == "initialize":
@@ -634,9 +681,14 @@ def main():
                                     "error": {"code": -32700, "message": "not JSON"}}) + "\n")
             continue
         for m in (msg if isinstance(msg, list) else [msg]):
+            if not isinstance(m, dict):     # 11-06 体检:合法 JSON 但不是对象(1、null、"x")原来会让服务崩溃退出
+                proto.write(json.dumps({"jsonrpc": "2.0", "id": None,
+                                        "error": {"code": -32600, "message": "not a JSON-RPC object"}}) + "\n")
+                proto.flush()
+                continue
             try:
                 out = handle(m)
-            except Exception as ex:
+            except (Exception, SystemExit) as ex:
                 out = {"jsonrpc": "2.0", "id": m.get("id"), "error": {"code": -32603, "message": str(ex)}}
             if out is not None:
                 proto.write(json.dumps(out, ensure_ascii=False) + "\n")

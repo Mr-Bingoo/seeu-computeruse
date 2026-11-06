@@ -348,7 +348,10 @@ function pageAct(i, action, value, mode) {
   el.scrollIntoView({ block: "center", inline: "center" });
   const r = el.getBoundingClientRect();
   const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
-  const state = () => ({ value: "value" in el ? String(el.value).slice(0, 200) : (el.isContentEditable ? el.innerText.slice(0, 200) : undefined),
+  // has:打字后「整段字在不在框里」在网页里比完只回对错(11-06:原来只回前 200 字让外面比,超过 200 字就误报没生效,AI 重打出重复内容)
+  const full = () => "value" in el ? String(el.value) : (el.isContentEditable ? el.innerText : undefined);
+  const state = () => ({ value: full() === undefined ? undefined : full().slice(0, 200),
+    has: (action === "type" && typeof value === "string" && full() !== undefined) ? full().includes(value) : undefined,
     checked: (el.type === "checkbox" || el.type === "radio") ? el.checked : undefined, url: location.href,
     rect: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] });
   const fire = (type, Ctor) => el.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true, composed: true,

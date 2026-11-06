@@ -55,6 +55,8 @@ def _key(pid, code, down, flags=0, auth=True, text=None, flags_changed=False):
 
 
 MOD_CODE = {"cmd": 55, "shift": 56, "alt": 58, "ctrl": 59}
+MOD_ALIAS = {"command": "cmd", "meta": "cmd", "super": "cmd", "win": "cmd", "option": "alt", "opt": "alt",
+             "control": "ctrl", "ctl": "ctrl"}       # 11-06:常见别名(跟 safety.MOD_ALIAS 同一套)
 
 
 def _safety(pid, key=None, mods=(), text=None):
@@ -89,9 +91,18 @@ def press(pid, key, mods=(), auth=True, step=None):
     """按一个键(可带 cmd/shift/alt/ctrl)。step = 这一步在做什么(浏览器卡片上写,同 bgclick.set_step)。
     🔴 10-15 C-1.2:修饰键要先单独发"按下"(flagsChanged)、最后发"松开",只把标记挂在字母上的话,
     iPhone 镜像这类转发输入的程序不认 —— 后台 ⌘A 清框变成打了个 "a"(拼音输入法里挂着候选「啊 阿」)。"""
-    code = KEYCODE[key.lower()] if len(key) > 1 or key.lower() in KEYCODE else None
+    # 11-06 体检:发任何事件之前先把键名、修饰键全部认一遍。原来 mods 里写错一个(AI 常写 option / command),
+    # 前面的修饰键已经「按下」、KeyError 又在 try 外面 → 永远不松开,目标程序以为 ⌘ 一直按着。别名一并收下。
+    key = str(key)
+    code = KEYCODE.get(key.lower())
     if code is None:
         raise ValueError(f"不认识的键:{key}")
+    if isinstance(mods, str):
+        mods = [mods]
+    mods = [MOD_ALIAS.get(str(m).strip().lower(), str(m).strip().lower()) for m in (mods or ())]
+    bad = [m for m in mods if m not in FLAG]
+    if bad:
+        raise ValueError(f"不认识的修饰键:{'、'.join(bad)}(只认 cmd / shift / alt / ctrl)")
     _called_out(pid)
     _safety(pid, key=key, mods=mods)
     _set_step(step)

@@ -47,11 +47,17 @@ FIXES = {
 }
 
 
-def _load():
+def _load(strict=False):
+    """读 设置.json。strict=True(要改完写回去的地方用):文件在但读不出来就报错。
+    11-06 体检:原来读坏了返回 {},on / off 接着把只剩一个键的内容整份写回,署名、颜色、借用鼠标等全丢。"""
     try:
         with open(SETTINGS, encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        return {}
+    except Exception as ex:
+        if strict:
+            raise RuntimeError(f"设置.json 读不出来(格式坏了:{ex}),没改;先把这个文件修好")
         return {}
 
 
@@ -95,7 +101,7 @@ def active():
 
 def on(hours=DEFAULT_HOURS):
     """开 I See,hours 小时后自动失效(0 = 不失效)。顺带做一次体检,返回体检结果。"""
-    d = _load()
+    d = _load(strict=True)
     d[KEY] = "开"
     d[KEY_UNTIL] = time.strftime(FMT, time.localtime(time.time() + hours * 3600)) if hours else None
     _save(d)
@@ -108,7 +114,7 @@ def on(hours=DEFAULT_HOURS):
 
 
 def off():
-    d = _load()
+    d = _load(strict=True)
     d[KEY] = "关"
     d.pop(KEY_UNTIL, None)
     _save(d)

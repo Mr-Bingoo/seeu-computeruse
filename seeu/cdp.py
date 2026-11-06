@@ -395,6 +395,9 @@ def _has_window(pid):
 def _front():
     try:
         import AppKit
+        # 11-06:先让事件循环跑 20ms 再问。没有事件循环的程序里 NSWorkspace 会一直返回第一次查到的旧值,
+        # 「前台被抢了就还回去」就永远以为没被抢(seeu_lib.input_guard.frontmost_app 同款做法)。
+        AppKit.NSRunLoop.currentRunLoop().runUntilDate_(AppKit.NSDate.dateWithTimeIntervalSinceNow_(0.02))
         return AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
     except Exception:
         return None
@@ -725,6 +728,31 @@ def _not_terminal(h, s):
         raise CDPError("VS Code 的焦点在内置终端里,往里打字等于能执行任何命令,SeeU 不碰(这一步请你自己来)", "refused")
 
 
+_SECRET_JS = ("(function(){var e=document.activeElement;"
+              "while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;"
+              "if(!e)return '';var t=(e.type||'').toLowerCase(),"
+              "a=(e.getAttribute&&e.getAttribute('autocomplete')||'').toLowerCase();"
+              "if(t==='password')return '密码框';if(a.indexOf('one-time-code')>=0)return '验证码框';"
+              "if(a.indexOf('cc-')===0)return '银行卡框';return ''})()")
+
+
+def _chrome_guard(h, s):
+    """隐身 Chrome 上按键 / 打字之前(11-06 体检:原来这两个动作不查名单、不查密码框,
+    名单外网站的表单有焦点时按回车就提交了):当前页不在允许名单(I See 没开)→ 拒;焦点在密码 / 验证码 / 银行卡框 → 拒。"""
+    if h.app != "Google Chrome":
+        return
+    from seeu import isee
+    from seeu.web import aejs
+    url = s.eval("location.href") or ""
+    if not isee.active() and not aejs.is_allowed(url):
+        o = aejs.origin(url) or url
+        raise CDPError(f"这个网站({o})不在 SeeU 允许名单里,不往里按键 / 打字"
+                       f"(AI 问你时答应就行;也可以终端 python3 -m seeu allow {o})", "refused")
+    kind = s.eval(_SECRET_JS)
+    if kind:
+        raise CDPError(f"光标在{kind}里,SeeU 不碰(这一步请你自己来)", "refused")
+
+
 def _focus(s):
     """让藏着的页面以为自己有焦点(不然输入框不收字)。"""
     s.call("Emulation.setFocusEmulationEnabled", {"enabled": True})
@@ -747,6 +775,7 @@ def type(h, text, tab=None):
         with session(h, tab) as s:
             _focus(s)
             _not_terminal(h, s)
+            _chrome_guard(h, s)
             s.call("Input.insertText", {"text": str(text)})
     except CDPError as ex:
         return dict(outcome="refused" if ex.code in ("refused", "called_out") else "failed", route="调试端口",
@@ -763,13 +792,16 @@ def key(h, k, *mods, tab=None):
         return dict(outcome="refused", route="调试端口", reason=str(ex))
     name, code, vk, text = _key_spec(k)
     m = 0
-    for x in mods:
-        m |= MOD.get(str(x).lower(), 0)
+    for x in safety.norm_mods(mods):
+        if x not in MOD:            # 11-06:原来不认识的修饰键静默忽略,跟安全检查看到的不是同一套
+            return dict(outcome="failed", route="调试端口", reason=f"不认识的修饰键:{x}(只认 cmd / shift / alt / ctrl)")
+        m |= MOD[x]
     _step(h, "按键")
     try:
         with session(h, tab) as s:
             _focus(s)
             _not_terminal(h, s)
+            _chrome_guard(h, s)
             base = dict(key=name if not (m & 8 and len(name) == 1) else name.upper(), code=code,
                         windowsVirtualKeyCode=vk, nativeVirtualKeyCode=vk, modifiers=m)
             down = dict(base, type="keyDown", text=text, unmodifiedText=text) if text and not (m & 7) else dict(base, type="rawKeyDown")
@@ -841,7 +873,9 @@ def _title_path(r):
 def vscode_open(h, path):
     """在 SeeU 专用那份里打开一个文件(快速打开 ⌘P → 粘路径 → 回车,全程藏着)。"""
     path = os.path.abspath(os.path.expanduser(path))
-    key(h, "p", "cmd")
+    r = key(h, "p", "cmd")
+    if r.get("outcome") in ("refused", "failed"):   # 11-06 体检:焦点在内置终端时 ⌘P 被拒,原来没看结果,接着把路径打进终端
+        raise CDPError(r.get("reason") or "快速打开没按出来", r.get("code") or "refused")
     time.sleep(0.5)
     with session(h) as s:
         _focus(s)

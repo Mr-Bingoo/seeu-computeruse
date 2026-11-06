@@ -8,6 +8,33 @@ import re
 
 # (中文片段, 英文)。顺序无所谓,用的时候按中文长度从长到短换。
 PHRASES = [
+    # —— 11-06 体检新增的原因
+    ("不在 SeeU 允许名单里,还没打开。怎么办:", " is not on SeeU's allow list, so it was not opened. What to do: "),
+    ("不在 SeeU 允许名单里,没拉起浏览器。怎么办:", " is not on SeeU's allow list, so the browser was not started. What to do: "),
+    (",然后再开一次;或开 I See 模式", ", then open it again; or turn on I See mode"),
+    (",然后再来;或开 I See 模式", ", then try again; or turn on I See mode"),
+    ("不是浏览器,SeeU 不用它开网址", " is not a browser; SeeU won't open URLs with it"),
+    ("只能打开 http / https 网址", "only http / https URLs can be opened"),
+    ("只能允许 http / https 网站", "only http / https sites can be allowed"),
+    ("不在 SeeU 允许名单里,不往里按键 / 打字", " is not on SeeU's allow list; no keys or text are sent to it"),
+    ("里,SeeU 不往里打字(这一步请你自己来)", " — SeeU won't type into it (please do this step yourself)"),
+    ("里,SeeU 不碰(这一步请你自己来)", " — SeeU won't touch it (please do this step yourself)"),
+    ("光标在", "the cursor is in a "),
+    ("银行卡框", " card-number field"),
+    ("验证码框", " verification-code field"),
+    ("新密码框", " new-password field"),
+    ("密码框", " password field"),
+    ("用户正在用电脑,SeeU 先不借鼠标(等用户停手再试):", "the user is using the computer, so SeeU is not borrowing the mouse right now (try again when they stop): "),
+    ("没核实到字打进去,所以没按回车(先 see 看一眼,字在就单独按一次回车)",
+     "the text could not be verified, so Return was not pressed (see first; if the text is there, press Return separately)"),
+    ("截不到图,按输入框里读到的文字核实", "no screenshot available; verified against the text read from the field"),
+    ("不认识的修饰键:", "unknown modifier key: "),
+    ("(只认 cmd / shift / alt / ctrl)", " (only cmd / shift / alt / ctrl)"),
+    ("不认识的键:", "unknown key: "),
+    ("读不到系统设置现在开着哪一页(可能是隐私与安全性)", "can't tell which System Settings page is open (it may be Privacy & Security)"),
+    ("认字失败:", "text recognition failed: "),
+    ("设置.json 读不出来", "settings file (设置.json) can't be read"),
+    ("没改;先把这个文件修好", "nothing was changed; fix the file first"),
     # —— 整句 / 长句
     ("这一步后台做不到,要借用户的鼠标键盘几秒(设置.json「借用鼠标」= 问我)。",
      "This step can't be done in the background and needs to borrow the user's mouse/keyboard for a few seconds (the borrow-mouse setting is ask). "),

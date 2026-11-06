@@ -4,6 +4,20 @@
 
 A few plain sentences per release: what's new, what changed, and whether you need to do anything. To update, just tell the AI to "update SeeU" (or run `python3 -m seeu update`); ask the AI which version you have (or run `python3 -m seeu version`).
 
+## v1.1.2 (2026-11-06)
+
+This release mostly closes safety gaps, and fixes a few things that could go wrong.
+
+- **Sites not on the allow list: ask first, then open**: SeeU used to open the page and then ask whether to add the site, by which time the page had already been visited with your login. It now asks first and opens only after you agree. With I See mode on it still opens directly.
+- **Stricter allow list in the hidden Chrome**: in SeeU's own Chrome, pages that aren't on the list are not read, and no keys or text are sent to them. Your own browser is unchanged.
+- **Dangerous shortcuts are blocked under any name**: shortcuts like Empty Trash used to slip through when delete was written as backspace or alt as option. They are all blocked now.
+- **"Don't look, don't touch" filled in**: terminals, password apps and the privacy pages of System Settings are no longer even looked at; System Settings is blocked on another desktop too; nothing is typed while the cursor is in a verification-code field.
+- **"Open a web page" only opens web pages**: browsers only, http / https URLs only. Local files (file://) can no longer be added to the allow list.
+- **Return is pressed only after the text is verified**: if SeeU can't confirm the text went in, it doesn't press Return and tells the AI to look first.
+- **More robust**: a text-recognition failure no longer takes the whole SeeU server down; a misspelled modifier key no longer leaves ⌘ held; typing more than 200 characters on a web page no longer falsely reports no effect; after starting a hidden browser the frontmost app is handed back to you; quitting the hidden Chrome only quits SeeU's own copy, not your Chrome or other apps.
+- **Command line**: when an AI adds a site or changes borrow-mouse from the command line it must pass your reply (`--user-said`); typing the commands yourself is unaffected.
+- **What you need to do**: after updating, quit your AI client completely and reopen it. If you used local files (file://) as test pages, serve them from a local address instead (e.g. `http://127.0.0.1:8000`).
+
 ## v1.1.1 (2026-11-06)
 
 - **Less mouse-borrowing in iPhone Mirroring**: when tapping a text field only adds a cursor to the screen, SeeU used to treat it as a miss and borrow your mouse to tap again. It now looks for small changes around the tap, so it no longer borrows the mouse for nothing.

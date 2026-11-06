@@ -8,12 +8,14 @@
   4. 系统权限 / 密码弹窗(「想要控制」授权框、管理员密码框、互联网 App 打开确认、辅助功能授权提示、指纹确认)
      和系统设置里的隐私与安全性 / 密码页面:不点、不打字。
   4b. 存密码的 App(钥匙串访问、密码 App、1Password 等,10-30 加):不点、不打字。
-  5. 正在运行 SeeU 的程序本身(往上找父进程)和能调 SeeU 的 AI 桌面 App(Claude、ChatGPT/Codex App,10-30 加后者):
+  5. 正在运行 SeeU 的程序本身(往上找父进程;10-31 用户定只拦这一个,别的 AI 桌面 App 照常能操作):
      不点、不打字(防 AI 自己批准自己)。Codex 命令行跑在终端里,第 3 条已拦。
   6. SeeU 自己的悬浮窗 / 悬浮标 / 多任务岛(10-30 加):借真鼠标点之前查那个位置最上层,是它们(而且没在让路)就不点。
      10-30 实测:不让路时真鼠标点得中按钮栏,能把 I See 点开 = AI 自己给自己放权。后台点击按名字找不到它们(只认普通窗口),不用拦。
   另:菜单里的「清空废纸篓 / 立即删除 / 退出登录 / 锁定屏幕 / 关机 / 重新启动」也拦(跟快捷键同一件事)。
 🔴 写死、不留开关(用户定:开关一留,AI 就可能被网页上的字骗去打开)。
+11-06 体检:快捷键先把键名 / 修饰键别名归一再查(backspace = delete、option = alt…);「看画面」(act.see)也过目标程序这一关;
+系统设置读不到窗口标题时按拦处理(原来只查当前桌面上的窗口)。
 接在:bgclick._prepare / click、bgkey.press / type_unicode / type_physical、ax.press / type_text / set_text / menu、
 act._ladder(借真鼠标那条路也在里面)、web.type。直接调底层的程序(镜像、模拟器自动化)碰不到这几条。
 第 4 条的弹窗进程名只按公开资料写,除「想要控制」那个外都没实测(SeeU-相关要点 10-25 节)。
@@ -42,8 +44,32 @@ BLOCKED_KEYS = {
 }
 
 
+# 11-06 体检:bgkey.KEYCODE 里 backspace / esc 跟 delete / escape 是同一个键,调试端口那条路修饰键还认 command / option…
+# 原来按字面查表,换个叫法就绕开(backspace+cmd+shift = 清空废纸篓)→ 查表前一律归一成标准叫法。
+KEY_ALIAS = {"backspace": "delete", "esc": "escape", "del": "delete"}
+MOD_ALIAS = {"command": "cmd", "meta": "cmd", "super": "cmd", "win": "cmd", "⌘": "cmd",
+             "option": "alt", "opt": "alt", "⌥": "alt",
+             "control": "ctrl", "ctl": "ctrl", "⌃": "ctrl",
+             "⇧": "shift"}
+
+
+def norm_key(key):
+    k = str(key).strip().lower()
+    return KEY_ALIAS.get(k, k)
+
+
+def norm_mods(mods=()):
+    if isinstance(mods, str):
+        mods = [mods]
+    out = []
+    for m in mods or ():
+        m = str(m).strip().lower()
+        out.append(MOD_ALIAS.get(m, m))
+    return out
+
+
 def check_keys(key, mods=()):
-    hit = BLOCKED_KEYS.get((str(key).lower(), frozenset(m.lower() for m in mods)))
+    hit = BLOCKED_KEYS.get((norm_key(key), frozenset(norm_mods(mods))))
     if hit:
         raise Refused(f"「{hit}」是危险快捷键,SeeU 不按(这一步请你自己来)")
 
@@ -53,7 +79,7 @@ BLOCKED_TEXT = [
     ("下载后直接运行", r"\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba|z|da|k|fi)?sh\b"),
     ("下载后直接运行", r"\b(ba|z)?sh\s+(-c\s+)?[\"']?\$\(\s*(curl|wget)\b"),
     ("用管理员权限运行(sudo)", r"(^|[\s;&|`(])sudo\s+[-a-zA-Z/.~$]"),
-    ("删整个硬盘 / 家目录", r"\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+(--no-preserve-root\s+)?(/|~|\$HOME|/\*|~/\*|/Users/?\S*)(\s|$)"),
+    ("删整个硬盘 / 家目录", r"\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+(--no-preserve-root\s+)?(/|~/?|\$\{?HOME\}?/?|/\*|~/\*|\$\{?HOME\}?/\*|/Users/?\S*)(\s|$)"),
     ("抹盘", r"\bdiskutil\s+(erase|zero|secureErase|partitionDisk|reformat)"),
     ("抹盘", r"\bdd\b[^\n]*\bof=/dev/"),
     ("格式化磁盘", r"\bmkfs(\.\w+)?\s+/dev/"),
@@ -74,6 +100,8 @@ TERMINALS = {
     "Terminal": "com.apple.Terminal", "iTerm2": "com.googlecode.iterm2", "Warp": "dev.warp.Warp-Stable",
     "Ghostty": "com.mitchellh.ghostty", "kitty": "net.kovidgoyal.kitty", "Alacritty": "org.alacritty",
     "WezTerm": "com.github.wez.wezterm",
+    # 11-06 体检补:
+    "WarpPreview": "dev.warp.Warp-Preview", "Hyper": "co.zeit.hyper", "Tabby": "org.tabby",
 }
 # 系统权限 / 密码弹窗(进程名;只有 UserNotificationCenter 那类「想要控制」10-25 真见过,其余按公开资料)
 SYSTEM_PROMPTS = {
@@ -98,7 +126,8 @@ SETTINGS_PRIVATE = re.compile(r"隐私|安全|密码|自动化|辅助功能|屏�
                               r"定位服务|通讯录|相机|麦克风|登录项|用户与群组|"
                               r"Privacy|Security|Password|Automation|Accessibility|Screen (& System Audio )?Recording|Full Disk|"
                               r"Files (and|&) Folders|Input Monitoring|Developer Tools|App Management|Location Services|Contacts|"
-                              r"Camera|Microphone|Login Items|Users (&|and) Groups|Device Control|Data Access|设备控制|数据访问", re.I)
+                              r"Camera|Microphone|Login Items|Users (&|and) Groups|Device Control|Data Access|设备控制|数据访问|"
+                              r"共享|Sharing", re.I)
 # 能调 SeeU 的 AI 桌面 App(名字沿用老的,cdp/doctor 在用):Claude;ChatGPT(本机 /Applications/ChatGPT.app 包名就是
 # com.openai.codex,10-30 查;老版 ChatGPT 是 com.openai.chat)
 CLAUDE_BUNDLES = {"com.anthropic.claudefordesktop", "com.openai.codex", "com.openai.chat"}
@@ -139,11 +168,13 @@ def host_pids():
     if _host:
         return _host[0]
     pids, pid = set(), os.getppid()
+    ok = True                       # 11-06 体检:ps 超时 / 出错那次不记住(原来空结果永久缓存,这个进程一辈子认不出宿主)
     for _ in range(16):
         try:
             out = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], capture_output=True, text=True,
                                  timeout=3).stdout.strip()
         except Exception:
+            ok = False
             break
         if not out:
             break
@@ -169,8 +200,9 @@ def host_pids():
                 if u is not None and str(u.path()) in outer:
                     pids.add(int(a.processIdentifier()))
     except Exception:
-        pass
-    _host.append(pids)
+        ok = False
+    if ok:
+        _host.append(pids)
     return pids
 
 
@@ -185,13 +217,25 @@ def host_bundles():
 
 
 def _window_titles(pid):
+    """这个进程所有窗口的标题(含别的桌面、藏着的)。11-06 体检:原来只查当前桌面上的,
+    系统设置在别的桌面 / 被隐藏时标题是空的 → 隐私页拦不住,而后台点击、辅助功能恰恰不需要窗口在当前桌面。"""
+    out = []
     try:
         import Quartz
-        return [str(w.get("kCGWindowName") or "") for w in
-                Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, 0) or []
-                if w.get("kCGWindowOwnerPID") == pid]
+        out = [str(w.get("kCGWindowName") or "") for w in
+               Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, 0) or []
+               if w.get("kCGWindowOwnerPID") == pid and int(w.get("kCGWindowLayer", 0)) == 0]
     except Exception:
-        return []
+        pass
+    if not any(out):                    # 没给屏幕录制权限时读不到标题:再问辅助功能
+        try:
+            from seeu import ax
+            el = ax._AX["AXUIElementCreateApplication"](int(pid))
+            for w in ax.attr(el, "AXWindows") or []:
+                out.append(str(ax.attr(w, "AXTitle") or ""))
+        except Exception:
+            pass
+    return [t for t in out if t]
 
 
 def why_not(pid):
@@ -208,8 +252,11 @@ def why_not(pid):
     if pid in host_pids():
         return f"{name or pid} 是正在运行 SeeU 的程序(防 AI 自己批准自己)"
     if name in SETTINGS_APPS or bundle in ("com.apple.systempreferences", "com.apple.Settings"):
-        if any(SETTINGS_PRIVATE.search(t) for t in _window_titles(pid)):
+        titles = _window_titles(pid)
+        if any(SETTINGS_PRIVATE.search(t) for t in titles):
             return "系统设置正开着隐私与安全性 / 密码页面"
+        if not titles:
+            return "读不到系统设置现在开着哪一页(可能是隐私与安全性)"
     return None
 
 
@@ -235,7 +282,7 @@ def check_app(app):
 
 # ---------------------------------------------------------------- 菜单
 BLOCKED_MENU = re.compile(r"清空废纸篓|立即删除|退出登录|注销|锁定屏幕|关机|重新启动|"
-                          r"Empty Trash|Delete Immediately|Log Out|Lock Screen|Shut Down|Restart", re.I)
+                          r"强制退出|Empty Trash|Delete Immediately|Log Out|Lock Screen|Shut Down|Restart|Force Quit", re.I)
 
 
 def check_menu(path):
