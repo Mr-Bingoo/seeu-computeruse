@@ -285,6 +285,54 @@ def _abs(app, rx, ry):
 
 # ---------------------------------------------------------------- 核实 + 退路
 
+FINE_PIX_THR = 12      # 彩色原尺寸比时,算「变了」的色差(11-06 真机静止帧:12 以上只剩光标闪动,没有画面噪声)
+FINE_TAP_PT2 = 12      # 点击处附近变了多大算有反应(平方点;光标约 2×20)
+FINE_NEAR = (90, 50)   # 点击处左右、上下各看多远(点)
+FINE_KEY_PCT = 0.002   # 按键:整块区域变了多少算有反应
+
+
+def _fine_area(before, after, box, at=None, scale=1.0):
+    """彩色、不缩小地比两张图,返回变了的面积(平方点)。给了 at(图上像素)只看它附近。"""
+    import cv2
+    import numpy as np
+    a, b = cv2.imread(before), cv2.imread(after)
+    if a is None or b is None or a.shape != b.shape:
+        return float("inf")
+    x0, y0, x1, y1 = box or (0, 0, a.shape[1], a.shape[0])
+    if at:
+        x0, x1 = max(x0, int(at[0] - FINE_NEAR[0] * scale)), min(x1, int(at[0] + FINE_NEAR[0] * scale))
+        y0, y1 = max(y0, int(at[1] - FINE_NEAR[1] * scale)), min(y1, int(at[1] + FINE_NEAR[1] * scale))
+    d = cv2.absdiff(a[y0:y1, x0:x1], b[y0:y1, x0:x1]).max(axis=2)
+    return float(np.count_nonzero(d > FINE_PIX_THR)) / (scale * scale)
+
+
+def _fine_expect(app, at=None, min_change=0.003):
+    """镜像、模拟器专用的核实:原来的「整块画面变多少」之外,再看小变化(光标、选中高亮)。
+    at = 相对窗口的点击位置(点);不给 = 按键,看整块。普通 App 返回 None,照旧。"""
+    if not _is_canvas(app):
+        return None
+    import shutil
+    from seeu_lib import wait
+
+    def factory():
+        first = shoot(app)
+        keep = os.path.join(tempfile.gettempdir(), f"seeu_fine_{os.getpid()}.png")     # 每次覆盖,不留一堆文件
+        shutil.copyfile(first, keep)
+        box = _verify_box(app, keep)
+        g = _geo(app)
+        import cv2
+        scale = cv2.imread(keep).shape[1] / g["w"]
+
+        def expect(png):
+            if wait.frame_change(keep, png, box) >= min_change:
+                return True
+            if at:
+                return _fine_area(keep, png, box, (at[0] * scale, at[1] * scale), scale) >= FINE_TAP_PT2
+            total = (box[2] - box[0]) * (box[3] - box[1]) / (scale * scale)
+            return _fine_area(keep, png, box, None, scale) >= total * FINE_KEY_PCT
+        return expect
+    return factory
+
 def _try(app, act, min_change, expect=None):
     from seeu_lib import wait
     try:
@@ -641,7 +689,8 @@ def tap(app, target, real=True, allow=None):
         # 镜像主屏的 App 名字点不进,要点字上方的图标(10-14 实测「Settings」:点字没反应,上移 30 点就进了)
         steps.append(("后台点击(字上方图标)",
                       lambda: _shown(app, "click", rx, ry - ICON_ABOVE_LABEL, lambda x, y: bg.tap(app, x, y))))
-    r = _ladder(app, steps)
+    factory = _fine_expect(app, (rx, ry))     # 镜像、模拟器读不到控件,光标、高亮这种小变化靠看点击处附近
+    r = _ladder(app, steps, expect_factory=factory)
     r["xy"] = (round(x), round(y))
     if r["outcome"] != "ineffective":
         return r
@@ -657,7 +706,7 @@ def tap(app, target, real=True, allow=None):
             from seeu import safety
             safety.check_point(ax_, ay_)      # 10-30:位置盖着 SeeU 自己的浮标(没让路)就不点
             ig.guarded(ax_, ay_, bg.split_target(app)[0], do=lambda: mi.qtap(ax_, ay_))
-        r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap))])
+        r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap))], expect_factory=factory)
         r2["tried"] = r["tried"] + r2["tried"]
         r2["xy"] = r["xy"]
         return r2
@@ -737,7 +786,7 @@ def type(app, text, enter=False, fallback=True, allow=None):
         if factory is not None:
             seen = tail in "".join(c for c in (_focused_text(app) or "") if c.isalnum())
         else:
-            seen = _ocr_has_tail(app, tail)
+            seen = _ocr_has_tail(app, text)
         if seen is False:
             r.update(outcome="partial", reason=f"画面变了,但没认到最后几个字「{tail}」,可能只打进一部分;没按回车")
             return r
@@ -758,14 +807,43 @@ def _tail(text, n=4):
     return "".join(keep[-n:])
 
 
-def _ocr_has_tail(app, tail):
-    """截图识字,看最后几个字在不在画面上。认不了(识字出错)返回 None = 不确定,按原来的结果走。"""
+def _edit_tail(body, have):
+    """body 跟 have 的某段「结尾贴着 have 末尾」的文字最少差几个字(多、少、错各算 1)。"""
+    row = []        # 反过来比,开头不限:每多比一个字记一次「整个 body 比完差几个」
+    rb, rh = body[::-1], have[::-1]
+    prev = list(range(len(rb) + 1))
+    for c in rh:
+        cur = [0]
+        for j, d in enumerate(rb, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (c != d)))
+        prev = cur
+        row.append(cur[-1])
+    return min([len(rb)] + row)
+
+
+def _tail_seen(text, got, n=12):
+    """画面认到的字 got 里有没有 text 的结尾。认字常认错、多认或漏认个别字(11-06 实测 Indiana → Indliana),
+    前面允许差 1/5;但最后 3 个字必须一字不差,这样漏打的结尾不会被放过(打一半不能按回车)。"""
+    want = "".join(c.lower() for c in str(text) if c.isalnum())[-n:]
+    have = "".join(c.lower() for c in str(got) if c.isalnum())
+    if len(want) < 5:
+        return want in have
+    body, end = want[:-3], want[-3:]
+    i = have.find(end)
+    while i >= 0:
+        if _edit_tail(body, have[max(0, i - len(body) - 3):i]) <= len(want) // 5:
+            return True
+        i = have.find(end, i + 1)
+    return False
+
+
+def _ocr_has_tail(app, text):
+    """截图识字,看 text 的结尾在不在画面上。认不了(识字出错)返回 None = 不确定,按原来的结果走。"""
     try:
         from seeu_lib import ocr
         png = shoot(app)
-        got = "".join(c for it in ocr.ocr(png) for c in str(it[0] if isinstance(it, (list, tuple)) else
-                                                               it.get("text", "")) if c.isalnum())
-        return tail in got
+        got = "".join(str(it[0] if isinstance(it, (list, tuple)) else it.get("text", "")) for it in ocr.ocr(png))
+        return _tail_seen(text, got)
     except (Exception, SystemExit):   # seeu_lib.ocr 认不出会 SystemExit
         return None
 
@@ -845,7 +923,7 @@ def press(app, key, *mods):
         g = _geo(app)
         pid, _, _ = bg._prepare(app, g["x"] + g["w"] / 2, g["y"] + g["h"] / 2)
         bk.press(pid, key, mods)
-    return _ladder(app, [("后台按键", act)], min_change=0.001)
+    return _ladder(app, [("后台按键", act)], min_change=0.001, expect_factory=_fine_expect(app, min_change=0.001))
 
 
 def menu(app, *path):
@@ -913,7 +991,13 @@ def _mirror_texts(app):
 
 
 def _in_spotlight(t):
-    return any(m in t for m in SPOTLIGHT_MARKS)
+    return any(m in x for x in t for m in SPOTLIGHT_MARKS)      # 认字常带尾巴(如「Search in App G」),按包含比
+
+
+def _typed_in_spotlight(app, name):
+    """字进搜索框了吗:打进去后会出搜索结果(空 Spotlight 只有一个 Search 框,没有这些字)。"""
+    t = _mirror_texts(app)
+    return _in_spotlight(t) or any(name.lower() in x.lower() for x in t)
 
 
 def mirror_home(app="iPhone Mirroring", tries=3):
@@ -943,7 +1027,19 @@ def mirror_open_app(name, app="iPhone Mirroring"):
     t = _mirror_texts(app)
     if t == home or ("Calendar" in t and "Calendar" in home):
         return {"outcome": "failed", "step": "开 Spotlight(画面没变)"}
-    r = type(app, name, enter=True)
+    r = type(app, name)
+    time.sleep(1.0)
+    if not _typed_in_spotlight(app, name):      # 11-05 实测:Spotlight 开着但框没聚焦(没光标)时打不进,点一下再打一次
+        hit = [i for i in see(app)["items"] if i["text"].endswith("Search")]
+        if not hit:
+            return {"outcome": "ineffective", "step": "打不进搜索框,也没找到搜索框", "type": r}
+        bg.tap(app, *_rel(app, hit[-1]["x"], hit[-1]["y"]))
+        time.sleep(0.8)
+        r = type(app, name)
+        time.sleep(1.0)
+        if not _typed_in_spotlight(app, name):
+            return {"outcome": "ineffective", "step": "点过搜索框还是打不进字", "type": r}
+    press(app, "return")
     time.sleep(1.5)
     t = _mirror_texts(app)
     if _in_spotlight(t):
