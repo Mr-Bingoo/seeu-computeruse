@@ -102,7 +102,7 @@ How to work (look → act → look again):
 8. Apps with several windows (e.g. a separate Settings window): write the app as "App「window title」".
    seeu_see lists the open windows when there is more than one.
 
-Off limits (SeeU blocks these, don't try): terminal apps, the Privacy & Security pages of System Settings,
+Off limits (SeeU blocks these, don't try): terminal apps, password apps (Keychain, Passwords, 1Password…), the Privacy & Security pages of System Settings,
 system password / authorization dialogs, and the AI client you are running in. Dangerous shortcuts and dangerous
 command text. Never fill password, bank-card or verification-code fields. Never submit forms, pay or send messages
 for the user — fill things in, then stop and let the user click. Don't change the user's settings or sign in to accounts.
@@ -165,7 +165,7 @@ TOOLS = [
           "app to the front — prefer buttons in the window when possible.",
           {"app": APP, "path": {"type": "array", "items": {"type": "string"}}, "why": WHY}, ("app", "path")),
     _tool("seeu_long_press", "Long-press (e.g. to open a context menu in iPhone Mirroring). Target by number, or px, py on the screenshot.",
-          {"app": APP, "target": TARGET, "px": PX, "py": PY, "ms": {"type": "number", "description": "Milliseconds, default 1000"},
+          {"app": APP, "target": TARGET, "px": PX, "py": PY, "ms": {"type": "number", "description": "Milliseconds, default 1000, at most 10000"},
            "why": WHY}),
     _tool("seeu_mirror_home", "Go to the iPhone home screen in iPhone Mirroring (and make sure Spotlight is closed).", {"why": WHY}, ()),
     _tool("seeu_mirror_open", "Open an app inside iPhone Mirroring (home → Spotlight search → return), entirely in the background.",
@@ -387,12 +387,11 @@ def do_scroll(a):
     import seeu
     app, web = a["app"], _web(a["app"])
     r = None
-    if web:
-        try:
-            r = web.scroll(app, dy=a.get("dy"), tab=_tab(a.get("tab")))
-        except web.WebError as ex:
-            if ex.code != "unsupported":        # 辅助功能那条路:网页自己滚不了 → 后台滚轮
-                raise
+    # 11-06 二次复查:① 网页里 scrollBy 正数才是往下,跟工具说明(负数往下)反了 → 这里取反;
+    # ② 辅助功能那条路滚不了,原来靠接 WebError 退到后台滚轮,但 web.scroll 已把异常转成结果,永远接不到 → 先问能不能滚
+    if web and web.can_scroll(app, tab=_tab(a.get("tab"))):
+        dy = a.get("dy")
+        r = web.scroll(app, dy=None if dy in (None, 0) else -float(dy), tab=_tab(a.get("tab")))
     if r is None:
         r = seeu.scroll(app, dy=float(a.get("dy") or 0), dx=float(a.get("dx") or 0))
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
@@ -410,9 +409,13 @@ def do_menu(a):
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
 
+LONG_PRESS_MAX_MS = 10000
+
+
 def do_long_press(a):
     import seeu
-    r = seeu.long_press(a["app"], _target(a), ms=int(a.get("ms") or 1000))
+    ms = max(50, min(int(a.get("ms") or 1000), LONG_PRESS_MAX_MS))    # 11-06:原来没上限,一个大数就把服务卡住
+    r = seeu.long_press(a["app"], _target(a), ms=ms)
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
 
@@ -617,6 +620,12 @@ def call_tool(name, a):
     t0 = time.time()
     if not isinstance(a, dict):
         a = {}
+    if isinstance(a.get("app"), str):       # 11-06 二次复查:浏览器的别的写法(「标题」、包名、进程号)先归一,别绕开网页层
+        try:
+            from seeu import web
+            a["app"] = web.canon(a["app"])
+        except Exception:
+            pass
     _show_why(name, a)
     try:
         parts, err = fn(a)
@@ -666,6 +675,17 @@ def handle(msg):
     return {"jsonrpc": "2.0", "id": mid, "result": res}
 
 
+def _wire(out):
+    """回复转成一行。11-06 二次复查:网页文字里有半个 emoji(孤立代理字符)时按 UTF-8 写不出去,
+    原来异常没人接、整个服务退出 → 换成 � 再发。"""
+    s = json.dumps(out, ensure_ascii=False)
+    try:
+        s.encode("utf-8")
+        return s
+    except UnicodeEncodeError:
+        return "".join("\ufffd" if 0xD800 <= ord(c) <= 0xDFFF else c for c in s)
+
+
 def main():
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
     os.dup2(2, 1)                       # 之后 fd 1(含子进程)都进 stderr
@@ -691,7 +711,7 @@ def main():
             except (Exception, SystemExit) as ex:
                 out = {"jsonrpc": "2.0", "id": m.get("id"), "error": {"code": -32603, "message": str(ex)}}
             if out is not None:
-                proto.write(json.dumps(out, ensure_ascii=False) + "\n")
+                proto.write(_wire(out) + "\n")
                 proto.flush()
 
 

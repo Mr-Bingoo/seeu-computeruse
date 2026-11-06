@@ -47,7 +47,7 @@ Legend: ✅ background, no disturbance · ⚡ briefly borrows the front window o
 | iPhone Mirroring | ✅ text recognition | ✅ background click (private interface) | ✅ | ✅ (adds a small drag when stuck) | ❌ (window must be there, any size) | Accessibility, Screen Recording |
 | Dragging (any scenario) | — | ⚡ borrows the real mouse | — | — | — | Same as above |
 
-Every scenario goes through the safety rules first: Terminal, system permission prompts, the Privacy & Security part of System Settings, password apps (Keychain, Passwords, 1Password and so on), the AI client running SeeU itself (such as Claude or Codex), SeeU's own floating window buttons (so the AI can't turn on I See for itself), and dangerous shortcuts / commands / menu items are all blocked; password, CAPTCHA and bank card fields are never touched.
+Every scenario goes through the safety rules first: Terminal, system permission prompts, the Privacy & Security part of System Settings, password apps (Keychain, Passwords, 1Password and so on), the AI client running SeeU itself (such as Claude or Codex), SeeU's own floating window buttons (so the AI can't turn on I See for itself), and dangerous shortcuts / commands / menu items are all blocked; password, verification-code and bank card fields are never touched.
 
 "Background click (private interface)" = posting the click straight to the window through an interface macOS hasn't made public. It may stop working after a system update, and then SeeU automatically falls back to the real mouse (see 3.3).
 

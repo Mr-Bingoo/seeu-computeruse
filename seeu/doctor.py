@@ -108,6 +108,13 @@ def check():
     except Exception as e:
         _row(rows, NA, "屏幕录制", f"查不到({e.__class__.__name__})")
 
+    try:                                 # 11-06 二次复查:截图、核实画面变没变都要这两个库,原来安装说明没写、这里也不查
+        import cv2, numpy  # noqa: F401
+        _row(rows, OK, "图像库(OpenCV、numpy)", "已装")
+    except Exception:
+        _row(rows, BAD, "图像库(OpenCV、numpy)",
+             "没装:截图、核实画面都会报错。运行 /usr/bin/python3 -m pip install --user opencv-python-headless numpy")
+
     try:
         from seeu import bgclick
         a = bgclick.available()

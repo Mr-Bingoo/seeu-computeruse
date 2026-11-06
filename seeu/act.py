@@ -258,6 +258,7 @@ def see(app):
     """返回 {png, items}。items 每项:id、kind(ax|ocr)、text、x/y(屏幕点中心)、以及 ax 项带 el/role。
     浏览器(Chrome / Safari …)转给 seeu.web:返回 {route, items, text, url, title, tab},没有 png。"""
     from seeu import web, safety
+    app = web.canon(app)
     # 11-06 体检:看画面也过安全底线(原来终端、密码 App、隐私设置页都能被截图 + 读文字发给 AI;probe 是跳过的)。
     # 被拦抛 safety.Refused(= ax.AXRefused)。
     safety.check_app(app)
@@ -758,6 +759,7 @@ def _shown(app, kind, rx, ry, fn):
 
 def tap(app, target, real=True, allow=None):
     from seeu import web
+    app = web.canon(app)
     if web.is_browser(app) or web.is_cdp(app):     # 浏览器 / SeeU 专用那份网页壳 App:按网页里的编号/名字点,见 seeu/web
         return web.tap(app, target)
     x, y, e = _resolve(app, target)
@@ -826,6 +828,8 @@ def type(app, text, enter=False, fallback=True, allow=None):
     """先后台打字;画面没变就走 SeeU 兜底:拿桌面锁 → 让路 → 把目标切到前台打 → 还原前台。
     fallback=False 只走后台(调用方自己有退路、不想被抢前台时用)。都不行报 ineffective,交给项目自己的办法。
     🔴 后台那次如果其实打进去了但画面没变(核实不到),兜底会再打一遍,看到重复字就是这种情况。"""
+    from seeu import web as _web
+    app = _web.canon(app)
     from seeu_lib import input_guard as ig
     from seeu import safety
     pid = ig.secure_input_pid()
@@ -1151,7 +1155,7 @@ def mirror_open_app(name, app="iPhone Mirroring"):
         hit = [i for i in see(app)["items"] if i["text"].endswith("Search")]
         if not hit:
             return {"outcome": "ineffective", "step": "打不进搜索框,也没找到搜索框", "type": r}
-        bg.tap(app, *_rel(app, hit[-1]["x"], hit[-1]["y"]))
+        bg.tap(app, hit[-1]["x"], hit[-1]["y"])      # 11-06 二次复查:bg.tap 要屏幕点(原来传了相对窗口的偏移)
         time.sleep(0.8)
         r = type(app, name)
         time.sleep(1.0)

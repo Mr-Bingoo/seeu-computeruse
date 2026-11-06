@@ -661,7 +661,7 @@ def drag(app_name, pts, hold_ms=0, step_ms=280, prime=None):
 def long_press(app_name, sx, sy, ms=900, prime=None):
     """后台长按。"""
     pid, wid, xy = _prepare(app_name, sx, sy, prime)
-    click(pid, wid, xy, sx, sy, hold=ms / 1000.0)
+    click(pid, wid, xy, sx, sy, hold=max(0.0, float(ms)) / 1000.0)   # 11-06:负数原来按下后抛异常、不抬起
     return pid, wid
 
 

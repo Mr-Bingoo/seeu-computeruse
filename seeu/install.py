@@ -387,7 +387,7 @@ def install_json(key):
     _p(f"① 找到 {app} ✅")
     d = _json_read(cfg)
     if d is None:
-        _p(f"② 设置文件读不懂(可能带注释):{cfg}\n   请手动在「{c['root']}」里加一条 seeu,写法见 接入说明-AI客户端.md")
+        _p(f"② 设置文件读不懂(可能带注释):{cfg}\n   请手动在「{c['root']}」里加一条 seeu,写法 : 把 python3 -m seeu mcp 当成本机 MCP 服务")
         return 1
     st = _load()
     if NAME in d.get(c["root"], {}):

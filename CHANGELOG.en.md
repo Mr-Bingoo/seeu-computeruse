@@ -4,6 +4,20 @@
 
 A few plain sentences per release: what's new, what changed, and whether you need to do anything. To update, just tell the AI to "update SeeU" (or run `python3 -m seeu update`); ask the AI which version you have (or run `python3 -m seeu version`).
 
+## v1.1.3 (2026-11-06)
+
+After v1.1.2 went out we reviewed everything once more. This release closes the safety gaps that review found, and corrects a few places where the docs promised too much.
+
+- **Web tools no longer read other apps**: "read page" and "list tabs" didn't check their target, so they would also read the AI client running SeeU, or a password app built with web technology. They now accept browsers only, and go through the safety rules like every other action.
+- **A browser under another name still follows the web rules**: writing Chrome with a window title, a bundle id or a process id used to bypass the allow list and the typing limits. It is now recognised as the browser first.
+- **The Empty Trash menu item is blocked in more languages**: Simplified Chinese macOS uses a different wording from the one SeeU blocked, so it slipped through. Traditional Chinese and British English ("Empty Bin") are covered too.
+- **Half an emoji no longer stops the service**: a truncated emoji in a page title or text made the SeeU service exit, after which every tool failed. It is now replaced with � and the reply goes through.
+- **Scrolling in web pages goes the right way**: the tool description says negative means down, but pages scrolled up. Without the Apple-events switch or the extension, page scrolling used to simply fail; it now falls back to the background scroll wheel.
+- **Long-press has a limit**: at most 10 seconds. A very large value used to hang the whole service.
+- **OpenCV and numpy added to the install instructions**: screenshots and result checks need them, and they were missing. `python3 -m seeu check` now checks for both.
+- **Docs made accurate**: the safety rules now separate what is hard-coded from the rules written for the AI. Not submitting, paying or sending messages for you belongs to the second kind; the code doesn't block it. In iPhone Mirroring and emulators SeeU can't recognise password fields, so that also relies on the AI there. The retry described in v1.1.1 ("taps the search box first") passed the wrong coordinates; that is fixed here, but it still hasn't been exercised on a real device.
+- **What you need to do**: fully quit your AI client and open it again after updating. Run `python3 -m seeu check` once; if it says the image libraries are missing, install them with the command it shows.
+
 ## v1.1.2 (2026-11-06)
 
 This release mostly closes safety gaps, and fixes a few things that could go wrong.
@@ -22,7 +36,7 @@ This release mostly closes safety gaps, and fixes a few things that could go wro
 
 - **Less mouse-borrowing in iPhone Mirroring**: when tapping a text field only adds a cursor to the screen, SeeU used to treat it as a miss and borrow your mouse to tap again. It now looks for small changes around the tap, so it no longer borrows the mouse for nothing.
 - **No more false "only partly typed" on long text**: text recognition sometimes misreads, adds or drops a letter. SeeU only compared the last few characters, so one mistake reported a partial result and skipped Return. It now tolerates a few recognition errors, but the ending must still match, so Return isn't pressed if typing really stopped short.
-- **Opening an app in iPhone Mirroring no longer falsely succeeds**: when the search box wasn't focused, the text didn't go in but SeeU still reported success. It now taps the search box and retries, and reports a failure if that doesn't work.
+- **Opening an app in iPhone Mirroring no longer falsely succeeds**: when the search box wasn't focused, the text didn't go in but SeeU still reported success. It now reports a failure when the text doesn't go in. A retry that taps the search box first was also added, but that step hasn't been exercised on a real device yet.
 - **Known issue**: ⌘A in iPhone Mirroring was once reported as having no effect even though everything was selected. We couldn't reproduce it; if you see it, have the AI look at the screen again.
 - **What you need to do**: after updating, quit your AI client completely and reopen it for the new version to take effect.
 
@@ -44,6 +58,6 @@ First public release.
 - **Background control**: native apps, Safari / Chrome pages, apps built with web tech, iPhone Mirroring and Android emulators: see the screen, click, type and scroll in the background without taking your mouse or switching your front window.
 - **Visible**: a purple agent cursor plus a floating badge; open it to see the steps and a live view, and stop it any time.
 - **Setup**: MCP and Skill support; `python3 -m seeu install auto` connects Claude, Codex, Cursor, Trae and VS Code in one step.
-- **Hard-coded safety rules**: never touches terminals, passwords or privacy settings, and never submits, pays or sends messages for you.
+- **Safety rules**: terminals, passwords and privacy settings are hard-coded as off limits; not submitting, paying or sending messages for you is a rule written for the AI.
 - **Mouse borrowing, three modes**: on (default, with a notice) / ask me / off.
 - **macOS only**: Windows and Linux versions are being researched.

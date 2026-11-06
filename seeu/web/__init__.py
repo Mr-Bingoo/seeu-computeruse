@@ -63,6 +63,61 @@ def is_browser(app):
     return _name(app) in CHROMIUM or _name(app) in OTHERS
 
 
+# 11-06 二次复查:浏览器写成「Google Chrome「标题」」、包名、进程号时,原来不算浏览器 → 走原生路线,
+# 允许名单、「打字必须给 target」、银行卡框判断全绕开。动手前先归成网页层认的名字。
+BUNDLES = {"com.apple.Safari": "Safari", "com.apple.SafariTechnologyPreview": "Safari Technology Preview",
+           "com.google.Chrome": "Google Chrome", "com.microsoft.edgemac": "Microsoft Edge",
+           "com.brave.Browser": "Brave Browser", "company.thebrowser.Browser": "Arc", "org.chromium.Chromium": "Chromium",
+           "com.vivaldi.Vivaldi": "Vivaldi", "org.mozilla.firefox": "Firefox", "com.kagi.kagimacOS": "Orion"}
+_canon = {}
+
+
+def _by_bundle(bundle):
+    for b, n in BUNDLES.items():
+        if bundle == b or str(bundle or "").startswith(b + "."):     # 带 .helper 之类后缀的子进程也算
+            return n
+    return None
+
+
+def canon(app):
+    """浏览器的别的写法(带「窗口标题」、包名、进程号、本地化名字)→ 网页层认的名字;不是浏览器原样返回。"""
+    s = str(app or "")
+    if not s or is_browser(s):
+        return app
+    if s in _canon:
+        return _canon[s]
+    from seeu import ax
+    owner = str(ax.split_window(s)[0] or "")
+    if is_browser(owner):
+        return _name(owner)
+    hit = _by_bundle(owner)
+    if hit:
+        return hit
+    try:
+        for n, p, b in ax.running_apps():
+            if (owner.isdigit() and int(owner) == p) or owner in (n, b):
+                hit = _by_bundle(b) or (_name(n) if is_browser(n) else None)
+                if hit and not owner.isdigit():      # 进程号会被别的程序重用,不记
+                    _canon[s] = hit
+                return hit or app
+        if owner.isdigit():                          # 不在 App 名单里的进程号(浏览器的子进程)
+            from seeu import safety
+            n, b = safety._info(int(owner))
+            return _by_bundle(b) or (_name(n) if is_browser(n) else app)
+    except Exception:
+        pass
+    return app
+
+
+def _gate(app):
+    """网页工具动手 / 读之前:只碰浏览器和 SeeU 专用那份,而且过安全底线(宿主、密码 App、终端…)。
+    11-06 二次复查:read / tabs 原来不查,app 传宿主或网页技术做的密码 App 能读到整页文字。"""
+    if not (is_browser(app) or is_cdp(app)):
+        raise WebError(f"{app} 不是浏览器,SeeU 的网页工具不碰它", "refused")
+    from seeu import safety
+    safety.check_app(app)
+
+
 def _cdp(app):
     """SeeU 专用那份(调试端口)在跑 → cdp.Handle,否则 None。"""
     try:
@@ -265,6 +320,7 @@ def _ae_on(app):
 def see(app, tab=None, max_items=400):
     """读网页:返回 {route, items, text, url, title, tab}。items 每项:id、role、text(名字)、value、checked…
     挑路:插件 → 开关 → 辅助功能(见模块说明)。tab:插件给整数 id,开关给 "窗口id:标签"(都从 tabs() 拿)。"""
+    _gate(app)
     free = isee.active()
     if not _step.get(app):
         _watch(app, "读网页")
@@ -359,6 +415,7 @@ def describe(items):
 
 def read(app, tab=None):
     """整页文字(比价、看文案用)。tab 是开关那条路的编号("窗口:序号")就不走插件(C-0.5 实测修)。"""
+    _gate(app)
     if _cdp(app):
         return {k: v for k, v in see(app, tab=tab).items() if k in ("text", "url", "title")}
     if plugin_ready(app) and not _ae_tab(tab):
@@ -444,6 +501,7 @@ def _guard(fn):
     """把 WebError / AEError 变成 SeeU 统一的结果(refused / failed),不往外抛。
     I See 开着:页面变了(编号失效)自动重看一次再做;每步记日志(打的字只记长度),供 isee.report() 出报告。"""
     def wrap(app, *a, **kw):
+        _gate(app)                          # 11-06 二次复查:不是浏览器 / 安全底线拦的,直接抛(不记成「卡住」)
         step = STEP.get(fn.__name__, fn.__name__)
         _watch(app, step)
         _step[app] = step                   # 动作里顺带读页面时,悬浮标上别被「读网页」盖掉(10-20 用户实测看到)
@@ -590,6 +648,12 @@ def select(app, target, option, tab=None):
     return _result("插件", "delivered", state=st)
 
 
+def can_scroll(app, tab=None):
+    """这一页能不能在网页里直接滚(插件 / 开关 / 调试端口);辅助功能那条路不能,调用方改用后台滚轮。"""
+    cur = _last.get(app) or see(app, tab=tab)
+    return cur["route"] in ("插件", "开关", "调试端口")
+
+
 @_guard
 def scroll(app, dy=None, tab=None):
     cur = _last.get(app) or see(app, tab=tab)
@@ -609,6 +673,7 @@ def scroll(app, dy=None, tab=None):
 def tabs(app):
     """插件:所有已允许网站的标签页(没允许的只给个数)。开关:所有窗口的标签页(没进 SeeU 允许名单的只给个数,
     I See 下全给)。辅助功能:当前窗口标签栏上的名字。调试端口:这份 App 里的页面(浏览器同样守名单)。"""
+    _gate(app)
     h = _cdp(app)
     if h:
         from seeu import cdp

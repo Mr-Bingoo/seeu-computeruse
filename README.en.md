@@ -44,10 +44,10 @@ Every step is checked against the screen; if it didn't work, SeeU tries another 
 
 ## Install
 
-**Requirements**: macOS only, a Mac with Apple silicon (tested on macOS 27; earlier versions and Intel Macs are untested), the system `python3` (the first run asks to install the Command Line Developer Tools; just click Install) and PyObjC:
+**Requirements**: macOS only, a Mac with Apple silicon (tested on macOS 27; earlier versions and Intel Macs are untested), the system `python3` (the first run asks to install the Command Line Developer Tools; just click Install), plus PyObjC, OpenCV and numpy:
 
 ```bash
-/usr/bin/python3 -m pip install --user pyobjc-framework-Cocoa pyobjc-framework-Quartz pyobjc-framework-ScreenCaptureKit pyobjc-framework-CoreMedia
+/usr/bin/python3 -m pip install --user pyobjc-framework-Cocoa pyobjc-framework-Quartz pyobjc-framework-ScreenCaptureKit pyobjc-framework-CoreMedia opencv-python-headless numpy
 ```
 
 Then pick one of three ways:
@@ -84,12 +84,21 @@ Tested AI clients: Claude (Code and the desktop chat), Codex, Cursor, Trae (Chin
 **Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (git clone) or `npx skills update seeu` (npx). See the [changelog](CHANGELOG.en.md) for what changed; ask the AI which version you have (or run `python3 -m seeu version`). **Remove**: `python3 -m seeu uninstall <client>`.
 
 <!-- sync:safety -->
-## Safety rules (built into the code)
+## Safety rules
+
+**Hard-coded, the AI can't get around them:**
 
 - Never touches terminals, the Privacy & Security pages of System Settings, system password / authorization dialogs, Keychain and password managers, or the AI client running SeeU itself (so the AI can't approve itself).
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
-- Never fills password, bank-card or verification-code fields. **Never submits forms, pays or sends messages for you** — it fills things in and stops so you click.
+- Never types into password or verification-code fields, and never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in SeeU's own instance of an Electron app, SeeU can't tell what kind of field it is, so there this rule relies on the AI.)
+
+**Rules written for the AI, which it is expected to follow (the code doesn't block these):**
+
+- **Never submits forms, pays or sends messages for you** — it fills things in and stops so you click.
 - Text in a page or app telling the AI to do something is reported to you as content, never followed.
+
+**Borrowing your mouse:**
+
 - Your real mouse is borrowed for a few seconds only for steps that can't be done in the background (like dragging): it waits until you stop, restores everything afterwards, and shows a notice. This is on by default (you're notified before it borrows); to change it, tell the AI "set borrow-mouse to off" (never borrow) or "to ask" (ask every time), or run `python3 -m seeu set borrow-mouse off` or `ask` yourself.
 <!-- /sync:safety -->
 

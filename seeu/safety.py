@@ -281,8 +281,9 @@ def check_app(app):
 
 
 # ---------------------------------------------------------------- 菜单
-BLOCKED_MENU = re.compile(r"清空废纸篓|立即删除|退出登录|注销|锁定屏幕|关机|重新启动|"
-                          r"强制退出|Empty Trash|Delete Immediately|Log Out|Lock Screen|Shut Down|Restart|Force Quit", re.I)
+# 11-06 二次复查:简体中文访达里实际叫「清倒废纸篓」(原来只写了「清空」,拦不住);顺带补繁体和英式英文的叫法
+BLOCKED_MENU = re.compile(r"清[空倒]废纸篓|[清倒]空?垃圾桶|立即[删刪]除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|关机|關機|重新启动|重新開機|"
+                          r"强制退出|強制結束|Empty (the )?(Trash|Bin)|Delete Immediately|Log Out|Lock Screen|Shut Down|Restart|Force Quit", re.I)
 
 
 def check_menu(path):

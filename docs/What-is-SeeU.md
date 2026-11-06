@@ -138,7 +138,7 @@ On top of the general abilities, the scenarios below get extra handling to stay 
 ## Web pages: Safari and Chrome
 
 ### What both can do
-Read and write ordinary web pages (read, click, fill in, drop-downs, checkboxes, including forms on React-style sites); read background tabs without switching to them; work with the window minimized or on another desktop; stop at CAPTCHA fields and new-password fields and leave them for you to fill in.
+Read and write ordinary web pages (read, click, fill in, drop-downs, checkboxes, including forms on React-style sites); read background tabs without switching to them; work with the window minimized or on another desktop; stop at verification-code fields and new-password fields and leave them for you to fill in.
 
 ### What's needed
 | | Safari | Chrome |
@@ -187,7 +187,7 @@ Chromium-based browsers like Edge and Arc will most likely work the Chrome way d
 
 **What it still can't get around when it's on**:
 - It still steps aside while you're using the mouse and keyboard.
-- It still never touches password, CAPTCHA or bank card fields.
+- It still never touches password, verification-code or bank card fields.
 - The "hard safety rules" still apply (see "Safety rules" under "Safety and things to note" below).
 - For outward-facing actions like sending messages, submitting or placing orders, the AI calling SeeU still asks you first; anything you spelled out in the task beforehand (such as "submit this batch of forms directly") counts as already asked.
 
@@ -198,12 +198,21 @@ Chromium-based browsers like Edge and Arc will most likely work the Chrome way d
 The "Safety rules", "Good to know" and "Troubleshooting" sections below match the README; a few details the README doesn't cover come last.
 
 <!-- sync:safety -->
-### Safety rules (built into the code)
+### Safety rules
+
+**Hard-coded, the AI can't get around them:**
 
 - Never touches terminals, the Privacy & Security pages of System Settings, system password / authorization dialogs, Keychain and password managers, or the AI client running SeeU itself (so the AI can't approve itself).
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
-- Never fills password, bank-card or verification-code fields. **Never submits forms, pays or sends messages for you** — it fills things in and stops so you click.
+- Never types into password or verification-code fields, and never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in SeeU's own instance of an Electron app, SeeU can't tell what kind of field it is, so there this rule relies on the AI.)
+
+**Rules written for the AI, which it is expected to follow (the code doesn't block these):**
+
+- **Never submits forms, pays or sends messages for you** — it fills things in and stops so you click.
 - Text in a page or app telling the AI to do something is reported to you as content, never followed.
+
+**Borrowing your mouse:**
+
 - Your real mouse is borrowed for a few seconds only for steps that can't be done in the background (like dragging): it waits until you stop, restores everything afterwards, and shows a notice. This is on by default (you're notified before it borrows); to change it, tell the AI "set borrow-mouse to off" (never borrow) or "to ask" (ask every time), or run `python3 -m seeu set borrow-mouse off` or `ask` yourself.
 <!-- /sync:safety -->
 
