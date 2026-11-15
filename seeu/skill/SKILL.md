@@ -1,10 +1,11 @@
 ---
 name: seeu
-description: Use SeeU to see and operate apps on the user's Mac in the background — look at the screen, click, type, scroll — without taking the mouse or switching the frontmost app. Use it when the user asks you to operate a Mac app (TextEdit, Notes, VS Code…), a Safari/Chrome page, iPhone Mirroring or the BlueStacks emulator, or says "use SeeU" / "click / fill in / check something in X for me". Don't use SeeU for things that have their own tools, like writing files or running commands.
+description: Use SeeU to see and operate apps on the user's Mac in the background — look at the screen, click, type, scroll — without taking the mouse or switching the frontmost app. Use it when the user asks you to operate a Mac app (TextEdit, Notes, VS Code…), a Safari/Chrome page, iPhone Mirroring or the BlueStacks emulator, or says "use SeeU" / "click / fill in / check something in X for me". Don't use SeeU for things that have their own tools, like writing files or running commands. On Windows there is a SeeU Windows preview with its own instructions (seeu/win/skill/SKILL.md).
 ---
 
 # SeeU: operate this Mac in the background
 
+> **On Windows?** This file is for the Mac. Windows has a SeeU Windows preview: install it as the README says (write `python` instead of `python3`), connect it with `python -m seeu install auto`, then follow `seeu/win/skill/SKILL.md` instead of this file.
 > Run every command from the folder that contains the `seeu` folder. SeeU works in the background: the user keeps using the mouse and keyboard, neither disturbs the other.
 > Reply to the user in the user's language; this file is in English only because it is written for you.
 

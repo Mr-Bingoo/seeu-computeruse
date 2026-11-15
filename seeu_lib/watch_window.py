@@ -2066,6 +2066,13 @@ def serve():
 
     def fade(win, key, target):
         if abs(st[key] - target) <= 0.01:
+            # 11-16 用户报「千问用 SeeU 干活时没出现悬浮标」:现场是记着已显示(alpha 1)、窗口却不在屏幕上(isVisible 假),
+            # 原来这里直接返回,就再也不会放出来。原因没抓到 → 补回来,并记一笔方便下次查。
+            if target > 0.01 and not win.isVisible() and not st.get("morph"):
+                _log(f"{key} 记着显示、窗口却不在屏幕上,补回来")
+                win.setAlphaValue_(st[key])
+                win.orderFrontRegardless()
+                return True
             return False
         step = (1 / 30.0) / 0.25
         st[key] = min(target, st[key] + step) if target > st[key] else max(target, st[key] - step)

@@ -30,9 +30,9 @@ Once installed, just ask your AI (Claude, Codex, Cursor…):
 "Watch the first test case in VS Code until it finishes"
 ```
 
-## What it can do
+## What SeeU can do for you
 
-Every step is checked against the screen; if it didn't work, SeeU tries another way or stops and tells you where it's stuck instead of clicking blindly. More in [What is SeeU](docs/What-is-SeeU.md).
+Before we get to what SeeU can do, one thing to know: every step is checked against the screen; if an action didn't take effect, SeeU tries another way, or stops and tells you where it's stuck, instead of clicking blindly. More in [What is SeeU](docs/What-is-SeeU.md).
 
 **On both Mac and Windows:**
 
@@ -56,7 +56,7 @@ A floating badge on screen (open it to see what the AI is doing, or a live view 
 
 | Scenario | How SeeU does it |
 |---|---|
-| Chrome / Edge pages | SeeU opens its own windowless background browser (kept apart from the one you use) and reads pages, fills forms and clicks there; for sites that need a login it can show that browser so you sign in yourself |
+| Chrome / Edge pages | SeeU opens its own windowless background browser (kept apart from the one you use) and reads pages, fills forms and clicks there; for sites that need a login, the AI can bring that window up so you handle it yourself! |
 
 ## Install
 
@@ -108,7 +108,7 @@ Permissions are needed on the Mac only (nothing to set up on Windows): on the Ma
 
 ## Connect your AI client
 
-Tested: Claude (Code and the desktop chat), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao, Qwen (Qwen needs a few extra steps, see below).
+Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao, Qwen (Qwen has a few steps of its own, see below for details).
 
 - Claude, Codex, Cursor, Trae, VS Code: connected by the `install` command above.
 - WorkBuddy, Doubao: create a custom connector (local / STDIO) in their own settings and enter `python3 -m seeu mcp`; the same works for any other MCP client.

@@ -4,6 +4,14 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI to "update SeeU", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.2.1 (2026-11-16)
+
+Two small fixes after v1.2.0, plus a few plainer wordings in the README.
+
+- **The floating badge sometimes didn't show** (Mac): after several AIs had used SeeU at once, the badge could stay hidden. Now when it should be showing but isn't on screen, SeeU puts it back and notes what happened, so the cause can be tracked down later.
+- **The AI's instructions now say what to do on Windows**: the instructions file at the top of the repository only talked about the Mac, so an AI given the link on Windows might think SeeU can't be installed there. It now says up front that there is a Windows preview and which instructions to follow.
+- **What you need to do**: nothing, just update.
+
 ## v1.2.0 (2026-11-16)
 
 The Windows preview is here, and the Mac version is steadier too: when SeeU isn't confident about what's on screen it doesn't click blindly, it doesn't pull windows to the front lightly, and it doesn't casually switch you to another desktop.
