@@ -1,5 +1,6 @@
 """SeeU —— 我们自己的 Computer Use(名字取「CU」的谐音,别处一律只叫 SeeU)。说明见同目录 README.md。"""
 
+import os
 import sys
 
 # 11-01 用户定:只支持 macOS。别的系统一进来就说清楚,别等到缺 pyobjc 报一大段英文。
@@ -7,7 +8,9 @@ import sys
 MAC_ONLY = ("SeeU 目前只支持 macOS，其能力主要来自macOS自带的辅助功能、截屏和文字识别，当前设备（{os}）暂时用不了，其他系统的版本正在调研中，欢迎关注！\n"
             "SeeU only supports macOS for now. Its abilities mainly come from macOS's built-in Accessibility, screen capture and "
             "text recognition, so it can't run on this device ({os}) yet. Versions for other systems are being researched, stay tuned!")
-if sys.platform != "darwin":
+# 11-11 起:Windows 预览版,实现在 seeu/win/(Mac 版代码不动)。包里没有 win/ 时(11-14 前的开源导出)Windows 上照旧给「只支持 macOS」的话
+WINDOWS = sys.platform == "win32" and os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "win"))
+if sys.platform != "darwin" and not WINDOWS:
     import platform as _pf
     _msg = MAC_ONLY.format(os=_pf.system() or sys.platform)
     if sys.argv[:1] == ["-m"]:
@@ -34,7 +37,19 @@ ACTIONS = ("see", "tap", "type", "scroll", "press", "menu", "drag", "long_press"
 SUBMODULES = ("web", "stealth", "cdp", "isee", "safety", "act")   # 10-30:Skill 里写 seeu.web.type(...),用到再加载
 
 
+WIN_ACTIONS = ("see", "tap", "type", "scroll", "press", "describe")
+
+
 def __getattr__(name):
+    if WINDOWS:
+        if name in WIN_ACTIONS:
+            from seeu.win import act as _wact
+            return getattr(_wact, name)
+        mods = {"win": "seeu.win", "act": "seeu.win.act", "safety": "seeu.win.safety"}
+        if name in mods:
+            import importlib
+            return importlib.import_module(mods[name])
+        raise AttributeError(f"module 'seeu' has no attribute {name!r}(Windows 预览版还没有这一项)")
     if name in ACTIONS:
         from seeu import act
         return getattr(act, name)

@@ -104,13 +104,16 @@ TEXT = {
     "upd.new": ("有新版:{n} 个更新\n{log}", "New version available: {n} change(s)\n{log}"),
     "upd.done": ("✅ 更新好了:v{oldv} → v{newv}({old} → {new})", "✅ Updated: v{oldv} → v{newv} ({old} → {new})"),
     "upd.pull_fail": ("拉取新版失败,这次没更新(原因:{err})。", "Pulling the new version failed, nothing was updated ({err})."),
-    "upd.launcher": ("SeeU 小程序有改动,已经重新生成。⚠️ 系统会把它当成新程序:请到「系统设置 → 隐私与安全性」的「辅助功能」和「屏幕与系统录音」里,把 SeeU 关掉再打开一次。",
-                     "The SeeU helper app changed and was rebuilt. ⚠️ macOS treats it as a new app: in System Settings → Privacy & Security, turn SeeU off and on again under Accessibility and Screen & System Audio Recording."),
+    "upd.launcher": ("SeeU 小程序有改动,已经重新生成。⚠️ 系统会把它当成新程序:请到「系统设置 → 隐私与安全性」的「辅助功能」(新版 macOS 英文界面里叫 Device Control and Data Access)和「屏幕与系统录音」里,把 SeeU 关掉再打开一次。",
+                     "The SeeU helper app changed and was rebuilt. ⚠️ macOS treats it as a new app: in System Settings → Privacy & Security, turn SeeU off and on again under Accessibility (called “Device Control and Data Access” in newer macOS) and Screen & System Audio Recording."),
     "upd.launcher_fail": ("SeeU 小程序有改动,但重新生成失败(原因:{err})。可以手动运行:sh {path}",
                           "The SeeU helper app changed but rebuilding it failed ({err}). You can run it yourself: sh {path}"),
     "upd.restart": ("已经开着的 AI 客户端还在用旧版:把 Claude / Codex / Cursor 这些退出再打开,新版才生效。",
                     "AI clients that are already open still use the old version: quit and reopen Claude / Codex / Cursor etc. to use the new one."),
     "upd.check": ("顺便检查一下授权:", "Checking permissions:"),
+    "upd.check_win": ("顺便检查一下:", "Checking the setup:"),
+    "upd.no_git_win": ("没找到 git 命令:先到 git-scm.com 装 Git for Windows,再运行一次。",
+                       "git was not found: install Git for Windows from git-scm.com, then run this again."),
 }
 
 _C = {"t": 0.0, "lang": "zh"}
@@ -126,7 +129,7 @@ def lang():
     if now - _C["t"] > 2.0:
         _C["t"] = now
         try:
-            with open(_SETTINGS, encoding="utf-8") as f:
+            with open(_SETTINGS, encoding="utf-8-sig") as f:       # 认记事本存的带 BOM 的
                 v = str(json.load(f).get("语言", "中文")).strip().lower()
         except Exception:
             v = "中文"
@@ -134,8 +137,12 @@ def lang():
             _C["lang"] = "en"
         elif v in ("自动", "auto"):
             try:
-                from Foundation import NSLocale
-                first = str(NSLocale.preferredLanguages()[0])
+                if os.name == "nt":          # 11-14:Windows 上问系统的界面语言(语言号低 10 位 = 4 是中文)
+                    import ctypes
+                    first = "zh" if (ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF) == 0x04 else "en"
+                else:
+                    from Foundation import NSLocale
+                    first = str(NSLocale.preferredLanguages()[0])
             except Exception:
                 first = "zh"
             _C["lang"] = "zh" if first.startswith("zh") else "en"

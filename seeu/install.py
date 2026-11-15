@@ -236,6 +236,7 @@ def _auth_hint(key):
            "聊天页 →「SeeU」(SeeU 小程序,首次会自己出现在列表里);终端里用 claude 命令 → 那个终端")
     elif who != app:
         _p(f"   ⚠️ 在 {app} 里用时,要给「{app}」也开这两项:系统设置 → 隐私与安全性 → 辅助功能 / 屏幕录制 → 打开 {app}")
+        _p("      (新版 macOS 英文界面里「辅助功能」叫 Device Control and Data Access)")
         _p("      (在终端里用 codex 命令的话,授权给的是那个终端)")
 
 
@@ -410,6 +411,7 @@ def install_json(key):
     _p(f"④ 试连一次 {'✅ 能连上,' + str(n) + ' 个工具' if n else '❌ 连不上(运行 python3 -m seeu mcp 看报错)'}")
     _p(f"⑤ 授权:在 {c['label']} 里用时,系统把授权算在「{app}」头上(11-01 实测)。"
        f"\n   系统设置 → 隐私与安全性 → 辅助功能、屏幕与系统录音 → 都打开「{app}」,开完 ⌘Q 重开 {c['label']}。"
+       f"\n   (新版 macOS 英文界面里「辅助功能」叫 Device Control and Data Access)"
        f"\n   也可以先不开:在 {c['label']} 里让它调一次 seeu_check,缺什么它会照原话告诉你。")
     _p(f"\n好了。{c['hint']}\n然后说一句「用 SeeU 看一下访达」试试。")
     _p(f"不想用了:python3 -m seeu 移除 {key}")
@@ -565,8 +567,41 @@ def uninstall(key):
     return 0
 
 
+POINTER = home("seeu_server.json")
+QIANWEN_HOW = ("千问(5.2 起)的设置不在文件里,要在它界面上加一次:\n"
+               "  左上切到「工作」→ 左栏「连接」→ 右上「+ 添加」→「手动填写配置」\n"
+               "  服务器名称:seeu    命令:npx -y seeu-computeruse\n"
+               "  (要先装 Node.js:https://nodejs.org;千问只认 npx 启动的工具,这个小启动包会找到本机的 SeeU)")
+
+
+def write_pointer():
+    """11-15 C-2.0:留一张「SeeU 装在这儿」的纸条,给 npm 启动包 seeu-computeruse 找(千问只认 npx 启动命令)。
+    内容:用哪个 Python、服务在哪。接入 / 每次服务启动都写一次(装的位置挪了也能跟上)。写不了就算了。"""
+    try:
+        d = {"python": _python(), "server": SERVER}
+        try:
+            old = json.load(open(POINTER, encoding="utf-8"))
+        except Exception:   # noqa: BLE001
+            old = None
+        if old == d:
+            return
+        os.makedirs(os.path.dirname(POINTER), exist_ok=True)
+        tmp = POINTER + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, POINTER)
+    except Exception:   # noqa: BLE001
+        pass
+
+
 def main(cmd, args):
     names = [a for a in args if not a.startswith("-")]
+    if cmd not in ("移除", "uninstall", "remove"):
+        write_pointer()
+    if names and names[0] in ("千问", "qianwen", "qwen"):
+        _p(QIANWEN_HOW if cmd not in ("移除", "uninstall", "remove") else
+           "千问的连接在它自己的界面里删:左上「工作」→ 左栏「连接」→ seeu 那张卡片的「…」→「删除」。")
+        return 0
     local = any(a in ("--本项目", "--local", "--project") for a in args)
     if cmd in ("移除", "uninstall", "remove"):
         if not names or names[0] not in ALL:

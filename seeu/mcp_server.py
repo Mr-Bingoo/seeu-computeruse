@@ -196,6 +196,30 @@ TOOLS = [
 ]
 
 
+# 11-15 C-2.1:后台打开 App。只给自己打不开 App 的客户端(千问:跑命令在沙箱里,每次要用户批准),见 openapp.enabled()
+OPEN_APP_TOOL = _tool(
+    "seeu_open_app", "Open a Mac app in the background (its window opens behind the user's current one; the front app is "
+    "not switched). Use it instead of running `open -a` yourself. Apps already open are left as they are. Terminals, "
+    "script apps, password apps, System Settings and browsers are not opened (for web pages use seeu_web_open). "
+    "Afterwards call seeu_see on the app.",
+    {"app": APP, "why": WHY})
+_open_app_on = []
+
+
+def _open_app_enabled():
+    if not _open_app_on:
+        try:
+            from seeu import openapp
+            _open_app_on.append(bool(openapp.enabled()))
+        except Exception:
+            _open_app_on.append(False)
+    return _open_app_on[0]
+
+
+def tool_list():
+    return TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+
+
 # ---------------------------------------------------------------- 工具实现
 
 def _tab(v):
@@ -326,6 +350,14 @@ def do_see(a):
                    f"tap by pixel: seeu_tap with px, py (top-left is 0,0); SeeU converts it")
         if a.get("screenshot", True):
             out.append(img)
+        if v.get("stale"):           # 11-15 C-2.0:Chrome / Electron 窗口看不见,截图停在旧画面
+            from seeu import act
+            where = {act.DESK_WHY: "ask the user to switch to that desktop (or move the window here)",
+                     act.LOCK_WHY: "ask the user to unlock the Mac / wake the display"}.get(
+                         v["stale"], "ask the user to uncover a piece of the window, e.g. a corner")
+            out[0] += ("\n\n⚠️ This screenshot may be OUT OF DATE: " + to_en(v["stale"]) + ". Numbers from the list, "
+                       "menus (seeu_menu) and keys (seeu_press) still work, but their effect won't show in the screenshot (check the list text instead); tapping by pixel (px, py) is blocked until the "
+                       "window is visible — " + where + ", then call seeu_see again.")
     else:
         _shots.pop(app, None)
         out[0] += "\n\n(no screenshot this time: the app is hidden or has no window — tap by number)"
@@ -430,6 +462,17 @@ def do_mirror_home(a):
     import seeu
     r = seeu.mirror_home()
     return [_result_text(r)], r.get("outcome") != "delivered"
+
+
+def do_open_app(a):
+    if not _open_app_enabled():          # 工具清单里没有它的客户端,硬调也不做
+        return ["outcome: refused\nreason: seeu_open_app is not available in this client — open the app the usual way"], True
+    from seeu import openapp
+    r = openapp.open_app(a["app"])
+    txt = _result_text(r)
+    if r.get("name"):
+        txt += f"\napp: {r['name']}"
+    return [txt], r.get("outcome") not in ("delivered", "unverified")
 
 
 def do_mirror_open(a):
@@ -577,7 +620,7 @@ def do_web_read(a):
 
 HANDLERS = {"seeu_check": do_check, "seeu_probe": do_probe, "seeu_see": do_see, "seeu_tap": do_tap, "seeu_type": do_type,
             "seeu_scroll": do_scroll, "seeu_press": do_press, "seeu_menu": do_menu, "seeu_long_press": do_long_press,
-            "seeu_mirror_home": do_mirror_home, "seeu_mirror_open": do_mirror_open, "seeu_web_open": do_web_open,
+            "seeu_mirror_home": do_mirror_home, "seeu_mirror_open": do_mirror_open, "seeu_open_app": do_open_app, "seeu_web_open": do_web_open,
             "seeu_web_tabs": do_web_tabs, "seeu_web_read": do_web_read, "seeu_allow_site": do_allow_site, "seeu_manage": do_manage}
 
 
@@ -594,11 +637,11 @@ def _log(name, a, ok, secs):
 
 # 会动手的工具:动手前把 AI 写的原因发给悬浮窗(10-30;文字卡一行灰字 / 看画面底边字幕带)。看画面、读网页不发。
 WHY_TOOLS = {"seeu_tap", "seeu_type", "seeu_scroll", "seeu_press", "seeu_menu", "seeu_long_press",
-             "seeu_mirror_home", "seeu_mirror_open", "seeu_web_open"}
+             "seeu_mirror_home", "seeu_mirror_open", "seeu_web_open", "seeu_open_app"}
 # 悬浮窗上这一步写什么动作(10-30 用户:按编号打字别写成「点击」);点击不给,照旧认点击处的字
 WHY_ACT = {"seeu_type": "打字", "seeu_scroll": "滚动", "seeu_press": "按键", "seeu_menu": "点菜单",
            "seeu_long_press": "长按", "seeu_mirror_home": "回主屏", "seeu_mirror_open": "打开 App",
-           "seeu_web_open": "开标签页"}
+           "seeu_web_open": "开标签页", "seeu_open_app": "打开 App"}
 
 
 def _show_why(name, a):
@@ -620,6 +663,19 @@ def _show_why(name, a):
         pass
 
 
+def _missing_args(name, a):
+    """11-15:AI 漏传必填参数时,动手前就用大白话说清缺哪个(原来到函数里才抛 KeyError,只回一句 missing argument: 'app')。"""
+    tool = next((t for t in TOOLS + [OPEN_APP_TOOL] if t.get("name") == name), None)
+    need = (tool or {}).get("inputSchema", {}).get("required") or []
+    miss = [k for k in need if a.get(k) is None]
+    if not miss:
+        return None
+    return {"content": [{"type": "text", "text": "outcome: failed\nreason: " + name + " needs " + ", ".join(miss)
+                         + (" — it was" if len(miss) == 1 else " — they were") + " not given. Nothing was done. "
+                         "Call " + name + " again with " + ("it" if len(miss) == 1 else "them") + " filled in (see the tool's parameters)."}],
+            "isError": True}
+
+
 def call_tool(name, a):
     fn = HANDLERS.get(name)
     if not fn:
@@ -627,7 +683,15 @@ def call_tool(name, a):
     t0 = time.time()
     if not isinstance(a, dict):
         a = {}
+    bad = _missing_args(name, a)
+    if bad:
+        return bad
     if isinstance(a.get("app"), str):       # 11-06 二次复查:浏览器的别的写法(「标题」、包名、进程号)先归一,别绕开网页层
+        try:                                # 11-15:别的语言的 App 名(「备忘录」→ Notes)先换成系统现在叫它的名字
+            from seeu import ax
+            a["app"] = ax.canon_name(a["app"])
+        except Exception:
+            pass
         try:
             from seeu import web
             a["app"] = web.canon(a["app"])
@@ -649,7 +713,7 @@ def call_tool(name, a):
             pass
         why = str(ex)
         if isinstance(ex, KeyError):
-            why = f"missing argument: {why}"
+            why = f"a value SeeU needed was missing ({why}) — check this call's parameters, then call seeu_see and try again"
         parts, err = [f"outcome: {out}\nreason: {to_en(why)}" + _allow_hint({"reason": why})], True
     _log(name, a, not err, time.time() - t0)
     content = [p if isinstance(p, dict) else {"type": "text", "text": str(p)} for p in parts]
@@ -674,7 +738,7 @@ def handle(msg):
     elif method == "ping":
         res = {}
     elif method == "tools/list":
-        res = {"tools": TOOLS}
+        res = {"tools": tool_list()}
     elif method == "tools/call":
         res = call_tool(params.get("name"), params.get("arguments"))
     else:
@@ -697,6 +761,11 @@ def main():
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
     os.dup2(2, 1)                       # 之后 fd 1(含子进程)都进 stderr
     sys.stdout = sys.stderr
+    try:                                # 11-15:给 npm 启动包 seeu-computeruse 留「装在哪」的纸条(千问只认 npx)
+        from seeu import install as _inst
+        _inst.write_pointer()
+    except Exception:   # noqa: BLE001
+        pass
     for line in sys.stdin:
         line = line.strip()
         if not line:

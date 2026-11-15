@@ -27,7 +27,9 @@ import time
 from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SETTINGS = os.path.join(HERE, "设置.json")
+# 11-13:环境变量 SEEU_SETTINGS_FILE 可以把 I See 的开关换到别的文件(只给开发测试用:虚拟机里的代码是共享目录,
+# 不换的话在虚拟机里点 I See 会改到这台 Mac 上真的 设置.json)。平时不设。
+SETTINGS = os.environ.get("SEEU_SETTINGS_FILE") or os.path.join(HERE, "设置.json")
 LOG = home("seeu_isee.log")
 KEY, KEY_UNTIL = "I See", "I See 到期"
 DEFAULT_HOURS = 24
@@ -41,7 +43,7 @@ FIXES = {
     "plugin": ("装 SeeU 浏览器插件", "跟 AI 说一声它来装(也可以终端 python3 -m seeu.web.install),装完在网页上点浏览器右上角的 SeeU 图标「允许这个网站」", None),
     "aejs_safari": ("打开 Safari 开关", "Safari 菜单 → 设置 → 高级 → 勾「显示网页开发者功能」;再到 开发 菜单 → 勾「允许来自 Apple 事件的 JavaScript」", None),
     "aejs_chrome": ("打开 Chrome 开关", "Chrome 菜单 查看 → 开发者 → 勾「允许 Apple 事件中的 JavaScript」", None),
-    "accessibility": ("给辅助功能授权", "系统设置 → 隐私与安全性 → 辅助功能 → 打开运行 SeeU 的程序(终端 / Claude)", _PANE + "Privacy_Accessibility"),
+    "accessibility": ("给辅助功能授权", "系统设置 → 隐私与安全性 → 辅助功能(新版 macOS 英文界面里叫 Device Control and Data Access) → 打开运行 SeeU 的程序(终端 / Claude)", _PANE + "Privacy_Accessibility"),
     "screen": ("给屏幕录制授权", "系统设置 → 隐私与安全性 → 屏幕与系统录音 → 打开运行 SeeU 的程序", _PANE + "Privacy_ScreenCapture"),
     "automation": ("允许控制这个 App", "系统设置 → 隐私与安全性 → 自动化 → 在运行 SeeU 的程序下面勾上要控制的 App(Safari / Chrome / 备忘录…,每个 App 单独一项)", _PANE + "Privacy_Automation"),
 }
@@ -51,7 +53,7 @@ def _load(strict=False):
     """读 设置.json。strict=True(要改完写回去的地方用):文件在但读不出来就报错。
     11-06 体检:原来读坏了返回 {},on / off 接着把只剩一个键的内容整份写回,署名、颜色、借用鼠标等全丢。"""
     try:
-        with open(SETTINGS, encoding="utf-8") as f:
+        with open(SETTINGS, encoding="utf-8-sig") as f:       # 11-14:认记事本存的带 BOM 的(Windows)
             return json.load(f)
     except FileNotFoundError:
         return {}
@@ -124,6 +126,8 @@ def off():
 def checkup():
     """开启时体检:开着的浏览器逐个试一下开关(第一次会弹系统授权框,集中在这时弹掉,跑起来就不再弹)。
     没开的浏览器不碰(不会替你打开)。返回 {浏览器: 状态说明}。"""
+    if sys.platform != "darwin":      # 11-13:Windows 版没有浏览器开关 / 插件这几条路,没什么可体检的
+        return {}
     from seeu.web import aejs, plugin_ready
     out = {}
     for app in sorted(aejs.SAFARI | aejs.CHROME_LIKE):
@@ -267,6 +271,17 @@ def report(since=None):
 
 def _expired_notice():
     log("expired")
+    if sys.platform == "win32":          # 11-14:Windows 上 seeu_lib.cursor_overlay 用不了,用 SeeU 自己的提示条
+        try:
+            from seeu.win import cursor
+            from seeu.i18n import lang
+            en = lang() == "en"
+            cursor.toast("SeeU · I See expired and turned off" if en else "SeeU · I See 已到期关闭",
+                         "I See mode is off again; SeeU will ask before switching routes." if en else
+                         "I See 已关,SeeU 遇到卡点会先停下问你", 8)
+        except Exception:
+            pass
+        return
     try:
         import subprocess
         subprocess.Popen([sys.executable, "-m", "seeu_lib.cursor_overlay", "toast", "SeeU · I See 已到期关闭",

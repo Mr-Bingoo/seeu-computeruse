@@ -32,7 +32,9 @@ class _Stop(Exception):
 
 def _git(*args, timeout=GIT_TIMEOUT_S):
     # core.quotepath=false:中文文件名(设置.json)原样给,不转成 \350\256… 这种写法
+    # encoding 写死 utf-8(11-14):Windows 上不写会按系统代码页解,中文文件名(设置.json)变乱码 → 认不出「只改了设置」
     r = subprocess.run(["git", "-C", ROOT, "-c", "core.quotepath=false", *args], capture_output=True, text=True, timeout=timeout,
+                       encoding="utf-8", errors="replace",
                        env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
     if r.returncode != 0:
         raise _Stop((r.stderr or r.stdout).strip().splitlines()[-1] if (r.stderr or r.stdout).strip() else f"git {args[0]} 退出码 {r.returncode}")
@@ -49,7 +51,8 @@ def _show(path):
 
 def _is_clone():
     try:
-        return os.path.realpath(_git("rev-parse", "--show-toplevel")) == os.path.realpath(ROOT) and bool(_git("rev-parse", "--abbrev-ref", "@{u}"))
+        same = lambda p: os.path.normcase(os.path.realpath(p))   # noqa: E731  normcase:Windows 上盘符大小写、正反斜杠不算不同(Mac 上原样)
+        return same(_git("rev-parse", "--show-toplevel")) == same(ROOT) and bool(_git("rev-parse", "--abbrev-ref", "@{u}"))
     except (_Stop, subprocess.TimeoutExpired):
         return False
 
@@ -163,7 +166,7 @@ def _rebuild_launcher():
 def main(args=()):
     check_only = "--check" in args
     if not shutil.which("git"):
-        print(T("upd.no_git"))
+        print(T("upd.no_git_win" if sys.platform == "win32" else "upd.no_git"))
         return 1
     if not _is_clone():
         # 11-01 实测:npx skills add 把整个仓库(不带 .git)拷进 ~/.claude/skills/seeu 这类技能目录,更新要走 npx skills update
@@ -249,11 +252,14 @@ def main(args=()):
     except (_Stop, subprocess.TimeoutExpired, ValueError) as e:
         print(T("upd.pull_fail", err=e))
         return 1
-    if any(p.startswith("seeu/launcher/") for p in changed) and os.path.isdir(os.path.join(HERE, "launcher", "SeeU.app")):
+    if sys.platform == "darwin" and any(p.startswith("seeu/launcher/") for p in changed) and os.path.isdir(os.path.join(HERE, "launcher", "SeeU.app")):
         _rebuild_launcher()
     print(T("upd.restart"))
-    print("\n" + T("upd.check"))
-    from seeu import doctor
+    print("\n" + T("upd.check_win" if sys.platform == "win32" else "upd.check"))
+    if sys.platform == "win32":                             # 11-14:Windows 预览版有自己的检查
+        from seeu.win import doctor
+    else:
+        from seeu import doctor
     try:
         doctor.main([])
     except SystemExit:

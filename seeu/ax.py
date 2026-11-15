@@ -185,10 +185,84 @@ def running_apps():
             for a in NSWorkspace.sharedWorkspace().runningApplications() if a.activationPolicy() == 0]
 
 
+_loc_names = {}   # App 包路径 -> 各语言的显示名集合(读一次就记住)
+
+
+def _bundle_local_names(path):
+    """App 包里写的各语言显示名(CFBundleDisplayName / CFBundleName)。
+    苹果自带 App 放 InfoPlist.loctable(一个 plist,按语言分);别家多是 <语言>.lproj/InfoPlist.strings。"""
+    if path in _loc_names:
+        return _loc_names[path]
+    import glob
+    import os
+    import plistlib
+    names = set()
+    res = os.path.join(path, "Contents", "Resources")
+    try:
+        with open(os.path.join(res, "InfoPlist.loctable"), "rb") as f:
+            for d in plistlib.load(f).values():
+                if isinstance(d, dict):
+                    names.update(v for k, v in d.items() if k in ("CFBundleDisplayName", "CFBundleName") and isinstance(v, str))
+    except Exception:
+        pass
+    for fn in glob.glob(os.path.join(res, "*.lproj", "InfoPlist.strings")):
+        try:
+            raw = open(fn, "rb").read()
+            try:
+                d = plistlib.loads(raw)           # 二进制 / XML 写法
+            except Exception:                     # 老的文本写法 "CFBundleName" = "备忘录";(UTF-16 或 UTF-8)
+                txt = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else raw.decode("utf-8", "ignore")
+                d = dict(re.findall(r'"?(CFBundle(?:Display)?Name)"?\s*=\s*"((?:[^"\\]|\\.)*)"\s*;', txt))
+            names.update(v for k, v in d.items() if k in ("CFBundleDisplayName", "CFBundleName") and isinstance(v, str))
+        except Exception:
+            pass
+    _loc_names[path] = names
+    return names
+
+
+def canon_name(app):
+    """11-15 千问实测:AI 写中文名「备忘录」,英文系统里正在跑的叫 Notes,SeeU 找不到。
+    名字(去掉「窗口标题」)对不上任何正在运行的 App 时,再看各 App 包里写的别的语言的名字,对上就换成系统现在叫它的名字;
+    「窗口标题」原样接回去。纯英文、数字(进程号)、包名照旧不动;找不到也原样返回(后面照常报找不到)。"""
+    s = str(app or "")
+    owner, title = split_window(s)
+    owner = str(owner or "").strip()
+    if not owner or owner.isascii():
+        return app                          # 英文名、进程号、包名不动(11-15 复查:中文系统里英文名会被换成中文名,代码里按
+                                            # "iPhone Mirroring" 这类英文名认的地方就对不上了)
+    try:
+        from AppKit import NSWorkspace
+        from Foundation import NSRunLoop, NSDate
+        NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(0.02))   # 长驻进程不转一下拿到的是旧名单
+        apps = [a for a in NSWorkspace.sharedWorkspace().runningApplications() if a.activationPolicy() == 0]
+        if any(a.localizedName() == owner for a in apps):
+            return app
+        for a in apps:
+            url = a.bundleURL()
+            if url is not None and owner in _bundle_local_names(str(url.path())):
+                n = str(a.localizedName())
+                return n if title is None else f"{n}「{title}」"
+        # 没在运行:再翻装着的 App,换成它的名字(后面报「Notes 没在运行」比报「找不到 备忘录」好懂)
+        import glob
+        import os
+        from Foundation import NSFileManager
+        fm = NSFileManager.defaultManager()
+        for p in sorted(glob.glob("/System/Applications/*.app") + glob.glob("/System/Applications/Utilities/*.app")
+                        + glob.glob("/Applications/*.app") + glob.glob("/Applications/Utilities/*.app")
+                        + glob.glob("/System/Library/CoreServices/Applications/*.app")):   # 钥匙串访问在这里
+            if owner in _bundle_local_names(p):
+                n = str(fm.displayNameAtPath_(p) or os.path.basename(p))
+                n = n[:-4] if n.endswith(".app") else n
+                return n if title is None else f"{n}「{title}」"
+    except Exception:
+        pass
+    return app
+
+
 def app_element(name_or_pid):
     """按显示名 / bundle id / pid 找 App,返回 (AX 元素, pid)。"""
     if not trusted():
-        raise AXError("本进程没有辅助功能权限(系统设置 → 隐私与安全性 → 辅助功能)")
+        raise AXError("本进程没有辅助功能权限(系统设置 → 隐私与安全性 → 辅助功能;新版 macOS 英文界面里叫 Device Control and Data Access)")
     pid = None
     if isinstance(name_or_pid, int) or str(name_or_pid).isdigit():
         pid = int(name_or_pid)

@@ -1,0 +1,29 @@
+{
+  "name": "seeu-computeruse",
+  "version": "1.2.2",
+  "description": "Launcher for SeeU (background Computer Use for your Mac, Windows preview) — for AI apps that only accept `npx` MCP commands, such as Qwen (千问). Starts the SeeU you already installed.",
+  "bin": {
+    "seeu-computeruse": "bin/seeu-computeruse.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": [
+    "mcp",
+    "computer-use",
+    "seeu",
+    "macos",
+    "qwen"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mr-Bingoo/seeu-computeruse.git"
+  },
+  "homepage": "https://github.com/Mr-Bingoo/seeu-computeruse",
+  "license": "MIT",
+  "author": "@Mr_Bingoo"
+}

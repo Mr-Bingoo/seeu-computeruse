@@ -7,14 +7,18 @@
 > ④ state diagrams (which states it can be in and how it switches) ⑤ mind map (all features at a glance).
 > The diagrams only show SeeU's general approach; where a step was added because the author hit a problem in a real scenario, a short "Example:" paragraph under the diagram explains it.
 
+> 💡 Diagrams marked "Windows preview" are for Windows (one overview, one capability matrix, swimlanes 3.6 and 3.7); all the others show the Mac version. For how Windows differs, see the [README](../README.en.md).
+
 ## ① Overview
+
+**Mac**
 
 ```mermaid
 block-beta
   columns 6
   H1["① Who calls it"]:6
   U1["Your Python programs<br/>scheduled tasks, automation"]:2
-  U2["AI (Claude, Codex…)<br/>MCP tools + Skill instructions<br/>one-step setup"]:2
+  U2["AI (Claude, Codex, Qwen…)<br/>MCP tools + Skill instructions<br/>one-step setup · npx launcher"]:2
   U3["Command line<br/>permission check, evidence, I See"]:2
   D1<["&nbsp;"]>(down):6
   H2["② SeeU"]:6
@@ -33,9 +37,37 @@ block-beta
   class H1,H2,H3,H4 head
 ```
 
+**Windows preview**
+
+```mermaid
+block-beta
+  columns 6
+  H1["① Who calls it"]:6
+  U1["Your Python programs<br/>scheduled tasks, automation"]:2
+  U2["AI (Claude, Codex, Qwen…)<br/>MCP tools + Skill instructions<br/>one-step setup · npx launcher"]:2
+  U3["Command line<br/>check, evidence, settings"]:2
+  D1<["&nbsp;"]>(down):6
+  H2["② SeeU"]:6
+  J["Decisions<br/>entry: pick route · switch · verify · report<br/>safety rules · step aside · no clicks by an untrustworthy picture<br/>I See"]:2
+  R["Routes<br/>background browser (debugging port)<br/>read controls · post window messages<br/>borrow the front · borrow the real mouse"]:2
+  FB["Seeing and feedback<br/>window capture + OCR<br/>floating window · island · agent cursor<br/>toast · check · evidence"]:2
+  D2<["&nbsp;"]>(down):6
+  H3["③ System abilities it relies on (no permissions to grant)"]:6
+  P1["Control interface<br/>(UI Automation)"]:2
+  P3["Mouse / keyboard messages to the window<br/>then borrow the front / real mouse"]:2
+  P4["Window capture · built-in Windows OCR<br/>debugging port (Chrome / Edge)"]:2
+  D3<["&nbsp;"]>(down):6
+  H4["④ Three kinds of scenario"]:6
+  A1["Native apps"]:2 A2["Chrome / Edge pages"]:2 A3["Emulators · custom-drawn apps"]:2
+  classDef head fill:none,stroke:none,font-weight:bold
+  class H1,H2,H3,H4 head
+```
+
 ## ② Capability matrix
 
 Legend: ✅ background, no disturbance · ⚡ briefly borrows the front window or your mouse · ⚠️ with conditions · ❌ not possible
+
+**Mac**
 
 | Scenario | Read content | Click | Type | Scroll | Works while hidden | Permissions needed |
 |---|---|---|---|---|---|---|
@@ -47,17 +79,29 @@ Legend: ✅ background, no disturbance · ⚡ briefly borrows the front window o
 | iPhone Mirroring | ✅ text recognition | ✅ background click (private interface) | ✅ | ✅ (adds a small drag when stuck) | ❌ (window must be there, any size) | Accessibility, Screen Recording |
 | Dragging (any scenario) | — | ⚡ borrows the real mouse | — | — | — | Same as above |
 
-Every scenario goes through the safety rules first: Terminal, system permission prompts, the Privacy & Security part of System Settings, password apps (Keychain, Passwords, 1Password and so on), the AI client running SeeU itself (such as Claude or Codex), SeeU's own floating window buttons (so the AI can't turn on I See for itself), and dangerous shortcuts / commands / menu items are all blocked; password, verification-code and bank card fields are never touched.
+Every scenario goes through the safety rules first: Terminal, system permission prompts, the Privacy & Security part of System Settings, password apps (Keychain, Passwords, 1Password and so on), the AI client running SeeU itself (such as Claude or Codex), SeeU's own floating window buttons (so the AI can't turn on I See for itself), and dangerous shortcuts / commands / menu items are all blocked; password, verification-code and bank card fields are never touched. When opening apps in the background for Qwen, terminals, script apps, password apps, System Settings, browsers, other AI clients and remote-access apps are never opened.
 
 "Background click (private interface)" = posting the click straight to the window through an interface macOS hasn't made public. It may stop working after a system update, and then SeeU automatically falls back to the real mouse (see 3.3).
 
 For emulators we suggest ADB first (Android's official debugging tool, a public interface that doesn't go through SeeU): clicks, swipes and screenshots are fully in the background with accurate coordinates. SeeU fills in with background clicks, for example typing Chinese (ADB's built-in input only handles English letters and numbers) or when ADB isn't enabled in the emulator.
 
+**Windows preview**
+
+| Scenario | Read content | Click | Type | Scroll | Works while hidden | Permissions needed |
+|---|---|---|---|---|---|---|
+| Native apps (Notepad, File Explorer…) | ✅ reads controls | ✅ background click; ⚡ newer UI (e.g. the new Notepad's dialogs) briefly borrows the front | ✅ | ✅ | ⚠️ fine when covered by other windows; minimized windows can't be seen | None |
+| Chrome / Edge pages (background browser) | ✅ | ✅ | ✅ | ✅ | ✅ never shows a window; shown only when you need to sign in yourself | None; only sites on the allow list |
+| Your own Chrome or Electron apps (e.g. VS Code) | ✅ reads controls | ✅ background click | ✅ the input field must be named first | ✅ | ❌ when the window is covered, clicks don't reach the page (use the background browser for web pages) | None |
+| Emulators, custom-drawn apps | ✅ text recognition | ✅ background click | ✅ | ✅ | ❌ (window must be there, not minimized) | None; OCR needs a Windows text-recognition language pack |
+| Dragging (any scenario) | — | ✅ background first; ⚡ borrows the real mouse if that fails | — | — | — | — |
+
+Three more things on Windows: windows running as administrator can't be touched (a Windows rule); when a window is on another virtual desktop, SeeU won't borrow your mouse or switch you over; when the picture can't be trusted (window covered, machine busy, another desktop), it won't click by a position on the screenshot, but clicks the control instead or asks the AI to look again.
+
 ## ③ Swimlane diagrams
 
 Each diagram has one column per module, with time running top to bottom. `alt` = a choice between branches, `opt` = only happens when the condition holds, `loop` = repeats (always with a limit).
 The "Desktop feedback" column is what you see on screen; the glow depends on the floating window's "Light" setting: off / takeover (orange only while borrowing the mouse, default) / controlled (purple whenever it's operating).
-The badge always just says "SeeU" (a breathing dot = working); borrowing the mouse and getting stuck aren't shown by color: the floating window expands and says so.
+The badge just says "SeeU", or "I See" while I See is on (a breathing dot = working); borrowing the mouse and getting stuck aren't shown by color: the floating window expands and says so.
 
 ### 3.1 Click a button (native app)
 
@@ -121,8 +165,9 @@ sequenceDiagram
       end
     end
   end
-  Note over E,F: A window you opened stays open until you collapse it,<br/>as a fallback it shrinks to the badge after 60 s idle, then fades after another 60 s
 ```
+
+A window you opened stays open until you collapse it; as a fallback it shrinks to the badge after 60 s idle, then fades after another 60 s.
 
 **Several tasks at once**
 
@@ -215,8 +260,9 @@ sequenceDiagram
       E-->>AI: Scrolled / didn't move<br/>(the caller decides)
     end
   end
-  Note over AI,M: There's no background way to drag, it always borrows the real mouse (see 3.1)
 ```
+
+There's no background way to drag; it always borrows the real mouse (see 3.1).
 
 Example: when the author used iPhone Mirroring on mini program pages inside an app (web pages embedded in the app), they found that after one background click, pop-up panels stopped scrolling; the "small drag" above was added for that, landing on blank space in the list so nothing gets clicked by mistake.
 The author's own automation also needs the mirroring window fixed at 391×859, so it turns on the "fixed size" switch (`SEEU_BASELINE=1`); SeeU doesn't pin the size by default, and any window size works.
@@ -299,6 +345,124 @@ sequenceDiagram
   end
 ```
 
+### 3.6 Windows preview: click a button
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant AI as AI / project
+  participant E as SeeU entry
+  participant S as Safety · step aside
+  participant R as Routes
+  participant A as Target window
+  participant F as Desktop feedback
+  AI->>E: Click a button<br/>(number / name / screen position)
+  E->>F: "SeeU" badge breathes,<br/>card says "Clicking 'OK'"
+  E->>S: Safety rules check
+  alt Hit (admin window, command-line window,<br/>password app, the AI client running SeeU…)
+    S-->>E: Refuse
+    E-->>AI: refused "please do this step yourself"
+    AI-->>U: Passes it on
+  else Passed
+    E->>E: Find the target: a number is checked first<br/>(gone = don't click, ask the AI to look again),<br/>a name is looked up in controls, then in OCR results
+    opt Only a screen position (or an OCR result)
+      E->>E: Can the picture be trusted?<br/>(window covered, machine busy, another virtual desktop)
+      alt Can't
+        E-->>AI: Don't click, use a number or look again
+      end
+    end
+    F-->>U: Purple agent cursor moves to the button
+    E->>R: Step 1: background click
+    R->>A: Mouse messages to the child window under that point<br/>(no front switch, mouse untouched)
+    E->>E: Verify (picture, window title,<br/>control contents, text read back,<br/>any change counts)
+    alt Took effect
+      E-->>AI: delivered
+    else No effect
+      E->>S: May it borrow?
+      alt Window on another virtual desktop
+        S-->>E: No borrowing, no switching you over
+        E-->>AI: refused "please switch over, or move the window here"
+      else Borrow mouse = off
+        E-->>AI: Stops and says where it's stuck
+      else Borrow mouse = ask
+        F-->>U: Orange toast: needs to borrow
+        E-->>AI: ask_user (the AI retries once you agree)
+      else Borrow mouse = on (default)
+        opt The control can be "pressed"
+          E->>R: Step 2: borrow the front and press
+          R->>A: Front for about 0.03–0.2 s,<br/>then handed straight back
+        end
+        E->>R: Step 3: borrow the real mouse
+        R->>S: Are you using the computer?
+        loop Mouse or keyboard used in the last second (waits up to 6 s)
+          S->>S: Wait until you stop
+        end
+        alt Still in use
+          E-->>AI: refused "you're using the computer, not borrowing now"
+        else You stopped
+          F-->>U: Bright orange agent cursor
+          R->>A: Bring to front, check nothing covers the point,<br/>real mouse click (about 0.2 s)
+          R->>A: Mouse back where it was, front back to the previous app
+          E->>E: Verify
+          E-->>AI: delivered, or failed (where · why · what to do)
+        end
+      end
+    end
+  end
+```
+
+Main differences from the Mac (3.1): Windows has no private-interface step, background clicks are window messages; there's an extra "borrow the front and press" step, faster than the real mouse and without moving it; no system permissions to grant.
+
+### 3.7 Windows preview: web pages through the background browser
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant AI as AI / project
+  participant E as SeeU entry
+  participant N as Allow list
+  participant B as Background browser
+  participant F as Desktop feedback
+  AI->>E: Open a page
+  E->>N: Is this site on the list?<br/>(no limit while I See is on)
+  alt Not on it
+    E-->>AI: refused "not on the allow list"
+    AI-->>U: Asks whether to add it
+    opt You agree
+      AI->>N: Add it, open again
+    end
+  else On it
+    alt Background browser already running
+      E->>B: Attach
+    else Not started
+      E->>B: Start SeeU's own Chrome or Edge<br/>(windowless, separate profile, random port,<br/>local only, your own browser untouched)
+    end
+    loop Work
+      AI->>E: Read the page / click by number / fill in
+      E->>B: Through the debugging port
+      alt Cursor in a password, verification-code or bank-card field
+        B-->>E: No typing, no keys that change the contents
+        E-->>AI: refused "please do this step yourself"
+      else Normal
+        B-->>E: Read back and verify
+        E-->>AI: delivered
+      end
+      F-->>U: Floating window says it's working on a page,<br/>live view greyed out (no window to show)
+    end
+    opt The site needs a login
+      AI-->>U: Please sign in yourself
+      U->>E: Agree to show it
+      E->>B: Close, reopen as a normal window
+      U->>B: Sign in yourself
+      E->>B: Close the window, reopen windowless<br/>(the login stays in this profile)
+    end
+  end
+```
+
+No long-press or dragging in browsers (both act by screen position and would bypass the allow list); things on a page are clicked by number only.
+
 ## ④ State diagrams
 
 ### 4.1 Stealth browser
@@ -348,8 +512,8 @@ stateDiagram-v2
   Badge --> Island: Two or more tasks running (shares the badge's position)
   Island --> Badge: Only one left
   note right of Badge
-    Always just says "SeeU"
-    Dot color = your chosen color, breathing = working
+    Says "SeeU", or "I See" while I See is on
+    Dot color = current mode (purple = background, orange = borrowing the mouse, changeable in settings), breathing = working
   end note
   note left of Win
     While an AI is using it: reason in grey under "Now…"
@@ -429,7 +593,7 @@ mindmap
       Hard-coded safety rules
       Never touches password apps
       Never clicks its own badge
-      Never submits or pays for you
+      AI rule: never submits or pays for you
       I See, I know the risks
     Evidence when things go wrong
       Permission check
@@ -438,6 +602,6 @@ mindmap
     Who uses it
       Python programs
       AI · MCP plus Skill
-      One-step setup for Claude, Codex and more
+      One-step setup for Claude, Codex and more · add Qwen and others by hand
       Command line
 ```

@@ -295,12 +295,48 @@ def see(app):
             wins = ax.window_titles(ax.app_element(app)[0])
         except Exception:
             pass
-    return {"png": png, "items": items, "windows": wins}
+    stale = stale_why(app) if png else None        # 11-15 C-2.0:Chrome / Electron 窗口看不见,截图可能是旧的
+    return {"png": png, "items": items, "windows": wins, "stale": stale}
 
 
 def describe(items):
     return "\n".join(f"{it['id']:>3}. {it.get('role', 'OCR')[2:] if it.get('role') else '字'}  {it['text']}  "
                      f"({it['x']:.0f},{it['y']:.0f})" for it in items)
+
+
+class Stale(RuntimeError):
+    """按编号操作时发现画面已经不是 see 那时候的样子(那个控件不在了)。不点,让调用方重新 see。"""
+
+
+def _still_there(app, it):
+    """按编号点之前核对(11-14):see 的时候那个控件还在不在、现在在哪。返回现在的中心点 (x, y);不在了抛 Stale。
+    原来直接用 see 时记下的位置:之后列表滚了、弹了框、界面换了都不知道,会点到别的东西上。
+      - 控件还在:用它**现在**的位置(滚动、挪窗口后也点得准),顺手更新清单里记的位置。
+      - 控件对象失效:有的 App 每读一次就换一批对象、界面其实没变 → 看原位置上现在是不是同一种、同名的控件,是就照点。
+      - 都不是:抛 Stale(不退回去点老位置)。
+    只有画面的项(镜像、模拟器,靠认字)没有控件可问,这里不核对(11-14 用户定:先做控件类)。"""
+    e = it.get("ax")
+    if not e:
+        return it["x"], it["y"]
+    el = e["el"]
+    if (ax.attr(el, "AXRole") or "") == e["role"]:
+        f = ax.frame(el)
+        if f and f[2] > 0 and f[3] > 0:
+            e["frame"] = f
+            it["x"], it["y"] = f[0] + f[2] / 2, f[1] + f[3] / 2
+            return it["x"], it["y"]
+    now = None
+    if e.get("title") or e.get("desc"):          # 没名字的控件认不出「是不是同一个」,不走这条
+        try:
+            now = ax.element_at(ax.app_element(app)[0], it["x"], it["y"])
+        except Exception:   # noqa: BLE001
+            now = None
+    if (now is not None and (ax.attr(now, "AXRole") or "") == e["role"]
+            and ax._short(ax.attr(now, "AXTitle") or "") == e["title"]
+            and ax._short(ax.attr(now, "AXDescription") or "") == e["desc"]):
+        it["ax"] = dict(e, el=now, actions=ax.action_names(now), frame=ax.frame(now) or e["frame"])
+        return it["x"], it["y"]
+    raise Stale(f"画面变了:第 {it['id']} 项「{(it.get('text') or '')[:20]}」已经不在 see 时的位置,先 see 一次再操作")
 
 
 def _resolve(app, target):
@@ -313,7 +349,8 @@ def _resolve(app, target):
         it = next((i for i in items if i["id"] == n), None)
         if not it:
             raise RuntimeError(f"没有编号 {n},先 see 一次")
-        return it["x"], it["y"], it.get("ax")
+        x, y = _still_there(app, it)
+        return x, y, it.get("ax")
     t = str(target)
     if not _is_canvas(app):
         e = ax.find(app, t)
@@ -335,6 +372,121 @@ def _rel(app, x, y):
 def _abs(app, rx, ry):
     g = _geo(app)
     return g["x"] + rx, g["y"] + ry
+
+
+# ---------------------------------------------------------------- 截图不可信(11-15 C-2.0)
+# Chrome / Electron 内核的 App 窗口看不见时(整个被盖住、在别的桌面、缩进程序坞)不重画,截图停在旧画面;
+# 11-15 Mac 实测 VS Code:后台按 Cmd+B,页面里侧栏 1 秒就变了,截图 20 秒一动不动,露出来才跟上(被盖住、别的桌面两种都是)。
+# 这类 App 网页里的控件辅助功能又读不到,AI 只能照截图按位置点 → 会点到已经不在那儿的东西上。照 Windows win/act.stale_why 做:
+# 看不见就不按截图位置点。按编号 / 菜单 / 按键照常。露出一部分的没测,不拦(Chromium 自己也只在整个盖住时才停画)。
+COVER_WHY = "它整个被别的窗口盖住了,Chrome / Electron 这类程序被盖住时不重画"
+DESK_WHY = "它不在当前桌面上(在别的桌面、缩进了程序坞,或被隐藏了),Chrome / Electron 这类程序这时不重画"
+LOCK_WHY = "Mac 锁着屏或显示器睡着了,Chrome / Electron 这类程序这时不重画"     # Chromium 官方文档:锁屏、关屏一律算遮挡
+STALE_PIXEL = ("这个窗口的截图现在不可信:{why}。按截图位置操作会照着旧画面点到别的东西"
+               "(11-15 实测:页面已经变了,截图 20 秒没变),SeeU 没做。{tip}")
+STALE_TIP = ("改用 see 列表里的编号、菜单(menu)或快捷键(press);都不行的话,请用户{how},再 see。"
+             "要全程藏着操作,可以改用 SeeU 专用的那份(Python:from seeu import cdp; cdp.launch(\"{app}\")),它藏着也能读清页面")
+COVER_HOW = "把这个窗口露出来一块(比如一个角,别只露一条缝)"
+DESK_HOW = "切到那个桌面,或把窗口挪到当前桌面"
+LOCK_HOW = "解锁 Mac、唤醒显示器"
+STALE_DONE = ("已经做了,但没法核实:{why},截图不会变。没有换别的办法再做一遍(免得重复)。"
+              "先 see 看列表里的文字有没有变来核对;别凭截图判断,也别马上重做")
+VISIBLE_MIN = 0.5        # 露出不到百分之几算「整个盖住」(菜单栏阴影、圆角缝隙那点不算露出)
+_KIND = {}               # App 包路径 → Chromium 内核 App 的包名(如「Visual Studio Code」,cdp.launch 用它),不是就 None
+
+
+def _chromium(pid):
+    # 11-15 复查:原来按进程号缓存 → 进程号被别的 App 复用会认错;刚启动读不到包路径也会一直记成「不是」。
+    #   改成每次现查包路径(便宜),只按路径缓存内核判断;读不到不缓存。
+    try:
+        from AppKit import NSRunningApplication
+        ra = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(pid))
+        path = str(ra.bundleURL().path()) if ra and ra.bundleURL() else None
+    except Exception:   # noqa: BLE001
+        return None
+    if not path:
+        return None
+    if path not in _KIND:
+        try:
+            from seeu import cdp
+            k = cdp.kind(path)
+        except Exception:   # noqa: BLE001
+            return None
+        _KIND[path] = os.path.basename(path.rstrip("/"))[:-4] if k and path.rstrip("/").endswith(".app") else None
+    return _KIND[path]
+
+
+def _visible_pct(wid, wins):
+    """窗口号 wid 露出来的百分比:wins = 当前桌面的窗口(从前往后);排在它前面的普通窗口(层 0、不透明)算盖住。不在 wins 里返回 None。"""
+    me = next((w for w in wins if int(w.get("kCGWindowNumber", -1)) == int(wid)), None)
+    if me is None:
+        return None
+    import numpy as np
+    b = me["kCGWindowBounds"]
+    k = 4.0                                       # 按 4 点一格算,够准、也快
+    W_, H_ = max(1, int(b["Width"] / k)), max(1, int(b["Height"] / k))
+    mask = np.zeros((H_, W_), bool)
+    for w in wins:
+        if w is me:
+            break
+        if w.get("kCGWindowLayer", 0) != 0 or float(w.get("kCGWindowAlpha", 1)) < 0.9:
+            continue
+        r = w["kCGWindowBounds"]
+        x0, y0 = max(int((r["X"] - b["X"]) / k), 0), max(int((r["Y"] - b["Y"]) / k), 0)
+        x1 = min(int((r["X"] + r["Width"] - b["X"]) / k), W_)
+        y1 = min(int((r["Y"] + r["Height"] - b["Y"]) / k), H_)
+        if x1 > x0 and y1 > y0:
+            mask[y0:y1, x0:x1] = True
+    return 100.0 - float(mask.mean()) * 100.0
+
+
+def _screen_off():
+    """锁着屏或主显示器睡着了(11-15 C-2.0)。读不到当没有。"""
+    try:
+        import Quartz
+        d = Quartz.CGSessionCopyCurrentDictionary() or {}
+        if d.get("CGSSessionScreenIsLocked"):
+            return True
+        return bool(Quartz.CGDisplayIsAsleep(Quartz.CGMainDisplayID()))
+    except Exception:   # noqa: BLE001
+        return False
+
+
+def stale_why(app):
+    """这个 App 的截图现在可不可信:不可信返回原因,可信 / 不适用返回 None。只管 Chrome / Electron 内核的 App(镜像、模拟器、原生 App 不管)。"""
+    try:
+        if _is_canvas(app):
+            return None
+        pid = _pid(app)
+        if not pid or not _chromium(pid):
+            return None
+        if _screen_off():
+            return LOCK_WHY
+        g = _geo(app)
+        if not g.get("id"):
+            return None
+        import Quartz
+        wins = list(Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, 0) or [])
+        v = _visible_pct(g["id"], wins)
+        if v is None:
+            return DESK_WHY
+        return COVER_WHY if v < VISIBLE_MIN else None
+    except Exception:   # noqa: BLE001 —— 判断不了就当可信,不挡正常操作(跟原来一样)
+        return None
+
+
+def _stale_pixel(app):
+    """按截图位置操作之前查一次:截图不可信返回一个「没做」的结果(failed + 原因),可信返回 None。"""
+    why = stale_why(app)
+    if not why:
+        return None
+    how = {DESK_WHY: DESK_HOW, LOCK_WHY: LOCK_HOW}.get(why, COVER_HOW)
+    try:
+        name = _chromium(_pid(app)) or app
+    except Exception:   # noqa: BLE001 —— 11-15 复查:App 刚好退出时 _pid 会抛错,别让整个 tap 失败
+        name = app
+    tip = STALE_TIP.format(how=how, app=name)
+    return dict(outcome="failed", route=None, tried=[], png=None, stale=True, reason=STALE_PIXEL.format(why=why, tip=tip))
 
 
 # ---------------------------------------------------------------- 核实 + 退路
@@ -430,6 +582,7 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
     except safety.Refused as ex:
         return dict(outcome="refused", route=None, tried=[], png=None, reason=str(ex))
     _ensure_base(app)
+    stale = stale_why(app)   # 11-15 复查:截图不可信时「截图没变」不代表没生效,不能换下一条路再做一遍
     tried = []
     png = None
     for name, act in steps:
@@ -438,6 +591,9 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
         except ax.AXRefused as ex:
             tried.append((name, f"refused:{ex}"))
             return dict(outcome="refused", route=name, tried=tried, png=png, reason=str(ex))
+        except _SelfVerified as ex:       # 11-14:这条路自己核实过了(控件的值变了),不再比截图、不再换下一条路
+            tried.append((name, "delivered"))
+            return dict(outcome="delivered", route=name, tried=tried, png=png, note=str(ex))
         except Exception as ex:  # 这条路走不通(私有接口没了、控件不支持…)→ 下一条
             if _user_busy(ex):
                 # 11-06 体检:借真鼠标前让路,发现用户正在用电脑。原来记成 failed(AI 的规矩是「先看再试」,会反复跟用户抢)
@@ -449,6 +605,9 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
         tried.append((name, outcome))
         if outcome in ("delivered", "unverified"):
             return dict(outcome=outcome, route=name, tried=tried, png=png)
+        if outcome == "ineffective" and stale:
+            # 窗口看不见(Chrome / Electron 不重画):做了,但截图核实不了。原来会换后台点击、借真鼠标再点两次
+            return dict(outcome="unverified", route=name, tried=tried, png=png, note=STALE_DONE.format(why=stale))
     last = tried[-1][1] if tried else "failed"
     out = "refused" if str(last).startswith("refused") else ("ineffective" if last == "ineffective" else "failed")
     return dict(outcome=out, route=tried[-1][0] if tried else None, tried=tried, png=png)
@@ -462,6 +621,10 @@ def _user_busy(ex):
         return isinstance(ex, (ig.UserTakeover, ig.GuardTimeout))
     except Exception:
         return False
+
+
+class _SelfVerified(Exception):
+    """这条路已经用控件自己的状态核实过生效了(不用再比截图)。只在 _ladder 里接。"""
 
 
 def _press_seen(app, e):
@@ -478,17 +641,72 @@ def _press_seen(app, e):
     act = "AXPress" if "AXPress" in acts else ("AXPick" if "AXPick" in acts else None)
     if not act:
         raise ax.AXError(f"{ax.describe(e)} 不支持按下")
+    v0 = ax.attr(e["el"], "AXValue")
     ax.perform(e["el"], act)
+    # 11-14:勾选框、单选、开关这类「按一下值就变」的控件,按完读一下它自己的值,变了就是生效了。
+    #   原来只比截图:窗口在后面 / 变化太小时看不出来 → 判没生效 → 换下一条路再点一次 → 把勾又点了回去
+    #   (文本编辑 bold 实测:辅助功能按下 0→1,后台点击又 1→0,还报 ineffective)。
+    if v0 is not None and not isinstance(v0, str):
+        for _ in range(6):
+            time.sleep(0.05)
+            v1 = ax.attr(e["el"], "AXValue")
+            if v1 is not None and v1 != v0:
+                raise _SelfVerified(f"控件自己的值变了({v0} → {v1})")
 
 
-def _real_mouse(app, fn):
-    """真鼠标兜底:拿桌面锁 → 让路检查 → 激活窗口 → 做 → 还原前台和鼠标 → 放锁。"""
+OTHER_DESKTOP = ("目标窗口不在当前桌面上(在别的桌面,或窗口被收起来了):后台做不成,借鼠标 / 切前台可能把用户整个切到那个桌面,SeeU 没借。"
+                 "请用户切到那个桌面,或把窗口挪到 / 打开在现在的桌面,再 see 一次接着做")
+# 11-15 真机只读核对:收进菜单栏的 App(Clash Verge、UU远程)窗口关着也是「有窗口、都不在屏上」,分不清是不是在别的桌面
+#   (辅助功能只列当前桌面的窗口,私有接口不用)。这种借鼠标也点不到,一起拦下,原因写成两种都包括。
+
+
+def _other_desktop(app):
+    """目标窗口在别的桌面(Space)上:有窗口,但没有一个在当前桌面;藏起来的(⌘H)、缩进程序坞的不算(激活它们不会切桌面)。
+    11-15 C-2.0 照 Windows `_gate`:借鼠标 / 前台打字前查,在别的桌面就不借(激活会把用户切过去)。判断不了当不在。"""
+    try:
+        g = bg.main_window(app)
+        if not g or g.get("onscreen") is not False or min(g.get("w", 0), g.get("h", 0)) < 100:
+            return False
+        if _app_hidden(g["pid"]):
+            return False
+        el = ax.app_element(g["pid"])[0]
+        ws = ax.attr(el, "AXWindows") or []
+        if ws and all(ax.attr(w, "AXMinimized") for w in ws):
+            return False
+        return True
+    except Exception:   # noqa: BLE001
+        return False
+
+
+def _desk_refused(r, app):
+    """在别的桌面:把结果改成 refused(停下告诉用户),不先问用户、也不借。不在返回 None。"""
+    if not _other_desktop(app):
+        return None
+    r.update(outcome="refused", code="other_desktop", reason=OTHER_DESKTOP)
+    return r
+
+
+def _real_mouse(app, fn, modal=False):
+    """真鼠标兜底:拿桌面锁 → 让路检查 → 激活窗口 → 做 → 还原前台和鼠标 → 放锁。
+    modal=True:fn 里会查「目标弹着对话框 / 表单就不点」(ig.guarded)的,激活前先查一遍。"""
     from seeu_lib import desktop_lock as dl, input_guard as ig
 
     def act():
+        if _other_desktop(app):          # 11-15 C-2.0:激活会把用户切到那个桌面 → 不借(_ladder 收成 refused)
+            raise ax.AXRefused(OTHER_DESKTOP)
         # 10-30:先让路再激活。原来激活后才在 fn 里查用户在不在用 → 用户在用就停手,
         # 但前台已经被抢、还原又因"用户在用"跳过,目标 App 一直挂在前台(Chrome 实测抢了用户桌面)
         ig.yield_to_user()
+        if modal:
+            # 11-14:弹窗 / 表单这条规则原来只在激活之后(fn 里的 ig.guarded)才查 → 注定被拦的也先把目标拉到前台
+            # (Parallels 设置的表单里点下拉框:没点,但窗口被激活变亮)。它按进程号读,不用在前台 → 提到激活前。
+            # 读不到进程号就留给后面那次查;被拦抛的错跟后面那次一样。
+            try:
+                pid = _pid(app)
+            except Exception:
+                pid = None
+            if pid:
+                getattr(ig, "check_no_modal", lambda _p: None)(pid)
         r = dl.acquire(PROJECT, f"SeeU 真鼠标:{app}", attended=True)
         if not r["ok"]:
             raise ax.AXRefused("桌面锁被占:" + dl.describe(r["held"]))
@@ -620,8 +838,11 @@ def settings_cmd(args):
     return 0
 
 
-def _ask_user(r, what):
-    """「问我」档:不借,结果改成 ask_user 交给 AI 去问;屏幕上弹提示条提醒用户回对话里选。"""
+def _ask_user(r, what, app=None):
+    """「问我」档:不借,结果改成 ask_user 交给 AI 去问;屏幕上弹提示条提醒用户回对话里选。
+    目标在别的桌面:借了也会把用户切走 → 直接 refused,不先问(11-15 C-2.0,照 Windows)。"""
+    if app and _desk_refused(r, app):
+        return r
     r.update(outcome="ask_user", reason=ASK_NOTE)
     try:
         from seeu_lib import cursor_overlay as co
@@ -764,6 +985,10 @@ def tap(app, target, real=True, allow=None):
     if web.is_browser(app) or web.is_cdp(app):     # 浏览器 / SeeU 专用那份网页壳 App:按网页里的编号/名字点,见 seeu/web
         return web.tap(app, target)
     x, y, e = _resolve(app, target)
+    if e is None:                 # 11-15 C-2.0:按截图位置点(不是控件):Chrome / Electron 窗口看不见时截图是旧的,不点
+        bad = _stale_pixel(app)
+        if bad:
+            return bad
     blocked = _tap_secret_block(app, e, x, y)      # 11-07:点「粘贴」按钮 / 右键菜单里的粘贴项 = 粘贴,光标在密码框里就不点
     if blocked:
         return blocked
@@ -798,12 +1023,12 @@ def tap(app, target, real=True, allow=None):
             from seeu import safety
             safety.check_point(ax_, ay_)      # 10-30:位置盖着 SeeU 自己的浮标(没让路)就不点
             ig.guarded(ax_, ay_, bg.split_target(app)[0], do=lambda: mi.qtap(ax_, ay_))
-        r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap))], expect_factory=factory)
+        r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap, modal=True))], expect_factory=factory)
         r2["tried"] = r["tried"] + r2["tried"]
         r2["xy"] = r["xy"]
         return r2
     if real_mode() == "ask":
-        return _ask_user(r, "ask.tap")
+        return _ask_user(r, "ask.tap", app)
     r["reason"] = NO_REAL_NOTE
     return r
 
@@ -819,6 +1044,10 @@ def long_press(app, target, ms=1000):
         return dict(outcome="refused", route=None, tried=[], png=None,
                     reason="浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号")
     x, y, e = _resolve(app, target)
+    if e is None:                 # 11-15 C-2.0:同 tap
+        bad = _stale_pixel(app)
+        if bad:
+            return bad
     blocked = _tap_secret_block(app, e, x, y)      # 11-07 复查:长按 50 毫秒就是一次点击,跟 tap 查同一条
     if blocked:
         return blocked
@@ -891,7 +1120,7 @@ def type(app, text, enter=False, fallback=True, allow=None):
                  "先 see 看框里的字;网页填表用 seeu.web.type(App, 编号, 文字) 才能核实,别重打")
     elif fallback is None and r["outcome"] == "ineffective":
         if real_mode() == "ask":
-            return _ask_user(r, "ask.type")
+            return _ask_user(r, "ask.type", app)
         r["reason"] = NO_REAL_NOTE + "(打字落空多半是输入框没聚焦:先点一下输入框再打)"
     # "动了"不等于打全了:读得到框里文字的直接看,读不到的(网页做的框、镜像画面)截图识字,找最后几个字;
     # 找不到 = 只打进一部分 → 报 partial、不按回车、也不兜底重打(重打会叠出重复字)
@@ -1349,6 +1578,9 @@ def _keep_front(app, fn):
 def drag(app, pts, hold_ms=0, allow=None):
     """拖动:macOS 没有后台拖动的路,直接走真鼠标。pts = 屏幕点列表。"""
     x0, y0 = pts[0]
+    bad = _stale_pixel(app)          # 11-15 C-2.0:拖动全靠截图位置
+    if bad:
+        return bad
     blocked = _tap_secret_block(app, None, x0, y0)     # 11-07 复查:起点终点同一处的拖动也是一次点击
     if blocked:
         return blocked
@@ -1362,8 +1594,8 @@ def drag(app, pts, hold_ms=0, allow=None):
     if not real_allowed(allow):
         r = dict(outcome="refused", route=None, tried=[], png=None,
                  reason="拖动只能借用户的鼠标(macOS 没有后台拖动),设置.json「借用鼠标」= 关,没做。要拖请用户自己拖,或请用户把设置改成开")
-        return _ask_user(r, "ask.drag") if real_mode() == "ask" else r
-    return _ladder(app, [("真鼠标拖动", _real_mouse(app, act))])
+        return _ask_user(r, "ask.drag", app) if real_mode() == "ask" else r
+    return _ladder(app, [("真鼠标拖动", _real_mouse(app, act, modal=True))])
 
 
 # ---------------------------------------------------------------- 镜像固定动作(自带状态检查)
@@ -1482,6 +1714,9 @@ def _main(cmd, app, rest):
             print(web.describe(v["items"]))
         if v.get("png"):
             print("截图:", v["png"])
+        if v.get("stale"):
+            print("⚠️ 截图可能是旧画面:" + v["stale"] + "。按编号、菜单、按键照常能做,但效果在截图上看不出来(看列表文字核对);按截图位置点会先被拦下。"
+                  + {DESK_WHY: "请切到那个桌面再 see", LOCK_WHY: "请解锁 Mac、唤醒显示器再 see"}.get(v["stale"], "请让窗口露出来一块(比如一个角)再 see"))
         return 0
     if cmd == "tap":
         t = (float(rest[0]), float(rest[1])) if len(rest) == 2 and all(
