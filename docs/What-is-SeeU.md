@@ -199,7 +199,7 @@ Chromium-based browsers like Edge and Arc will most likely work the Chrome way d
 - The "hard safety rules" still apply (see "Safety rules" under "Safety and things to note" below).
 - For outward-facing actions like sending messages, submitting or placing orders, the AI calling SeeU still asks you first; anything you spelled out in the task beforehand (such as "submit this batch of forms directly") counts as already asked.
 
-**How to turn it on**: off by default. Click I See in the floating window's button bar. Only you can turn it on; the AI won't do it for you (you can also run `python3 -m seeu isee on` yourself in a terminal; on Windows write `python`, run it in a Windows cmd / PowerShell window and press the letter it shows to confirm). To turn it off, click it again or tell the AI "turn off I See". It turns itself off after 24 hours by default; when it does, if the browser's extra permission is still on, it reminds you to turn that off too.
+**How to turn it on**: off by default. Click I See in the floating window's button bar. Only you can turn it on; the AI won't do it for you (you can also run `python3 -m seeu isee on` yourself in the system terminal and press the letter it shows to confirm; on Windows write `python` and run it in a Windows cmd / PowerShell window). To turn it off, click it again or tell the AI "turn off I See". It turns itself off after 24 hours by default; when it does, if the browser's extra permission is still on, it reminds you to turn that off too.
 
 ## Safety and things to note
 

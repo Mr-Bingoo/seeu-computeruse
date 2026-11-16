@@ -4,6 +4,19 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI to "update SeeU", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.3.0 (2026-11-16)
+
+Only you can turn on I See, and now it's much harder to get around; and when the AI points inside a dialog, SeeU can borrow your mouse to click there.
+
+- **Borrowing the mouse inside a dialog** (Mac): before, whenever the target app showed a dialog or sheet, SeeU never borrowed your mouse to click. Now it does when the AI is pointing inside that dialog and the dialog was already there when the AI last looked at the screen; a popup that appears afterwards, or a click outside the dialog, is still refused.
+- **Only you can turn on I See, for real this time** (Mac and Windows):
+  - Editing the settings file to say "on" no longer counts; after I See is turned off or expires, copying the old "on" record back doesn't count either.
+  - Turning it on from the Mac terminal now also asks you to press the letter shown on screen (same as Windows); the AI's command line can't answer it.
+  - On Windows, the I See button on the floating window only accepts a click from your own mouse; simulated clicks from a program can't turn it on.
+  - The environment variable `SEEU_ISEE=1` no longer turns it on (`=0` still forces it off).
+- **Small fixes**: a mistyped number of hours after `isee on` no longer crashes, and a negative one no longer turns on something already expired; the `isee` commands on the Mac now speak English too; on Windows, adding sites to the allow list or changing settings from a terminal inside an editor or AI app now also needs your own words.
+- **What you need to do**: after updating, quit your AI app completely and reopen it; if I See was on, turn it on again.
+
 ## v1.2.1 (2026-11-16)
 
 Two small fixes after v1.2.0, plus a few plainer wordings in the README.

@@ -213,6 +213,14 @@ def isee_on():
     d = _read_json(SEEU_SETTINGS)
     if str(d.get("I See", "关")) not in ("开", "on", "1", "true"):
         return False
+    try:        # 11-16:还要凭证对得上(手改设置文件写「开」不算);seeu.isee 是旧版没有 file_on 就照老办法
+        if ROOT not in sys.path:      # 开源包没有 seeu_lib.pth(同 tr())
+            sys.path.insert(0, ROOT)
+        from seeu import isee as _isee
+        if hasattr(_isee, "file_on"):
+            return bool(_isee.file_on(d))
+    except Exception:
+        return False
     until = d.get("I See 到期")
     try:
         return not until or time.time() < time.mktime(time.strptime(until, "%Y-%m-%d %H:%M"))

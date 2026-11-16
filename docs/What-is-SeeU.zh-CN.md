@@ -199,7 +199,7 @@ Edge、Arc 这类 Chrome 内核的浏览器，大概率也能按上面 Chrome �
 - 安全底线依旧生效（见下面「安全与注意事项」里的「安全底线」）。
 - 发消息、提交、下单这类对外的动作，调用 SeeU 的 AI 仍会先问你；你在任务里事先说清楚的（比如「这批表单直接提交」）就算问过了。
 
-**怎么开**：默认是关着的。点悬浮窗按钮栏里的 I See，只能你亲手开，AI 不会替你开(也可以自己在终端里运行 `python3 -m seeu isee on`，Windows 上写 `python`、要在系统的 cmd / PowerShell 窗口里运行并按一下屏幕上提示的字母确认)。想关可以再点一次，或者跟 AI 说「关掉 I See」。开了默认 24 小时后自动关掉；关掉时如果浏览器的额外权限还开着，会提醒你记得关。
+**怎么开**：默认是关着的。点悬浮窗按钮栏里的 I See，只能你亲手开，AI 不会替你开(也可以自己在系统的终端里运行 `python3 -m seeu isee on`，再按一下屏幕上提示的字母确认；Windows 上写 `python`，要在系统的 cmd / PowerShell 窗口里运行)。想关可以再点一次，或者跟 AI 说「关掉 I See」。开了默认 24 小时后自动关掉；关掉时如果浏览器的额外权限还开着，会提醒你记得关。
 
 ## 安全与注意事项
 
@@ -245,7 +245,7 @@ Edge、Arc 这类 Chrome 内核的浏览器，大概率也能按上面 Chrome �
 
 ### 出问题怎么办
 
-1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照他说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
+1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
 2. 开完或改完授权，要完全退出 AI 客户端再打开，才会生效。
 3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有隐私。
 <!-- /sync:notes -->

@@ -22,7 +22,7 @@ https://github.com/user-attachments/assets/18916b9c-9654-4740-95dd-cc40c52b9ea8
 
 SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思是「先看清，再动手」。
 
-他会在屏幕上再放一个紫色的代理鼠标替 AI 干活。看画面、点击、输入、滚动都在后台完成，不抢你的鼠标、不切你的前台窗口。你可以照常写文档、回消息，它会在旁边做它的事，点击 SeeU 悬浮标就可以知道或看到 AI 在干什么。
+它会在屏幕上再放一个紫色的代理鼠标替 AI 干活。看画面、点击、输入、滚动都在后台完成，不抢你的鼠标、不切你的前台窗口。你可以照常写文档、回消息，它会在旁边做它的事，点击 SeeU 悬浮标就可以知道或看到 AI 在干什么。
 
 ## 你可以这样说
 
@@ -36,9 +36,9 @@ SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思�
 「VS Code 里首个测试用例盯着跑出结果」
 ```
 
-## 他能做什么
+## 它能做什么
 
-在了解他能做什么之前，先和你确认一件事 : 他做事的每一步都会检查画面有没有变化，动作没生效就尝试换个办法，或停下来告诉你目前卡在哪，不会闷头乱点。详细介绍见 [SeeU 是什么](docs/What-is-SeeU.zh-CN.md)。
+在了解它能做什么之前，先和你确认一件事 : 它做事的每一步都会检查画面有没有变化，动作没生效就尝试换个办法，或停下来告诉你目前卡在哪，不会闷头乱点。详细介绍见 [SeeU 是什么](docs/What-is-SeeU.zh-CN.md)。
 
 **Mac 和 Windows 都有的 :**
 
@@ -110,11 +110,11 @@ python3 -m seeu install auto      # 或指定:claude | codex | cursor | trae | v
 python3 -m seeu check             # 看这台电脑上还缺什么，缺的会写怎么办
 ```
 
-仅 Mac 要打开相关授权(Windows 无需单独设置) : 在 Mac 里跟 AI 说「检查一下 SeeU 还缺什么授权」(或自己运行 `python3 -m seeu check`)，他会告诉你该给谁开(可能是你的 AI 客户端，也可能是 SeeU 小程序)，照着在系统设置 → 隐私与安全性里打开**辅助功能**(新版 macOS 英文界面里叫 Device Control and Data Access)和**屏幕与系统录音**就行。开完授权要完全退出 AI 客户端再打开，才会生效。
+仅 Mac 要打开相关授权(Windows 无需单独设置) : 在 Mac 里跟 AI 说「检查一下 SeeU 还缺什么授权」(或自己运行 `python3 -m seeu check`)，它会告诉你该给谁开(可能是你的 AI 客户端，也可能是 SeeU 小程序)，照着在系统设置 → 隐私与安全性里打开**辅助功能**(新版 macOS 英文界面里叫 Device Control and Data Access)和**屏幕与系统录音**就行。开完授权要完全退出 AI 客户端再打开，才会生效。
 
 ## 接入 AI 客户端
 
-已测试过的 : Claude(Code 以及桌面版聊天页)、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问(千问有一部分他特有操作，详细见下方)。
+已测试过的 : Claude(Code 以及桌面版聊天页)、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问(千问有一部分它特有操作，详细见下方)。
 
 - Claude、Codex、Cursor、Trae、VS Code : 上面的 `install` 一条命令接好。
 - WorkBuddy、豆包 : 在它们自己的界面里新建一个自定义连接器(本机 / STDIO)，把 `python3 -m seeu mcp` 填进去；其他支持 MCP 的客户端也是这个办法。
@@ -167,7 +167,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 1. **不限制使用时长** : 部分模型的 Computer Use 单次使用时长不能超过 30 分钟。
 2. **成为项目的能力** : 放到需要自动化执行的项目里使用，免去每次向 Agent 申请使用的过程。
 3. **后台默默的干活** : 大部分场景下不会打扰你，不抢鼠标、不切前台，你可以和 AI 并行使用电脑。
-4. **知道他在做什么** : 桌面上显示紫色代理鼠标，悬浮窗里可以看操作步骤和实时画面，也能随时叫停。
+4. **知道它在做什么** : 桌面上显示紫色代理鼠标，悬浮窗里可以看操作步骤和实时画面，也能随时叫停。
 5. **关键时刻提醒你** : 需要借用你的鼠标或中断时主动提醒，抢占和被控时屏幕边缘可选择展示提醒灯光。
 6. **执行策略会自选** : 根据场景自动选择方案，如果你此时在使用鼠标且无法后台执行时会主动给你让路！
 7. **轻松上手不挑剔** : 一键接入，支持 MCP 和技能(Skill)，不绑定某家客户端。
@@ -193,7 +193,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 
 ## 出问题怎么办
 
-1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照他说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
+1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
 2. 开完或改完授权，要完全退出 AI 客户端再打开，才会生效。
 3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有隐私。
 <!-- /sync:notes -->

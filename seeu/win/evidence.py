@@ -186,18 +186,9 @@ def settings():
 def _isee_on(isee):
     """I See 现在算不算开着。🔴 自己读文件判断、不落盘:isee.active() 发现过期会顺手改设置文件、弹提示(11-14 复查),取证不能改东西。"""
     env = os.environ.get("SEEU_ISEE", "").strip().lower()
-    if env in ("1", "on", "开", "true"):
-        return True
     if env in ("0", "off", "关", "false"):
         return False
-    d = isee._load()
-    if str(d.get(isee.KEY, "关")) not in ("开", "on", "1", "true"):
-        return False
-    until = d.get(isee.KEY_UNTIL)
-    try:
-        return not (until and time.time() > time.mktime(time.strptime(until, isee.FMT)))
-    except ValueError:
-        return True
+    return isee.file_on(isee._load())      # 11-16:凭证对得上、没过期才算(只读)
 
 
 def shot():

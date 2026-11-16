@@ -5,10 +5,10 @@
 拿不掉的:用户亲手在用键鼠时让路;密码框/新密码框/验证码框/银行卡框不碰(代码层);付款、转账这类(调用方 AI 自己的规矩)——
   这些不中途停,记成「跳过」,报告里统一列。
 
-开法(三种,任选):
-  设置文件 seeu/设置.json 里 "I See" 写 "开"(底层存储;11-02 起只让用户自己开(悬浮窗 I See 按钮),AI 只能关)
-  命令:python3 -m seeu isee on [小时]   /  off  /  status  /  report
-  定时任务:环境变量 SEEU_ISEE=1(只管这一个进程,优先于设置文件;=0 强制关)
+开法(只让用户自己开,AI 只能关;11-02 用户定):
+  悬浮窗 / 灵动岛上的 I See 按钮;或用户自己在终端里敲:python3 -m seeu isee on [小时]   /  off  /  status  /  report
+  底层存在 seeu/设置.json 的 "I See",🔴 11-16 起还要带上 on() 写的「I See 凭证」才算开:手改设置文件写「开」不算
+  (防 AI 绕开按钮直接改文件);环境变量 SEEU_ISEE=0 强制关(这一个进程),=1 不再能开(11-16 起,原来给定时任务用,没人用)。
 默认 24 小时后自动失效(设置文件里 "I See 到期")。到期后第一次用 SeeU 会弹提示条提醒关浏览器开关。
 日志:~/.seeu/seeu_isee.log(只在本机;7 天前的自动清;打的字只记长度,不记内容)。
 
@@ -31,7 +31,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 不换的话在虚拟机里点 I See 会改到这台 Mac 上真的 设置.json)。平时不设。
 SETTINGS = os.environ.get("SEEU_SETTINGS_FILE") or os.path.join(HERE, "设置.json")
 LOG = home("seeu_isee.log")
-KEY, KEY_UNTIL = "I See", "I See 到期"
+KEY, KEY_UNTIL, KEY_PROOF = "I See", "I See 到期", "I See 凭证"
+# 11-16:凭证用的本机密钥(只本用户可读);删了 = 现有的开着作废,关 / 到期时就删(旧凭证抄回去也不算)。
+# 🔴 不跟 SEEU_HOME 走(同 seeu_web):各家 MCP 配置可能各设各的 SEEU_HOME,跟着走会找不到同一把、把用户开的当成伪造
+SECRET = os.path.expanduser("~/.seeu/seeu_isee.key")
 DEFAULT_HOURS = 24
 KEEP_DAYS = 7
 FMT = "%Y-%m-%d %H:%M"
@@ -71,23 +74,121 @@ def _save(d):
     os.replace(tmp, SETTINGS)
 
 
+def _L(zh, en):
+    try:
+        from seeu.i18n import lang
+        return en if lang() == "en" else zh
+    except Exception:
+        return zh
+
+
+def _secret(create=False):
+    """凭证密钥(32 字节随机,文件只本用户可读)。没有且 create=False → None。"""
+    try:
+        with open(SECRET, "rb") as f:
+            k = f.read()
+        if len(k) >= 32:
+            return k
+    except OSError:
+        pass
+    if not create:
+        return None
+    os.makedirs(os.path.dirname(SECRET), exist_ok=True)
+    for _ in range(3):
+        # 先写满临时文件再 link 到正式位置:正式文件要么没有、要么是完整的一把(写到一半被结束也不会留空文件);
+        # 两个 on() 同时第一次跑,link 失败的那个读先建好的那把(11-16 复查两轮)
+        k = os.urandom(32)
+        tmp = SECRET + f".{os.getpid()}.{os.urandom(4).hex()}.tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(k)
+        try:
+            os.link(tmp, SECRET)
+            return k
+        except FileExistsError:
+            got = _secret()
+            if got:
+                return got
+            try:              # 老版本留下的坏文件(长度不够):删掉重建
+                os.remove(SECRET)
+            except OSError:
+                pass
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    raise RuntimeError(_L("I See 的密钥文件建不起来(~/.seeu/seeu_isee.key),没开", "Couldn't create the I See key file (~/.seeu/seeu_isee.key); not turned on"))
+
+
+def _drop_secret():
+    """关 / 到期 / 认出伪造时作废密钥:之前写过的凭证全部对不上(防 AI 记下凭证、关了以后原样抄回去)。"""
+    try:
+        os.remove(SECRET)
+    except OSError:
+        pass
+
+
+def _proof(until, nonce, key):
+    import hashlib
+    import hmac
+    return hmac.new(key, f"I See|{until or ''}|{nonce}".encode(), hashlib.sha256).hexdigest()
+
+
+def proof_ok(d):
+    """设置里的「开」是不是 on() 写的(凭证对得上)。只读,不改文件。
+    🔴 挡的是「AI 绕开按钮直接把设置文件改成开」;同一个账号下的程序真要伪造也拦不住,这只是让绕路变成明摆着的伪造。"""
+    pf = d.get(KEY_PROOF)
+    if not isinstance(pf, str) or "." not in pf:
+        return False
+    key = _secret()
+    if not key:
+        return False
+    import hmac
+    nonce, sig = pf.split(".", 1)
+    return hmac.compare_digest(sig, _proof(d.get(KEY_UNTIL), nonce, key))
+
+
+def file_on(d):
+    """只看设置文件(不看环境变量、不改文件):写着开 + 凭证对 + 没过期。悬浮窗、取证这种不能改东西的地方用。"""
+    if str(d.get(KEY, "关")) not in ("开", "on", "1", "true") or not proof_ok(d):
+        return False
+    until = d.get(KEY_UNTIL)
+    try:
+        return not (until and time.time() > time.mktime(time.strptime(until, FMT)))
+    except ValueError:
+        return False
+
+
+_FORGED_LOGGED = False
+
+
 def status():
     """{on, source(环境变量/设置文件), until(到期时间文字或 None)}。过期的顺手关掉并提醒一次。"""
     env = os.environ.get("SEEU_ISEE", "").strip().lower()
-    if env in ("1", "on", "开", "true"):
-        return dict(on=True, source="环境变量", until=None)
     if env in ("0", "off", "关", "false"):
         return dict(on=False, source="环境变量", until=None)
     d = _load()
     if str(d.get(KEY, "关")) not in ("开", "on", "1", "true"):
         return dict(on=False, source="设置文件", until=None)
+    if not proof_ok(d):
+        # 11-16:写着开、凭证对不上 = 不是 on() 开的(手改 / 别的程序改的 / 升级前开的)→ 当关,不改文件(复查:改了会把
+        # 读不到密钥的进程误判的那份也关掉),每个进程只记一次
+        global _FORGED_LOGGED
+        if not _FORGED_LOGGED:
+            _FORGED_LOGGED = True
+            log("forged")
+        return dict(on=False, source="设置文件", until=None, forged=True)
     until = d.get(KEY_UNTIL)
     try:
         expired = until and time.time() > time.mktime(time.strptime(until, FMT))
     except ValueError:
-        expired = False
+        expired = True          # 11-16:到期时间写坏了按已过期(原来当没过期 = 一直开着)
     if expired:
         d[KEY] = "关"
+        d.pop(KEY_UNTIL, None)
+        d.pop(KEY_PROOF, None)
+        _drop_secret()
         _save(d)
         _expired_notice()
         return dict(on=False, source="设置文件", until=until, expired=True)
@@ -101,11 +202,102 @@ def active():
         return False
 
 
-def on(hours=DEFAULT_HOURS):
-    """开 I See,hours 小时后自动失效(0 = 不失效)。顺带做一次体检,返回体检结果。"""
+def hours_ok(hours):
+    """0 = 不自动关;否则 1 分钟 ~ 一年(11-16:负数原来开出一个已经过期的,NaN / 无穷大会崩)。"""
+    try:
+        h = float(hours)
+    except (TypeError, ValueError):
+        return False
+    return h == 0 or 1 / 60 <= h <= 24 * 365
+
+
+def _tty_confirm(secs=60):
+    """Mac 终端里开的现场确认(11-16 复查,照 Windows):随机一个字母,要人在这个终端的键盘上按。读的是控制终端 /dev/tty,
+    AI 的命令行没有控制终端(打不开就算没确认);进程脱离父进程链(后台、launchd)也答不上来。最多等 secs 秒。"""
+    import random
+    import select
+    import termios
+    import tty
+    try:
+        fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+    except OSError:
+        return False
+    ch = random.choice("ABCDEFGHJKLMNPQRSTUVWXYZ")
+    try:
+        old = termios.tcgetattr(fd)
+    except termios.error:
+        os.close(fd)
+        return False
+    try:
+        os.write(fd, _L(f"要打开 I See(我知风险),请在键盘上按字母 {ch} 确认,按别的键取消({secs} 秒内):",
+                        f"To turn on I See (I know the risks), press the letter {ch} to confirm, any other key cancels "
+                        f"(within {secs} s): ").encode())
+        tty.setcbreak(fd)
+        termios.tcflush(fd, termios.TCIFLUSH)        # 先清掉之前积着的键
+        r, _, _ = select.select([fd], [], [], secs)
+        k = os.read(fd, 4).decode(errors="ignore")[:1] if r else ""
+        os.write(fd, (k + "\n").encode())
+        return k.upper() == ch
+    except Exception:
+        return False
+    finally:
+        try:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        except Exception:
+            pass
+        os.close(fd)
+
+
+def _win_console_ok():
+    """Windows 命令行那条:on() 自己再查一遍(不信调用方传的 by):真控制台、不是编辑器 / AI 终端、现场按对字母。"""
+    try:
+        from seeu import __main__ as m
+        from seeu.win import lang as lg
+    except Exception:
+        return False
+    return m._win_by_person() and not m._win_isee_ai() and m._win_key_confirm(lg)
+
+
+def _win_overlay_ok():
+    """Windows 悬浮窗那条:本进程就是浮标,而且它刚认出一次手按(GetCurrentInputMessageSource = 硬件)按下。"""
+    cands = [sys.modules.get("seeu.win.floatwin")]
+    m = sys.modules.get("__main__")          # 用 -m 拉起时浮标代码叫 __main__(floatwin 顶上也登记了别名,这里双保险)
+    if m is not None and getattr(getattr(m, "__spec__", None), "name", "") == "seeu.win.floatwin":
+        cands.append(m)
+    now = time.time()
+    return any(fw is not None and getattr(fw, "SERVING", False) and 0 <= now - getattr(fw, "HAND_T", 0) < 5 for fw in cands)
+
+
+def person_ok(by=None):
+    """这次「开」是不是用户亲手(11-16 复查后:都在这里自己查,不信调用方的话)。
+    Mac:悬浮窗亲自拉起的(from_overlay),或父进程链里没有 AI 客户端 + 终端里现场按对字母;
+    Windows:by="console" 真控制台 + 不是 AI + 现场按键;by="overlay" 浮标进程里刚有一次手按。"""
+    if sys.platform == "win32":
+        if by == "console":
+            return _win_console_ok()
+        if by == "overlay":
+            return _win_overlay_ok()
+        return False
+    if from_overlay():
+        return True
+    return not from_ai() and _tty_confirm()
+
+
+def on(hours=DEFAULT_HOURS, by=None):
+    """开 I See,hours 小时后自动失效(0 = 不失效)。顺带做一次体检,返回体检结果。
+    11-16:「只让用户自己开」原来只在命令行入口查,`python -c "isee.on()"` 能绕 → 查在这里;不是用户亲手抛 PermissionError。"""
+    if not hours_ok(hours):
+        raise ValueError(_L("小时数不对:0 = 不自动关,其余 1 分钟到一年", "Bad hours: 0 = never turns off by itself, otherwise 1 minute to 1 year"))
+    if not person_ok(by):
+        log("on_refused", by=by)
+        raise PermissionError(_L("I See 只能你自己开(悬浮窗上的 I See 按钮,或自己在终端里敲命令),AI 不能替你开",
+                                 "Only you can turn on I See (the I See button on the overlay, or typing the command in a terminal yourself)"))
+    hours = float(hours)
     d = _load(strict=True)
     d[KEY] = "开"
     d[KEY_UNTIL] = time.strftime(FMT, time.localtime(time.time() + hours * 3600)) if hours else None
+    nonce = os.urandom(8).hex()
+    d[KEY_PROOF] = nonce + "." + _proof(d[KEY_UNTIL], nonce, _secret(create=True))
     _save(d)
     log("on", hours=hours)
     try:
@@ -119,7 +311,9 @@ def off():
     d = _load(strict=True)
     d[KEY] = "关"
     d.pop(KEY_UNTIL, None)
+    d.pop(KEY_PROOF, None)
     _save(d)
+    _drop_secret()
     log("off")
 
 
@@ -256,15 +450,16 @@ def report(since=None):
     done = [r for r in acts if r.get("outcome") in ("delivered", "unverified")]
     skipped = [r for r in acts if r.get("outcome") not in ("delivered", "unverified")]
     unlock = sorted({r["unlock"] for r in skipped if r.get("unlock")})
-    lines = [f"做成了 {len(done)} 步"]
+    lines = [_L(f"做成了 {len(done)} 步", f"Done: {len(done)} step(s)")]
     lines += [f"  - {r['app']} {r['step']}({r.get('route')})" for r in done[-20:]]
-    lines.append(f"跳过了 {len(skipped) + len(skips)} 步")
-    lines += [f"  - {r['app']} {r['step']}:{r.get('reason') or r.get('outcome')}" for r in skipped + skips]
+    lines.append(_L(f"跳过了 {len(skipped) + len(skips)} 步", f"Skipped: {len(skipped) + len(skips)} step(s)"))
+    lines += [f"  - {r['app']} {r['step']}" + _L(":", ": ") + f"{r.get('reason') or r.get('outcome')}" for r in skipped + skips]
     if stucks:
-        lines.append(f"卡住停下 {len(stucks)} 次")
-        lines += [f"  - {r['app']} {r['step']}:{r.get('reason')};怎么办:{r.get('todo')}" for r in stucks]
+        lines.append(_L(f"卡住停下 {len(stucks)} 次", f"Stopped when stuck: {len(stucks)} time(s)"))
+        lines += [f"  - {r['app']} {r['step']}" + _L(f":{r.get('reason')};怎么办:{r.get('todo')}",
+                                                     f": {r.get('reason')}; what to do: {r.get('todo')}") for r in stucks]
     if unlock:
-        lines.append("开这些能多做:")
+        lines.append(_L("开这些能多做:", "Turn these on to do more:"))
         lines += [f"  - {u}" for u in unlock]
     return "\n".join(lines)
 
@@ -352,20 +547,44 @@ def main(argv):
               "I See 只能你自己开:点 SeeU 悬浮窗上的「I See」按钮(或在系统自带的「终端」里运行这条命令)。AI 不能替你开。")
         sys.exit(3)
     if cmd == "on":
-        hours = float(argv[1]) if len(argv) > 1 else DEFAULT_HOURS
-        res = on(hours)
+        hours = argv[1] if len(argv) > 1 else DEFAULT_HOURS
+        if not hours_ok(hours):        # 11-16:原来 `isee on abc` 直接崩、负数开出已过期的
+            print(_L("用法:python3 -m seeu isee on [小时](0 = 不自动关;最短 1 分钟,最长一年)",
+                     "Usage: python3 -m seeu isee on [hours] (0 = never turns off by itself; 1 minute to 1 year)"), file=sys.stderr)
+            sys.exit(2)
+        try:
+            res = on(hours)
+        except (PermissionError, RuntimeError) as ex:
+            print(str(ex), file=sys.stderr)
+            sys.exit(3 if isinstance(ex, PermissionError) else 1)
         st = status()
-        print(f"I See 开了" + (f",到 {st['until']} 自动关" if st.get("until") else "(不自动关)"))
+        print(_L("I See 开了", "I See is on") + (_L(f",到 {st['until']} 自动关", f", turns off at {st['until']}") if st.get("until")
+                                               else _L("(不自动关)", " (won't turn off by itself)")))
         for k, v in res.items():
-            print(f"  {k}:{v}")
+            print(f"  {k}" + _L(":", ": ") + f"{v}")
     elif cmd == "off":
-        off()
-        print("I See 关了")
+        try:
+            off()
+        except RuntimeError as ex:
+            print(str(ex), file=sys.stderr)
+            sys.exit(1)
+        print(_L("I See 关了", "I See is off"))
     elif cmd == "report":
         print(report())
-    else:
+    elif cmd == "status":
         st = status()
-        print(("开着" if st["on"] else "关着") + f"(来源:{st['source']}" + (f",到 {st['until']}" if st.get("until") else "") + ")")
+        src = _L("环境变量 SEEU_ISEE", "the SEEU_ISEE environment variable") if st["source"] == "环境变量" else _L("设置文件", "settings file")
+        print(_L("开着" if st["on"] else "关着", "on" if st["on"] else "off")
+              + (_L(f",到 {st['until']}", f", until {st['until']}") if st["on"] and st.get("until") else "")
+              + _L(f"(来源:{src})", f" (from {src})")
+              + (_L(";设置里写着开,但不是你用按钮 / 终端开的(或是升级前开的),按关算;要用请重新开一次",
+                    "; the settings file says on, but it wasn't turned on with the button / terminal (or was turned on before an "
+                    "update), so it counts as off; turn it on again if you need it")
+                 if st.get("forged") else ""))
+    else:
+        print(_L("用法:python3 -m seeu isee on [小时] | off | status | report",
+                 "Usage: python3 -m seeu isee on [hours] | off | status | report"), file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

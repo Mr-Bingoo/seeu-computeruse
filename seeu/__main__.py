@@ -182,7 +182,8 @@ if __name__ == "__main__":
                 said = (rest[i + 1] if i + 1 < len(rest) else "").strip()
                 del rest[i:i + 2]
             # 人在终端里敲的(有终端)直接做;程序 / AI 调的(没有终端)要带用户原话(跟 Mac 版 _ai_gate 一个意思)
-            if cmd == "allow" and not _win_by_person() and not said:
+            # 11-16 复查:编辑器 / AI 客户端的内置终端是伪控制台,_win_by_person 会当成人 → 跟 isee on 一样再查父进程链
+            if cmd == "allow" and not said and (not _win_by_person() or _win_isee_ai()):
                 print(_lg.L("没做:这条命令不是人在终端里敲的。要先问用户,答应了带上 --user-said \"用户的原话\" 重跑"
                             "(有 seeu_allow_site 工具就用工具)。就是你本人的话:在 cmd / PowerShell 窗口里直接运行,别把输出接走。",
                             "Not done: this command wasn't typed by a person in a terminal. Ask the user first, then re-run with "
@@ -219,12 +220,13 @@ if __name__ == "__main__":
                     print(_lg.L("用法:python -m seeu isee on [小时](0 = 不自动关;最短 1 分钟,最长一年)",
                                 "Usage: python -m seeu isee on [hours] (0 = never turns off by itself; 1 minute to 1 year)"), file=sys.stderr)
                     sys.exit(2)
-                if not _win_key_confirm(_lg):
-                    print(_lg.L("没开:没有按对确认键。", "Not turned on: the confirmation key wasn't pressed."), file=sys.stderr)
-                    sys.exit(3)
                 try:
-                    isee.on(hours)
+                    isee.on(hours, by="console")      # 11-16 复查:三道门(含现场按键)在 isee.on 里自己再查,不信这里
                     st = isee.status()
+                except PermissionError:
+                    print(_lg.L("没开:没有按对确认键(或不是在 cmd / PowerShell 窗口里直接运行)。",
+                                "Not turned on: the confirmation key wasn't pressed (or this isn't a cmd / PowerShell window)."), file=sys.stderr)
+                    sys.exit(3)
                 except Exception as ex:   # noqa: BLE001   设置文件坏了 / 写不进
                     print(_lg.L(f"没开成:{ex}", f"Couldn't turn it on: {ex}"), file=sys.stderr)
                     sys.exit(1)
@@ -241,8 +243,7 @@ if __name__ == "__main__":
                     print(_lg.L(f"没关成:{ex}", f"Couldn't turn it off: {ex}"), file=sys.stderr)
                     sys.exit(1)
                 st = isee.status()
-                print(_lg.L("I See 关了", "I See is off") if not st.get("on") else
-                      _lg.L("设置文件里关了,但环境变量 SEEU_ISEE 还让它开着", "Off in the settings file, but the SEEU_ISEE environment variable keeps it on"))
+                print(_lg.L("I See 关了", "I See is off"))
             elif sub == "report":
                 print(isee.report())
             elif sub == "status":
@@ -250,7 +251,10 @@ if __name__ == "__main__":
                 src = _lg.L("环境变量 SEEU_ISEE", "the SEEU_ISEE environment variable") if st.get("source") == "环境变量" else _lg.L("设置文件", "settings file")
                 print(_lg.L("开着" if st["on"] else "关着", "on" if st["on"] else "off")
                       + (_lg.L(f",到 {st['until']}", f", until {st['until']}") if st.get("on") and st.get("until") else "")
-                      + _lg.L(f"(来源:{src})", f" (from {src})"))
+                      + _lg.L(f"(来源:{src})", f" (from {src})")
+                      + (_lg.L(";设置里写着开,但不是你用按钮 / 命令开的(或是升级前开的),按关算;要用请重新开一次",
+                               "; the settings file says on, but it wasn't turned on with the button / command (or was turned on before "
+                               "an update), so it counts as off; turn it on again if you need it") if st.get("forged") else ""))
             else:
                 print(_lg.L("用法:python -m seeu isee on [小时] | off | status | report",
                             "Usage: python -m seeu isee on [hours] | off | status | report"), file=sys.stderr)
@@ -271,7 +275,7 @@ if __name__ == "__main__":
                 said = (rest[i + 1] if i + 1 < len(rest) else "").strip()
                 del rest[i:i + 2]
             # 改设置跟加名单一个规矩:人在终端里敲的直接做;程序 / AI 调的要带用户原话。只看不改不用
-            if rest and not _win_by_person() and not said:
+            if rest and not said and (not _win_by_person() or _win_isee_ai()):     # 11-16:同 allow
                 from seeu.win import lang as _lg
                 print(_lg.L("没做:这条命令不是人在终端里敲的。改设置要先问用户,答应了带上 --user-said \"用户的原话\" 重跑。"
                             "就是你本人的话:在 cmd / PowerShell 窗口里直接运行,别把输出接走。",

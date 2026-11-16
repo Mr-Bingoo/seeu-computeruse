@@ -79,6 +79,7 @@ def _ocr(png):
     except SystemExit as ex:
         raise RuntimeError(f"认字失败:{ex}")
 _last = {}   # app -> 上一次 see() 的清单(按编号点用)
+_seen_modals = {}   # app -> 上一次 see() 时弹着的表单 / 对话框框(11-16:只有 AI 看过的弹窗才允许借鼠标往里点)
 _n = [0]
 
 
@@ -254,7 +255,7 @@ def _verify_box(app, png):
 
 # ---------------------------------------------------------------- 看
 
-def see(app):
+def see(app, _note_modals=True):
     """返回 {png, items}。items 每项:id、kind(ax|ocr)、text、x/y(屏幕点中心)、以及 ax 项带 el/role。
     浏览器(Chrome / Safari …)转给 seeu.web:返回 {route, items, text, url, title, tab},没有 png。"""
     from seeu import web, safety
@@ -289,6 +290,11 @@ def see(app):
     for i, it in enumerate(items, 1):
         it["id"] = i
     _last[app] = items
+    if not canvas and _note_modals:      # 按编号点时顺手补的那次 see 不算「AI 看过」(11-16 复查二)
+        try:
+            _seen_modals[app] = [f for f in (_modal_frames(_pid(app)) or []) if f]
+        except Exception:
+            _seen_modals[app] = []
     wins = []
     if not canvas and bg.split_target(app)[1] is None:
         try:                            # 11-01:App 开着好几个窗口(如 Gemini 的设置)时告诉 AI 怎么指定
@@ -344,7 +350,7 @@ def _resolve(app, target):
     if isinstance(target, (tuple, list)) and len(target) == 2:
         return float(target[0]), float(target[1]), None
     if isinstance(target, int) or (isinstance(target, str) and target.isdigit()):
-        items = _last.get(app) or see(app)["items"]
+        items = _last.get(app) or see(app, _note_modals=False)["items"]
         n = int(target)
         it = next((i for i in items if i["id"] == n), None)
         if not it:
@@ -686,9 +692,105 @@ def _desk_refused(r, app):
     return r
 
 
+def _modal_frames(pid):
+    """pid 这个 App 弹着的每个表单 / 对话框的屏幕框 [(x, y, w, h) 或 None…];认法跟 input_guard.modal_state 一样
+    (表单 AXSheet、AXModal 窗口、不是主窗口的 AXDialog,红黄绿那种小窗不算)。读不到整张表返回 None。"""
+    try:
+        el, _ = ax.app_element(int(pid))
+        wins = ax.attr(el, "AXWindows")
+        if wins is None:
+            return None
+        out = []
+        for w in wins:
+            sheets = list(ax.attr(w, "AXSheets") or []) + [
+                c for c in (ax.attr(w, "AXChildren") or []) if ax.attr(c, "AXRole") == "AXSheet"]
+            if sheets:
+                out += [ax.frame(s) for s in sheets]
+                continue
+            if ax.attr(w, "AXModal"):
+                out.append(ax.frame(w))
+            elif ax.attr(w, "AXSubrole") in ("AXDialog", "AXSystemDialog") and ax.attr(w, "AXMain") is False:
+                f = ax.frame(w)
+                if f and f[2] < 120 and f[3] < 40:
+                    continue
+                out.append(f)
+        return out
+    except Exception:
+        return None
+
+
+def _same_frame(a, b, tol=2):
+    return bool(a and b) and all(abs(p - q) <= tol for p, q in zip(a, b))
+
+
+def _under(el, f, depth=40):
+    """控件 el 顺着 AXParent 往上,先碰到的表单 / 窗口是不是框 f 那个(表单在窗口之前碰到;对话框本身就是窗口)。"""
+    for _ in range(depth):
+        if el is None:
+            return False
+        role = ax.attr(el, "AXRole") or ""
+        if role in ("AXSheet", "AXWindow"):
+            if _same_frame(ax.frame(el), f):
+                return True
+            if role == "AXWindow":
+                return False
+        el = ax.attr(el, "AXParent")
+    return False
+
+
+def _in_modal(app, pts, e=None):
+    """11-16 用户定:AI 明确指着对话框 / 表单里面的位置 → 借鼠标照常点(原来一律被「弹着对话框」拦住)。
+    11-16 复查后收紧,下面全满足才算:
+      ① 所有点落在**同一个**弹窗框里(往里收 1 点;同一个框里两点连线不出框,拖动中间不会划过主窗口);
+      ② 这个弹窗 AI 上次 see 时就已经在了(_seen_modals 记着同样的框)—— 后来冒出来的意外弹窗照旧拦;
+      ③ 每个点上最上面的控件确实属于这个弹窗(同 App 别的窗口叠在框上面就不算);
+      ④ 按编号点的,那个控件本身也在这个弹窗里(不是被弹窗挡住的主窗口控件)。
+    读不到任何一样都不算(照旧拦)。"""
+    try:
+        pid = _pid(app)
+        frames = [f for f in (_modal_frames(pid) or []) if f]
+    except Exception:
+        return False
+    if not frames or not pts:
+        return False
+
+    def inside(p, f):
+        return f[0] + 1 <= p[0] <= f[0] + f[2] - 1 and f[1] + 1 <= p[1] <= f[1] + f[3] - 1
+    box = next((f for f in frames if all(inside(p, f) for p in pts)), None)
+    if box is None or not any(_same_frame(box, g) for g in (_seen_modals.get(app) or [])):
+        return False
+    try:
+        app_el = ax.app_element(int(pid))[0]
+        if not all(_under(ax.element_at(app_el, p[0], p[1]), box) for p in pts):
+            return False
+        if e is not None and not _under(e.get("el"), box):
+            return False
+    except Exception:
+        return False
+    return True
+
+
+def _has_modal(app):
+    """目标现在弹着表单 / 对话框没有(同 input_guard.modal_state;读不到当没有,交给老规矩)。"""
+    from seeu_lib import input_guard as ig
+    try:
+        return bool(ig.modal_state(_pid(app))[0])
+    except Exception:
+        return False
+
+
+def _modal_recheck(app, pts, e=None):
+    """真点下去之前再核一次(让路可能等了几秒,弹窗换了):不在了就按「弹着对话框」拦。"""
+    from seeu_lib import input_guard as ig
+    if not _in_modal(app, pts, e):
+        raise ig.GuardBlocked("modal_sheet", "目标应用的弹窗变了(跟 see 时不一样),不点,先 see 一次", pid=None)
+
+
 def _real_mouse(app, fn, modal=False):
     """真鼠标兜底:拿桌面锁 → 让路检查 → 激活窗口 → 做 → 还原前台和鼠标 → 放锁。
-    modal=True:fn 里会查「目标弹着对话框 / 表单就不点」(ig.guarded)的,激活前先查一遍。"""
+    modal=True:fn 里会查「目标弹着对话框 / 表单就不点」(ig.guarded)的,激活前先查一遍。
+    modal 也可以是返回 (要点的屏幕点列表, 按编号点的控件或 None) 的函数:AI 明确指着看过的弹窗里面(_in_modal)就不拦
+    (fn 里自己也要按同样办法放开)。"""
     from seeu_lib import desktop_lock as dl, input_guard as ig
 
     def act():
@@ -706,7 +808,12 @@ def _real_mouse(app, fn, modal=False):
             except Exception:
                 pid = None
             if pid:
-                getattr(ig, "check_no_modal", lambda _p: None)(pid)
+                try:
+                    getattr(ig, "check_no_modal", lambda _p: None)(pid)
+                except ig.GuardBlocked:
+                    # 先按老规矩查(没弹窗时不多读一遍);弹着的话,AI 明确指着弹窗里面(_in_modal)才放过
+                    if not (callable(modal) and _in_modal(app, *modal())):
+                        raise
         r = dl.acquire(PROJECT, f"SeeU 真鼠标:{app}", attended=True)
         if not r["ok"]:
             raise ax.AXRefused("桌面锁被占:" + dl.describe(r["held"]))
@@ -1022,8 +1129,18 @@ def tap(app, target, real=True, allow=None):
             _cursor(app, "click", ax_, ay_, mode="real", force=True)
             from seeu import safety
             safety.check_point(ax_, ay_)      # 10-30:位置盖着 SeeU 自己的浮标(没让路)就不点
-            ig.guarded(ax_, ay_, bg.split_target(app)[0], do=lambda: mi.qtap(ax_, ay_))
-        r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap, modal=True))], expect_factory=factory)
+            # 11-16:点的位置就在 AI 看过的对话框 / 表单里面 = AI 明确要点它 → 不按「弹着对话框」拦(_in_modal 的四条);
+            #   别的照旧拦。放过的,点下去前再核一次(让路可能等了几秒)
+            inside = _has_modal(app) and _in_modal(app, [(ax_, ay_)], e)
+
+            def do():
+                if inside:
+                    _modal_recheck(app, [(ax_, ay_)], e)
+                    _seen_modals.pop(app, None)     # 往弹窗里点过一次就作废:同样大小的下一个弹窗要 AI 再看一次才算看过
+                mi.qtap(ax_, ay_)
+            ig.guarded(ax_, ay_, bg.split_target(app)[0], do=do, check_modal=not inside)
+        r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap, modal=lambda: ([_abs(app, rx, ry)], e)))],
+                     expect_factory=factory)
         r2["tried"] = r["tried"] + r2["tried"]
         r2["xy"] = r["xy"]
         return r2
@@ -1589,13 +1706,21 @@ def drag(app, pts, hold_ms=0, allow=None):
         _cursor(app, "move", x0, y0, mode="real", force=True)
         from seeu import safety
         safety.check_point(x0, y0)
-        ig.guarded(x0, y0, bg.split_target(app)[0], do=lambda: mi.qdrag(pts, hold_ms=hold_ms))
+        # 11-16:起点、终点、中间点全在同一个 AI 看过的弹窗里面(拖对话框里的滑块)才放开;拖进 / 拖出弹窗照旧拦
+        inside = _has_modal(app) and _in_modal(app, list(pts))
+
+        def do():
+            if inside:
+                _modal_recheck(app, list(pts))
+                _seen_modals.pop(app, None)
+            mi.qdrag(pts, hold_ms=hold_ms)
+        ig.guarded(x0, y0, bg.split_target(app)[0], do=do, check_modal=not inside)
         _cursor(app, "move", *pts[-1], mode="real", force=True)
     if not real_allowed(allow):
         r = dict(outcome="refused", route=None, tried=[], png=None,
                  reason="拖动只能借用户的鼠标(macOS 没有后台拖动),设置.json「借用鼠标」= 关,没做。要拖请用户自己拖,或请用户把设置改成开")
         return _ask_user(r, "ask.drag", app) if real_mode() == "ask" else r
-    return _ladder(app, [("真鼠标拖动", _real_mouse(app, act, modal=True))])
+    return _ladder(app, [("真鼠标拖动", _real_mouse(app, act, modal=lambda: (list(pts), None)))])
 
 
 # ---------------------------------------------------------------- 镜像固定动作(自带状态检查)

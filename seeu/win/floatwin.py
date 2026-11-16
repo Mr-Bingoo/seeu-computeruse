@@ -31,6 +31,11 @@ import subprocess
 import sys
 import time
 
+if __name__ == "__main__":
+    # 11-16 复查:浮标用 `python -m seeu.win.floatwin serve` 拉起,这份代码在 sys.modules 里叫 __main__;别处再 import
+    # seeu.win.floatwin 会另起一份(SERVING / HAND_T 对不上,I See 按钮开不了)→ 登记成同一个
+    sys.modules.setdefault("seeu.win.floatwin", sys.modules[__name__])
+
 PORT = 47833                 # 跟 Mac 版悬浮窗同一个号(各在各的机器上)
 M = 16                       # 画布四周留给阴影和回弹
 CAP_W, CAP_H = 92, 32
@@ -168,6 +173,10 @@ def light_level():
     """灯光档位;从没设过 = 抢占(只在借用鼠标时亮,同 Mac 默认「仅让路模式」)。"""
     v = live().get("light")
     return v if v in LIGHTS else "real"
+
+
+SERVING = False     # 11-16:本进程是不是浮标显示进程(serve 里置真)
+HAND_T = 0.0        # 最近一次认出「手按」的时间(isee.on(by="overlay") 用)
 
 
 # ───────── 调用方用的(不依赖 Windows,任何平台都能导入) ─────────
@@ -1354,7 +1363,7 @@ def serve():
             if isee.active():
                 isee.off()
             elif real:
-                isee.on()
+                isee.on(by="overlay")             # 11-16:isee.on 自己也查「是不是用户亲手」,Windows 上由这里担保
         except Exception:   # noqa: BLE001      设置文件坏了之类:不开,样子不变
             pass
         st["isee"], st["isee_t"] = isee_active(), time.time()
@@ -1634,7 +1643,11 @@ def serve():
             c = msg_pt(lp)
             st["drag"], st["moved"] = (c.x, c.y, cap["x"], cap["y"]), False
             # 是不是真鼠标按下的:系统里这个键此刻真的按着(后台发来的鼠标消息不会让它按着)。左右键对调过的认另一个键
-            st["real_down"] = bool(u.GetAsyncKeyState(2 if u.GetSystemMetrics(23) else 1) & 0x8000)
+            # 11-16 复查:SendInput / mouse_event 模拟的点击也会让键「真的按着」→ 再问系统这条消息是不是硬件来的
+            st["real_down"] = hand_down() and bool(u.GetAsyncKeyState(2 if u.GetSystemMetrics(23) else 1) & 0x8000)
+            if st["real_down"]:
+                global HAND_T
+                HAND_T = time.time()           # isee.on(by="overlay") 认这个:本进程刚有一次手按
             u.SetCapture(hwnd)
             return 0
         if msg == 0x0200 and st["drag"]:
@@ -1681,12 +1694,32 @@ def serve():
     hinst = k32.GetModuleHandleW(None)
     wc = WNDCLASSW(0, proc, 0, 0, hinst, None, u.LoadCursorW(None, P(32649)), None, None, "SeeUFloat")
     u.RegisterClassW(ctypes.byref(wc))
+    # 11-16 复查:认「这次按下是不是手按的」用 GetCurrentInputMessageSource(Win8 起有;不挂全局钩子,不拖慢整机鼠标)
+    class IMS(ctypes.Structure):
+        _fields_ = [("dev", ctypes.c_int), ("origin", ctypes.c_int)]
+    try:
+        u.GetCurrentInputMessageSource.argtypes = [ctypes.POINTER(IMS)]
+        u.GetCurrentInputMessageSource.restype = wt.BOOL
+    except AttributeError:
+        pass
+
+    def hand_down():
+        """正在处理的这条按下消息是不是硬件来的(IMO_HARDWARE = 1)。SendInput / mouse_event = 注入(2),
+        PostMessage 发来的拿不到来源(0);读不到一律当「不是」(I See 开不了,关照样能关)。"""
+        try:
+            src = IMS()
+            return bool(u.GetCurrentInputMessageSource(ctypes.byref(src))) and src.origin == 1
+        except Exception:   # noqa: BLE001
+            return False
+
     glow_proc = WNDPROC(lambda h_, m_, w_, l_: u.DefWindowProcW(h_, m_, w_, l_))     # 光圈窗口:什么消息都不管
     wc2 = WNDCLASSW(0, glow_proc, 0, 0, hinst, None, None, None, None, "SeeUGlow")
     u.RegisterClassW(ctypes.byref(wc2))
     ex = 0x00080000 | 0x00000008 | 0x00000080 | 0x08000000      # 分层 | 置顶 | 不进任务栏 | 不抢前台
     hwnd = u.CreateWindowExW(ex, "SeeUFloat", "", 0x80000000, 0, 0, 10, 10, None, None, hinst, None)
     setup(hwnd)
+    global SERVING
+    SERVING = True
     __import__("threading").Thread(target=cam_loop, daemon=True).start()
     u.SetTimer(hwnd, 1, 16, None)
     msg = wt.MSG()
