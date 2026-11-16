@@ -2,7 +2,7 @@
 
 中文 | [English](CHANGELOG.en.md)
 
-版本变化的直白表述，反正没法找锅「祭天」！加了什么、改了什么、是否需要你做点什么。更新或查版本号，可以直接跟 AI 说「更新 SeeU」，或者自己运行(Mac 用 `python3`，Windows 用 `python`) : 更新 `python3 -m seeu update`，查版本 `python3 -m seeu version`。
+版本变化的直白表述，反正没法找锅「祭天」！加了什么、改了什么、是否需要你做点什么。更新或查版本号，可以直接直白的跟 AI 说「更新 SeeU」，「查询 SeeU 版本」亦或者你自己运行(Mac 用 `python3`，Windows 用 `python`) : 更新 `python3 -m seeu update`，查版本 `python3 -m seeu version`。
 
 ## v1.3.0(2026-11-16)
 
