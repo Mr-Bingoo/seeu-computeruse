@@ -114,11 +114,11 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 
 ## 接入 AI 客户端
 
-已测试过的 : Claude(Code 以及桌面版聊天页)、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问(千问有一部分它特有操作，详细见下方)。
+已测试过的 : Claude(Code 以及桌面版聊天页)、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问(千问有一部分仅它特有的操作，详细见下方)。
 
 - Claude、Codex、Cursor、Trae、VS Code : 上面的 `install` 一条命令接好。
 - WorkBuddy、豆包 : 在它们自己的界面里新建一个自定义连接器(本机 / STDIO)，把 `python3 -m seeu mcp` 填进去；其他支持 MCP 的客户端也是这个办法。
-- 仅 Windows : Claude 能一键接入，但还没实际用过；豆包现阶段(2026 年 11 月)请装 x64 版，ARM 版暂时接不了。
+- 仅 Windows : Claude 能一键接入，由于担心频繁切换设备触发风控，故而没有测试这块；豆包现阶段(2026 年 11 月)请装 x64 版，ARM 版暂时接不了。
 - 仅 Mac : 习惯用技能市场的，也可以 `npx skills add Mr-Bingoo/seeu-computeruse`。它装的只是给 AI 看的使用说明，第一次用时 AI 会照着说明把 SeeU 装好、接上。
 
 **千问** : 千问只认用 `npx` 启动的工具，要先装 [Node.js](https://nodejs.org)。
@@ -128,7 +128,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 3. 仅 Mac : 给「千问」打开辅助功能和屏幕与系统录音，开完完全退出千问再打开。
 
 - 千问第一次加连接常会显示「连接失败」或没反应，重启千问、再进一次「连接」页就好。
-- 仅 Windows : 千问官网给的安装包版本较旧，没有「工作」页。装好后要在右上角点「新版本」升级(可能要升两次)，升完重启千问，直到左上角出现「日常 / 工作」。
+- 仅 Windows : 千问官网(2026年11月)给的安装包版本较旧，没有「工作」页。装好后要在右上角点「新版本」升级(可能要升两次)，升完重启千问，直到左上角出现「日常 / 工作」。
 - 千问自己打开 App 每次都要你点「允许」，所以在千问里 SeeU 多一个「后台打开 App」的工具 : App 开在你当前窗口后面，不切走你正在用的程序；终端、能跑脚本的 App、密码类 App、系统设置、浏览器(开网页请用 SeeU 的网页工具)、别的 AI 客户端和远程协助程序不替你打开。
 
 ## 更新和移除
@@ -195,7 +195,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 
 1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
 2. 开完或改完授权，要完全退出 AI 客户端再打开，才会生效。
-3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有隐私。
+3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有涉及个人隐私。
 <!-- /sync:notes -->
 
 ## 文档
