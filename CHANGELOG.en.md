@@ -4,6 +4,14 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.4.2 (2026-11-18)
+
+On Windows, windows on another virtual desktop can now be read and typed into; the docs now fully explain how several sessions share SeeU.
+
+- **Windows on another virtual desktop can be read and filled in**: once a window was on another virtual desktop, SeeU could only read its frame controls, not the text or the input fields, so the AI had to ask you to switch over. Now SeeU also asks the parts inside the window directly. Tested with the classic Notepad on Windows 10 and the new Notepad on Windows 11: the text can be read and typed into a field by its number, and you aren't switched over. If an app still can't be read fully, the AI is told, as before, to ask you to switch over or move the window here.
+- **Docs cover several sessions**: "What is SeeU" has a new "Several conversations in parallel" section explaining how sessions take turns; the business diagram's "Several tasks at once" part is filled in too.
+- **What you need to do**: after updating, quit the AI client completely and open it again.
+
 ## v1.4.1 (2026-11-17)
 
 A few improvements: browsers work on another desktop too, and several sessions sharing SeeU take turns more smoothly and reliably.

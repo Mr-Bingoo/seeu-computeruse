@@ -105,7 +105,7 @@ How to work (look → act → look again):
    ineffective = nothing changed, try once more with a different target; partial = only part of the text was typed;
    refused = blocked by a safety rule or the user is busy — stop and pass the reason to the user, do not work around it;
    failed = an error, call seeu_see first;
-   busy = another task is using the same window (or borrowing the mouse) right now and the wait ran out — not blocked:
+   busy = another task is using the same window or the same SeeU browser (or borrowing the mouse) right now and the wait ran out — not blocked:
    wait a few seconds and retry, or do something else first; if it keeps happening, tell the user several tasks are using it;
    failed with code stale = you waited in the queue and the window moved or changed meanwhile: seeu_see again before clicking;
    failed with code focus_moved = another task changed the window's focus after your last step: redo it passing target
@@ -286,12 +286,13 @@ WIN_PHRASES = [
      "typed, but the text read back is the same as before, so it may not have gone in (the app was busy); Enter was not pressed. "
      "Check with seeu_see; if it didn't go in, wait a moment and type again"),
     ("截图可能是旧画面:", "The screenshot may be old: "),
-    ("这个窗口在另一个虚拟桌面上,控件只读得到窗口边框那几项;可以看截图、按截图位置点(Chrome / Electron 类窗口除外)、直接打字和按键,"
-     "但后台点不动时 SeeU 不借鼠标(会把用户切过去)。要按编号操作,请用户切到那个桌面或把窗口挪过来。",
-     "This window is on another virtual desktop, so only its frame controls can be read. You can look at the screenshot, "
-     "tap by pixel (not in Chrome / Electron windows), type and press keys; but if the background has no effect SeeU won't "
-     "borrow the mouse (Windows would switch the user over). To use the numbered list, ask the user to switch to that desktop "
-     "or move the window here."),
+    ("这个窗口在另一个虚拟桌面上,控件可能读不全(有些程序只剩窗口边框那几项);可以看截图、按截图位置点(Chrome / Electron 类窗口除外)、"
+     "直接打字和按键,清单里有的输入框也能按编号打字;但后台点不动时 SeeU 不借鼠标(会把用户切过去)。清单里没有要操作的东西时,请用户切到那个桌面或把窗口挪过来。",
+     "This window is on another virtual desktop, so its controls may be incomplete (some apps show only the frame "
+     "controls). You can look at the screenshot, tap by pixel "
+     "(not in Chrome / Electron windows), type and press keys, and type into a listed field by its number; but if the "
+     "background has no effect SeeU won't borrow the mouse (Windows would switch the user over). If what you need isn't in "
+     "the list, ask the user to switch to that desktop or move the window here."),
     ("窗口里没找到", "not found in the window: "), ("没有编号", "no item number "), (",先 see 一次", ", call seeu_see first"),
 ]
 
@@ -446,10 +447,11 @@ def do_see(a):
                    f"\nTo use another one, write app as \"{win['exe'][:-4] if win['exe'].lower().endswith('.exe') else win['exe']}"
                    "「part of its title」\" or \"#window number\" (seeu_windows)")
     if v.get("note"):            # 11-14:窗口在另一个虚拟桌面上
-        out[0] += ("\n\nnote: this window is on another virtual desktop, so only its frame controls can be read. You can look at the "
-                   "screenshot, tap by pixel (not in Chrome / Electron windows), type and press keys; but if the background has no effect SeeU won't borrow the mouse or "
-                   "the foreground (Windows would switch the user to that desktop). To use the numbered list, ask the user to switch "
-                   "to that desktop or move the window here.")
+        out[0] += ("\n\nnote: this window is on another virtual desktop, so its controls may be incomplete (some apps show only "
+                   "the frame controls). You can look at the screenshot, tap by pixel "
+                   "(not in Chrome / Electron windows), type and press keys, and type into a listed field by its number; but if the background "
+                   "has no effect SeeU won't borrow the mouse or the foreground (Windows would switch the user to that desktop). If what you "
+                   "need isn't in the list, ask the user to switch to that desktop or move the window here.")
     if v.get("stale"):           # 11-15:截图可能是旧画面
         tipe = {act.COVER_WHY: "until the window is uncovered (ask the user to uncover part of it).",
                 act.DESK_WHY: "until the window is on the current desktop (ask the user to switch to it or move it here)."}.get(

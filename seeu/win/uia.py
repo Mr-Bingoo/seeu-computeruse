@@ -68,35 +68,118 @@ def _val(e, pid):
         return None
 
 
+def _item(e):
+    """一个 UIA 元素(带缓存)→ 清单里的一项;不进清单的返回 None。"""
+    t = _val(e, P_TYPE) or 0
+    name = (_val(e, P_NAME) or "").strip()
+    if t not in KEEP and not (t in KEEP_IF_NAMED and name):
+        return None
+    if _val(e, P_OFFSCREEN):
+        return None
+    r = e.CachedBoundingRectangle
+    w, h = r.right - r.left, r.bottom - r.top
+    if w <= 0 or h <= 0:
+        return None
+    acts = [k for k, p in (("invoke", P_HAS_INVOKE), ("toggle", P_HAS_TOGGLE), ("select", P_HAS_SELECT),
+                           ("expand", P_HAS_EXPAND), ("value", P_HAS_VALUE)) if _val(e, p)]
+    val = _val(e, P_VALUE) if "value" in acts else None
+    pw = bool(_val(e, P_PASSWORD))
+    return dict(name=name, role=TYPES.get(t, str(t)), type=t, rect=(r.left, r.top, w, h),
+                enabled=bool(_val(e, P_ENABLED)), password=pw, focused=bool(_val(e, P_FOCUS)),
+                actions=acts, value=None if pw else (val or None), autoid=_val(e, P_AUTOID) or "", el=e)
+
+
 def elements(hwnd, limit=500):
     """窗口里的控件清单(只读,不抢前台)。每项:name、role(中文类型)、type、rect(x,y,w,h 屏幕物理像素)、
-    enabled、password、focused、actions(invoke/toggle/select/expand/value)、value、el(UIA 元素,按的时候用)。"""
+    enabled、password、focused、actions(invoke/toggle/select/expand/value)、value、el(UIA 元素,按的时候用)。
+    窗口在别的虚拟桌面上时,再从各个子窗口问一遍补上(见 _child_items)。"""
     a = _auto()
     root = element(hwnd)
     arr = root.FindAllBuildCache(TREE_DESC, a.ControlViewCondition, _cache())
     out = []
     n = arr.Length if arr else 0
     for i in range(n):
-        e = arr.GetElement(i)
-        t = _val(e, P_TYPE) or 0
-        name = (_val(e, P_NAME) or "").strip()
-        if t not in KEEP and not (t in KEEP_IF_NAMED and name):
+        it = _item(arr.GetElement(i))
+        if it is None:
             continue
-        if _val(e, P_OFFSCREEN):
-            continue
-        r = e.CachedBoundingRectangle
-        w, h = r.right - r.left, r.bottom - r.top
-        if w <= 0 or h <= 0:
-            continue
-        acts = [k for k, p in (("invoke", P_HAS_INVOKE), ("toggle", P_HAS_TOGGLE), ("select", P_HAS_SELECT),
-                               ("expand", P_HAS_EXPAND), ("value", P_HAS_VALUE)) if _val(e, p)]
-        val = _val(e, P_VALUE) if "value" in acts else None
-        pw = bool(_val(e, P_PASSWORD))
-        out.append(dict(name=name, role=TYPES.get(t, str(t)), type=t, rect=(r.left, r.top, w, h),
-                        enabled=bool(_val(e, P_ENABLED)), password=pw, focused=bool(_val(e, P_FOCUS)),
-                        actions=acts, value=None if pw else (val or None), autoid=_val(e, P_AUTOID) or "", el=e))
+        out.append(it)
         if len(out) >= limit:
-            break
+            return out
+    try:
+        out += _child_items(hwnd, out, limit - len(out))
+    except Exception:   # noqa: BLE001  补不上就算了,不影响主清单
+        pass
+    return out
+
+
+CHILD_MAX = 80          # 最多问这么多个子窗口(按个数截、不按时间截:动作前后两次读要截在同一处,不然清单前后对不上会误判「变了」,二轮复查 11-18)
+
+
+def _desk_kids(hwnd):
+    """窗口在别的虚拟桌面上时,要从哪些子窗口补问(同一进程、看得见的,按列举顺序 = 先上级后下级);不在别的桌面返回 []。
+    复查 11-18:用 window.children(api 里设好了参数类型,64 位句柄不出错);别的进程嵌进来的子窗口不问(安全底线只按顶层程序查过)。"""
+    from seeu.win import window as W
+    if not W.other_desktop(hwnd):
+        return []
+    import ctypes
+    from seeu.win import api
+
+    def pid(h):
+        p = ctypes.c_ulong(0)
+        api.user32.GetWindowThreadProcessId(h, ctypes.byref(p))
+        return p.value
+    me = pid(hwnd)
+    return [c["hwnd"] for c in W.children(hwnd) if c["visible"] and pid(c["hwnd"]) == me][:CHILD_MAX]
+
+
+def _child_items(hwnd, have, room):
+    """11-18 C-2.8(Win10 / Win11 实测):窗口在别的虚拟桌面上时,从顶层窗口往下读,系统只给菜单、标题栏按钮那几项,正文输入框不见了;
+    但从各个子窗口句柄往下问,控件和值都还在:Win10 老式记事本(Edit)读得到全文;Win11 新记事本顶层只剩 6 项,
+    从子窗口(DesktopChildSiteBridge 等)补回全部 34 项,按编号打字也进得去(两边 other_desk_type.py 各 7/7)。
+    只在别的桌面上补;某个子窗口读出了东西,它下面的子窗口就不再重复读;按(类型, 位置, 名字)去重。只读。"""
+    if room <= 0:
+        return []
+    from seeu.win import api
+    kids = _desk_kids(hwnd)
+    if not kids:
+        return []
+    a = _auto()
+    seen = {(i["type"], tuple(i["rect"]), i["name"]) for i in have}
+    done = set()            # 读出过东西的子窗口:它的子树已经包含下面各层
+    out = []
+    for c in kids:
+        p, skip = c, False
+        for _ in range(30):
+            p = int(api.user32.GetAncestor(p, 1) or 0)          # 1 = GA_PARENT(SetParent 挂上去的也找得到上级)
+            if not p or p == int(hwnd):
+                break
+            if p in done:
+                skip = True
+                break
+        if skip:
+            continue
+        try:
+            arr = element(c).FindAllBuildCache(7, a.ControlViewCondition, _cache())    # 7 = TreeScope_Subtree(连它自己)
+        except Exception:   # noqa: BLE001
+            continue
+        got = False
+        for i in range(arr.Length if arr else 0):
+            try:
+                it = _item(arr.GetElement(i))
+            except Exception:   # noqa: BLE001  个别元素读错只跳过这一项
+                continue
+            if it is None:
+                continue
+            got = True
+            k = (it["type"], tuple(it["rect"]), it["name"])
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(it)
+            if len(out) >= room:
+                return out
+        if got:
+            done.add(int(c))
     return out
 
 
@@ -159,6 +242,18 @@ def focused_in(hwnd):
         e = element(hwnd).FindFirstBuildCache(TREE_DESC, cond, _cache())
     except Exception:
         return None
+    if not e:
+        try:        # 复查 11-18:别的虚拟桌面上顶层树被截断,焦点(可能是密码框)要从子窗口补查
+            kids = _desk_kids(hwnd)
+        except Exception:   # noqa: BLE001
+            kids = []
+        for c in kids:      # 二轮复查:一个子窗口出错只跳过它,别连累后面的(密码框会漏认)
+            try:
+                e = element(c).FindFirstBuildCache(7, cond, _cache())
+            except Exception:   # noqa: BLE001
+                e = None
+            if e:
+                break
     if not e:
         return None
     return dict(name=_val(e, P_NAME) or "", type=_val(e, P_TYPE), password=bool(_val(e, P_PASSWORD)), el=e)
@@ -326,12 +421,21 @@ def blocking_dialog(hwnd):
     11-12 Win10 真机:VS Code 欢迎窗 = 类型 50032「对话框」、role=dialog、模态 True;被它挡着时后台打字画面会变,却打不进编辑区。
     注意:Chrome / VS Code 的辅助功能是用到才建,刚打开时可能只给十几个元素、认不出,读不到就当没有。"""
     a = _auto()
+    cond = a.CreatePropertyCondition(P_TYPE, 50032)
     try:
-        arr = element(hwnd).FindAll(TREE_DESC, a.CreatePropertyCondition(P_TYPE, 50032))
+        arrs = [element(hwnd).FindAll(TREE_DESC, cond)]
     except Exception:
         return None
-    for i in range(arr.Length if arr else 0):
-        e = arr.GetElement(i)
+    try:            # 复查 11-18:别的虚拟桌面上顶层树被截断,弹窗也从子窗口补查
+        for c in _desk_kids(hwnd):
+            try:
+                arrs.append(element(c).FindAll(TREE_DESC, cond))
+            except Exception:   # noqa: BLE001
+                pass
+    except Exception:   # noqa: BLE001
+        pass
+    els = [arr.GetElement(i) for arr in arrs for i in range(arr.Length if arr else 0)]
+    for e in els:
         try:
             if e.CurrentNativeWindowHandle == hwnd or e.CurrentIsOffscreen:
                 continue

@@ -171,7 +171,13 @@ A window you opened stays open until you collapse it; as a fallback it shrinks t
 
 **Several tasks at once**
 
-- What SeeU does: only one task borrows the real mouse at a time; the others queue. The wait has a limit, and if it runs out the task reports "stuck" rather than grabbing the mouse. If a task exits unexpectedly without letting go, its claim expires after a while instead of blocking forever.
+- What SeeU does:
+  - Only one task acts on the same app at a time (on Windows, the same window); after a step it keeps the app for a few seconds for its next step. The others queue for up to 30 seconds; if their turn doesn't come, the AI is told "busy, try again shortly" — nobody barges in. Several conversations in one AI client and different clients such as Claude and Codex all queue the same way.
+  - Slow work such as typing a long passage keeps reporting "still working", so nobody cuts in; a step that was stopped because another task had just touched the app, so nothing was done, gives the app up right away.
+  - If a click by position had to queue for more than 3 seconds and meanwhile the window moved or the picture near the click point changed, SeeU doesn't click and asks the AI to look again; if another task moved the focus in the same app, typing or a key press without a target field is skipped this time and the AI is asked to name the field (tapping the field and typing then happen in one go, with nobody in between).
+  - Only one task borrows the real mouse at a time; the others queue. If a borrow had to wait, SeeU takes a fresh "before" picture after the wait, so a screen that changed by itself while waiting isn't mistaken for a successful click.
+  - If a task exits unexpectedly without letting go, its claim expires after a while instead of blocking forever.
+  - Each task has its own cursor, labeled with its conversation name (Claude, Claude2…) in its own color; a queued one dozes off (Zz) and fades. The island splits into two parts, with queued tasks below.
 - Suggestions:
   - Stagger scheduled tasks, especially ones that borrow the mouse (dragging, clicks that don't land in the background);
   - Run mouse-heavy tasks when you're not using the computer;
@@ -580,6 +586,7 @@ mindmap
     Stays out of your way
       Background clicks · front window untouched
       Steps aside · mouse queue
+      Several AIs at once · same app takes turns
       Stealth browsers
       Debugging port
     Lets you see

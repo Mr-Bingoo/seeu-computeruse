@@ -26,7 +26,7 @@ description: Use SeeU to see and operate apps on the user's Windows PC in the ba
 ## 2. Outcomes
 delivered = done and verified · unverified = done, check with seeu_see · ineffective = nothing changed, try once more with another
 target, then stop and tell the user · partial = only part typed, look before retyping · refused = safety rule / user is busy: stop and
-pass the reason on · busy = another task is using the same window (or borrowing the mouse) and the wait ran out: not blocked,
+pass the reason on · busy = another task is using the same window or the same SeeU browser (or borrowing the mouse) and the wait ran out: not blocked,
 wait a few seconds and retry or do something else first; if it keeps happening, tell the user · failed with code stale = you waited
 in the queue and the window moved or changed: seeu_see again before clicking · ask_user = the next fallback borrows the user's mouse/keyboard (or the foreground for ~0.2 s): ask
 "just this once / allow for this session / refuse", then repeat with `allow_real` = `once` / `auto`.

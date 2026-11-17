@@ -46,6 +46,8 @@ It isn't picky about apps and needs no per-app setup. Tell it which app to open,
 
 **You decide whether it borrows**: "on" by default (with a notice on screen before it borrows); you can switch to "ask" (asks every time) or "off" (never borrows, so steps that need the system mouse will get stuck). To change it, just tell the AI (e.g. "set borrow-mouse to ask"), or run `python3 -m seeu set borrow-mouse on|ask|off` yourself.
 
+**Several conversations in parallel**: several conversations in the same AI client, or different clients such as Claude and Codex open together, can all use SeeU at the same time. Only one of them acts on the same app at a time (on Windows, the same window), and after a step it keeps the app for a few seconds for its next step. The others queue for up to 30 seconds; if their turn doesn't come, the AI is told "busy, try again shortly" — nobody barges in. Slow work such as typing a long passage can't be cut into, and a step that was stopped because another conversation had just touched the app, so nothing was done, gives the app up right away. Each conversation gets its own cursor, labeled with its name (Claude, Claude2…) in its own color; one waiting in the queue dozes off (Zz) and fades. Borrowing your mouse is also one conversation at a time. To turn queuing off, set the environment variable `SEEU_NO_SCHED=1`.
+
 ## Visible · the floating badge
 When SeeU is acting, a floating window appears at the top right of the screen so you always know what it's doing:
 - **Collapsed**: a small badge reading "SeeU" ("I See" while I See is on) that only shows status, no steps. The dot's color shows the current mode and it "breathes" while active. Click it to see what's happening.
@@ -53,9 +55,9 @@ When SeeU is acting, a floating window appears at the top right of the screen so
   - **Live view**: plays the window being operated in real time and marks where it clicks. A stealth browser has nothing to show, so this button is greyed out.
   - **Steps**: tells you in words what it's doing, such as "Clicking 'OK'" or "Typing"; when the click lands next to the text it says "Clicking near 'OK'".
   - You can switch between the two at any time.
-- **Expands on its own**: when it borrows your mouse, the window expands whether it was collapsed or open, saying "Using your mouse" so you know not to move it for a moment. When it gets stuck it also expands, saying which project, which app, why it's stuck and what you can do.
+- **Expands at key moments**: when it borrows your mouse, the window expands whether it was collapsed or open, saying "Using your mouse" so you know not to move it for a moment. When it gets stuck it also expands, saying which project, which app, why it's stuck and what you can do.
 - **Why the AI does it**: when an AI works through SeeU, each step comes with a short reason. The window shows it in grey under "Now…"; in live view the reason appears at the bottom of the picture and fades after a few seconds. Only shown while an AI is using SeeU.
-- **Multitasking island**: when two or more projects use SeeU at once, the badge still just says "SeeU". Opened, it becomes an "island" with one row per task; stuck tasks and tasks borrowing your mouse come first, and you can watch any single task's live view.
+- **Multitasking island**: when two or more projects use SeeU at once, the badge still just says "SeeU". Opened, it becomes an "island" with one row per task; stuck tasks and tasks borrowing your mouse come first, and you can watch any single task's live view; tasks waiting in the queue are listed there too.
 - **Simple, not simplistic**: hovering over the window shows a few buttons: the screen-edge glow switch (off / only while borrowing the mouse / always on), the live view and steps toggle, and collapse. When working on web pages there's an extra I See button (see "I See · I-know-the-risks mode" below); while an AI is using it there's also a "Reason" switch (on by default).
 - **Put it anywhere**: drag it anywhere and resize it by its edges, and it remembers the position. If you don't want it, you can turn it off entirely.
 

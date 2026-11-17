@@ -509,8 +509,8 @@ def see(app):
     note = None
     stale = stale_why(h, cap) if cap else None
     if win.get("other_desktop"):
-        note = ("这个窗口在另一个虚拟桌面上,控件只读得到窗口边框那几项;可以看截图、按截图位置点(Chrome / Electron 类窗口除外)、直接打字和按键,"
-                "但后台点不动时 SeeU 不借鼠标(会把用户切过去)。要按编号操作,请用户切到那个桌面或把窗口挪过来。")
+        note = ("这个窗口在另一个虚拟桌面上,控件可能读不全(有些程序只剩窗口边框那几项);可以看截图、按截图位置点(Chrome / Electron 类窗口除外)、"
+                "直接打字和按键,清单里有的输入框也能按编号打字;但后台点不动时 SeeU 不借鼠标(会把用户切过去)。清单里没有要操作的东西时,请用户切到那个桌面或把窗口挪过来。")
     return {"png": png, "items": items, "windows": wins, "window": {k: win[k] for k in ("hwnd", "title", "exe", "rect")},
             "cap": cap, "ocr_note": ocr_note, "note": note, "stale": stale}
 
