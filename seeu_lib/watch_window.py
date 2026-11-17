@@ -141,7 +141,8 @@ def ensure_serve():
 def who_name(who=None):
     """项目名(SeeU C-0.4 用户定):调用方传 who,或开跑时设环境变量 SEEU_PROJECT(如「项目甲」「个人」)。
     最多 4 个汉字 / 8 个字母,超了截掉;没有就返回 ""(悬浮窗照旧只写 App 名)。"""
-    s = str(who if who is not None else os.environ.get("SEEU_PROJECT", "")).strip().replace(" ", "")
+    # 11-17 C-2.5:没写项目名时用 SeeU 调度起的任务显示名(AI 会话叫 Claude、Claude2…,跟排队提示、光标名牌对得上)
+    s = str(who if who is not None else (os.environ.get("SEEU_PROJECT") or os.environ.get("SEEU_TASK_DISPLAY", ""))).strip().replace(" ", "")
     out, n = "", 0
     for ch in s:
         n += 2 if ord(ch) > 0x2E80 else 1
@@ -163,6 +164,31 @@ def why(app, text, who=None, act=""):
         w = who_name(who)
         s.sendto(("why " + json.dumps([str(app or ""), str(text or "")[:300], w, str(act or "")],
                                       ensure_ascii=False)).encode(), ("127.0.0.1", PORT))
+    finally:
+        s.close()
+
+
+def queue(app, on=True, pos=1, holder="", who=None, color=None):
+    """11-17 C-2.5 多任务调度:这个任务在排队等 app(on=False 排完了)。pos = 排第几,holder = 谁占着。
+    灵动岛把它放进下段「排队中」(变暗);color = 任务光标色 "#RRGGBB",岛上圆点用它。旧版悬浮窗不认识,直接忽略。"""
+    ensure_serve()
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.sendto(("queue " + json.dumps([str(app or ""), 1 if on else 0, int(pos or 1), str(holder or ""),
+                                         who_name(who), str(color or "")], ensure_ascii=False)).encode(),
+                 ("127.0.0.1", PORT))
+    finally:
+        s.close()
+
+
+def tint(color, who=None):
+    """11-17:这个任务的光标颜色("#RRGGBB"),灵动岛那行圆点跟它一致。没有任务名不发。"""
+    w = who_name(who)
+    if not w or not color:
+        return
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.sendto(("tint " + json.dumps([w, str(color)], ensure_ascii=False)).encode(), ("127.0.0.1", PORT))
     finally:
         s.close()
 
@@ -2093,6 +2119,14 @@ def serve():
 
     # ---- 多任务(SeeU C-0.8,10-24 用户定):按「任务名」(项目名,没有就按窗口/App)分开记,≥2 个同时在跑就换成灵动岛;只有 1 个照旧。
     tasks = {}            # 任务名 -> 状态
+    tint_cache = {}       # 11-17:先到的颜色(任务还没进表),进表时用
+
+    def hex_rgb(h):
+        try:
+            h = str(h).lstrip("#")
+            return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+        except Exception:
+            return None
     pending = []          # 待重放的原始消息(切回单任务 / 单看某任务时,把那个任务最后一条消息再走一遍,让原悬浮窗接上)
     owner_cache = {}
 
@@ -2129,6 +2163,13 @@ def serve():
                 who = str(arr[3]) if len(arr) > 3 else ""
                 wid = int(arr[2]) if len(arr) > 2 and arr[2] else None
                 return "browser", who or named_key(wid) or str(arr[0]), who, str(arr[0]), wid, arr
+            if raw.startswith("queue "):        # 11-17 多任务调度:排队中 / 排完了
+                arr = json.loads(raw[6:])
+                who = str(arr[4]) if len(arr) > 4 else ""
+                return "queue", who or str(arr[0]), who, str(arr[0]), None, arr
+            if raw.startswith("tint "):         # 11-17:任务光标色
+                arr = json.loads(raw[5:])
+                return ("tint", str(arr[0]), str(arr[0]), "", None, arr) if arr and arr[0] else None
             msg = raw.split()
             if len(msg) in (2, 3, 4) and msg[0] == "show":
                 who = msg[3] if len(msg) == 4 else ""
@@ -2175,11 +2216,33 @@ def serve():
         kind, key, who, app_, wid, extra = c
         if not key:
             return
+        if kind == "tint":                      # 只记颜色,不算动作(不续命、不改步骤)
+            tk = tasks.get(key)
+            if tk is not None:
+                tk["color"] = hex_rgb(extra[1])
+            else:
+                tint_cache[key] = hex_rgb(extra[1])
+            return
         t = tasks.get(key)
         if t is None:
             t = tasks[key] = dict(key=key, who=who, app=app_ or key, kind="app", step="", steps=[], born=now, last=now,
-                                  borrow=False, real_until=0.0, stuck=None, hidden=False, wid=None, raw=None)
+                                  borrow=False, real_until=0.0, stuck=None, hidden=False, wid=None, raw=None,
+                                  queued=None, color=tint_cache.pop(key, None))
         step = None
+        if kind == "queue":                     # 11-17:[app, 开/关, 排第几, 谁占着, 项目名, 颜色]
+            on = len(extra) > 1 and bool(extra[1])
+            t["queued"] = dict(app=str(extra[0]), pos=int(extra[2]) if len(extra) > 2 else 1,
+                               holder=str(extra[3]) if len(extra) > 3 else "", t=now) if on else None
+            if len(extra) > 5 and extra[5]:
+                t["color"] = hex_rgb(extra[5])
+            if who:
+                t["who"] = who
+            if on:
+                t["last"] = now
+            elif not t.get("raw") and not t.get("wid") and not t.get("step"):
+                tasks.pop(key, None)            # 复查 11-17:只排过队、没动过手(排不上就走了)→ 直接从岛上撤,别挂着「等下一步」60 秒
+            return
+        t["queued"] = None                      # 有别的动作 = 不在排队了
         if kind == "show":
             t.update(kind="mirror", app=app_, wid=wid, stuck=None, hidden=False, raw=raw)
             t["real_until"] = now + PASS_S if (len(extra) >= 3 and extra[2] == "real") else 0.0
@@ -2292,6 +2355,8 @@ def serve():
                     c = classify(raw)
                     if c:
                         note_task(raw, c, now)
+                        if c[0] in ("queue", "tint"):   # 11-17:只给灵动岛用的消息,原悬浮窗不管
+                            continue
                         if st.get("solo") and c[1] and c[1] != st["solo"]:
                             continue                # 单看某个任务期间,别的任务只记表,不动原悬浮窗
                         if st.get("multi"):         # 岛在显示:原悬浮窗/悬浮标不动(不开画面流),只管借鼠标穿透

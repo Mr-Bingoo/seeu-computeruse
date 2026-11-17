@@ -2,7 +2,17 @@
 
 [中文](CHANGELOG.md) | English
 
-Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI to "update SeeU", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
+Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
+
+## v1.4.0 (2026-11-17)
+
+Several AIs can now use SeeU at the same time: one at a time per app, the others wait in line; each AI gets its own cursor, and text no longer lands in the wrong window.
+
+- **Several AIs at once take turns** (Mac and Windows): only one AI acts in an app at a time (on Windows, in a window), and it keeps the app for a few seconds for its next step; other AIs wait in line for up to 30 seconds, and if their turn doesn't come they're told "busy, try again shortly" instead of cutting in. Borrowing your mouse and keyboard also takes turns between AIs.
+- **One cursor per AI**: each cursor shows whose it is (Claude, Claude2, Codex…) in its own color; one that's waiting dozes off (Zz) and fades. Open the badge and the island shows who's waiting too.
+- **Text no longer lands in the wrong window** (Mac): with two windows of the same app and two AIs typing, text could end up in the other window; now SeeU checks the field is in the target window first and doesn't type if it isn't.
+- **No cutting in**: if another AI clicked in the same app after an AI's last step and that AI then types or presses keys without naming a field, SeeU skips it and asks the AI to name the field (SeeU then clicks the field and types in one go, with no one cutting in). After waiting several seconds in line, it also won't click at the old position if the window moved or changed.
+- **What you need to do**: after updating, quit your AI client completely and reopen it so the new rules take effect. To turn queueing off, set the environment variable `SEEU_NO_SCHED=1`.
 
 ## v1.3.0 (2026-11-16)
 

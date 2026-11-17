@@ -93,6 +93,14 @@ class AXRefused(AXError):
     """安全底线拒绝(密码框/密码输入状态/被对话框挡住)。调用方别换路硬点。"""
 
 
+class AXRetry(AXRefused):
+    """这次不做、但不是拒绝(复查 11-17 C-2.7):别的任务正占着打字、焦点在别的窗口 —— AI 应该稍后 / 先点一下再试,
+    不该停手去找用户。outcome / code 给 act._ladder 报结果用。是 AXRefused 的子类:老的调用方照旧当「别硬做」处理。"""
+    def __init__(self, msg, outcome="failed", code=None):
+        super().__init__(msg)
+        self.outcome, self.code = outcome, code
+
+
 # ---------- 底层 ----------
 
 def trusted():

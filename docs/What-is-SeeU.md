@@ -185,6 +185,8 @@ Chromium-based browsers like Edge and Arc will most likely work the Chrome way d
 - Ready-made entry point: `seeu/stealth.py` (start with one line, self-check before typing, quit).
 
 ## I See · I-know-the-risks mode
+Read the tagline "You see SeeU, I know you see. I See." backwards and the first thing you run into is "I See": set the process aside for now, get the result first. That's what this mode does.
+
 **What it is**: once on, SeeU stops pausing to ask you along the way. When it hits a problem it tries another way and carries on; whatever it can't do it notes down and skips, and at the end you get a report: what got done, what was skipped and why, and which permissions would let it do more. The name pairs with SeeU: SeeU is "watching you operate", I See is "got it, go ahead". For now it only covers web pages.
 
 **Risks first**:
@@ -247,7 +249,7 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 
 1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands.)
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
-3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for anything private first.
+3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
 <!-- /sync:notes -->
 
 ### Extra notes

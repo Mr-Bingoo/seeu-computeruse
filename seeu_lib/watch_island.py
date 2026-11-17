@@ -84,6 +84,15 @@ def stuck(t):
     return bool(t.get("stuck"))
 
 
+def queued(t):
+    """11-17 C-2.5 多任务调度:在排队等别的任务用完同一个 App(借鼠标 / 卡住优先,不算排队)。"""
+    return bool(t.get("queued")) and not borrow(t) and not stuck(t)
+
+
+Q_ALPHA = 0.55       # 排队那几行整体的淡度(用户 11-17 在小样里定)
+Q_FOLD = 2           # 排队超过这么多行就折成「还有 N 个在排队」
+
+
 def ordered(now):
     a = list(tasks)
     a.sort(key=lambda t: -max(t["last"], st["pick"].get(t["key"], 0)))
@@ -93,14 +102,15 @@ def ordered(now):
             and not pick_top > st["pick"].get(cur["key"], 0):
         a.remove(cur)
         a.insert(0, cur)
-    a.sort(key=lambda t: (not borrow(t), not stuck(t)))   # 借鼠标 > 卡住 > 最近有动作(10-27 用户定:卡住的也排到顶上写全)
+    a.sort(key=lambda t: (not borrow(t), not stuck(t), queued(t)))   # 借鼠标 > 卡住 > 最近有动作 > 排队中(11-17:排队的永远不上顶)
     if a and a[0]["key"] != st["top"]:
         st["top"], st["top_since"] = a[0]["key"], now
     return a
 
 
 def color(t):
-    return ORANGE if borrow(t) else PURPLE     # 10-27:卡住不靠红色(颜色用户自定,红可能撞色),靠文字说
+    # 10-27:卡住不靠红色(颜色用户自定,红可能撞色),靠文字说;11-17:圆点用任务光标色(跟屏幕上那只光标对得上)
+    return ORANGE if borrow(t) else (t.get("color") or PURPLE)
 
 
 def title(t):
@@ -116,6 +126,8 @@ def verb(t):
     """一行写的那句(不带「正在」):借鼠标 / 卡住 / 等下一步 / 动作。"""
     if borrow(t):
         return _tr("card.borrow", "正在用你的鼠标")
+    if queued(t):
+        return _tr("island.queued", "排队中")
     if stuck(t):
         return _tr("card.stuck_why", "卡住了: {why}", why=t["stuck"].get("why", ""))
     if idle(t) or not t.get("step"):
@@ -125,6 +137,9 @@ def verb(t):
 
 def headline(t):
     """顶卡大字:动作前面加「正在」;借鼠标 / 卡住 / 等下一步原样。"""
+    if queued(t):            # 11-17:全都在排队时顶卡写清楚排第几、等谁
+        q = t["queued"]
+        return _tr("card.queued", "排队中 · 第 {n} · 等 {app}", n=q.get("pos", 1), app=q.get("app", ""))
     v = verb(t)
     if borrow(t) or stuck(t) or idle(t) or not t.get("step"):
         return v
@@ -175,14 +190,16 @@ def text(root, s, size, bold, x, mid, w, a=1.0, rgb=None, right=False):
     return t
 
 
-def dot(root, cx, cy, r, rgb, breath=True):
+def dot(root, cx, cy, r, rgb, breath=True, a=1.0):
     d = Quartz.CALayer.layer()
+    d.setOpacity_(a)
     d.setFrame_(Quartz.CGRectMake(cx - r, cy - r, 2 * r, 2 * r)); d.setCornerRadius_(r); d.setBackgroundColor_(cg(rgb))
     if breath:
-        a = Quartz.CABasicAnimation.animationWithKeyPath_("opacity")
-        a.setFromValue_(1.0); a.setToValue_(0.3); a.setDuration_(0.9); a.setAutoreverses_(True); a.setRepeatCount_(1e9)
-        d.addAnimation_forKey_(a, "b")
+        an = Quartz.CABasicAnimation.animationWithKeyPath_("opacity")
+        an.setFromValue_(a); an.setToValue_(0.3 * a); an.setDuration_(0.9); an.setAutoreverses_(True); an.setRepeatCount_(1e9)
+        d.addAnimation_forKey_(an, "b")
     root.addSublayer_(d)
+    return d
 
 
 def box(root, x, y, w, h, r, a, rgb=None, border=None):
@@ -308,6 +325,8 @@ class WatchIslandView(NSView):
                         st["open"] = False; st["light_open"] = False
                     elif who == "more":
                         st["more"] = not st.get("more")
+                    elif who == "qmore":
+                        st["qmore"] = not st.get("qmore")
                     elif who == "tb_light":
                         st["light_open"] = not st.get("light_open")
                     elif who.startswith("lv_"):
@@ -386,7 +405,10 @@ def _draw(now, force=False):
     light = H["light_get"]()
     sig = json.dumps([st["open"], look_dark(), isee, n_skip, str(st.get("tip")), st.get("hover"), st.get("hover_btn"), light,
                       st.get("light_open"), st.get("more"),
-                      [(t["key"], t.get("step"), borrow(t), stuck(t), ago(t, now), t.get("hidden")) for t in a]], ensure_ascii=False)
+                      st.get("qmore"),
+                      [(t["key"], t.get("step"), borrow(t), stuck(t), ago(t, now), t.get("hidden"),
+                        (t["queued"].get("pos"), t["queued"].get("app")) if queued(t) else None, t.get("color")) for t in a]],
+                     ensure_ascii=False)
     if sig == st["last_sig"] and not force:
         return False
     st["last_sig"] = sig
@@ -429,13 +451,18 @@ def _draw(now, force=False):
     steps_h = 18 * len(steps)
     card_h = 14 + 16 + 28 + 20 * len(notes) + (steps_h + 8 if steps_h else 0) + 8
     W = OPEN_W
+    qrest = sorted((r for r in rest if queued(r)), key=lambda r: r["queued"].get("t", 0))   # 11-17:排队的放下段,先排的在前
+    rest = [r for r in rest if not queued(r)]
     fold = len(rest) > MAX_ROWS and not st.get("more")
     shown = rest[:MAX_ROWS] if fold else rest
     more_row = len(rest) > MAX_ROWS
-    HH = TB_H + card_h + 6 + len(shown) * 36 + 4 + ((12 if fold else 26) if more_row else 0)
+    qfold = len(qrest) > Q_FOLD and not st.get("qmore")
+    qshown = qrest[:1] if qfold else qrest
+    q_h = (20 + 36 * (len(qshown) + (1 if qfold else 0)) + (26 if (not qfold and len(qrest) > Q_FOLD) else 0)) if qrest else 0
+    HH = TB_H + card_h + 6 + len(shown) * 36 + 4 + ((12 if fold else 26) if more_row else 0) + q_h
     st["osize"] = (W, HH)
     sub = 0.72 if look_dark() else 0.6
-    topbar(HH, W, t, len(a), isee, light)
+    topbar(HH, W, t, len(a), isee, light, sum(1 for x in a if queued(x)))
     cy0 = HH - TB_H - card_h
     # 10-27 用户:顶卡排版照单任务卡片(卡片左边 10 起算:圆点 22、小字 34、大字 18、右边留 18、圆角 18),不加橙/红边
     L, CW = 10, W - 20
@@ -480,15 +507,68 @@ def _draw(now, force=False):
         text(lroot, ago(r, now), 11, False, W - 110, mid, 86, sub * 0.8, right=True)
         hits.append((0, W, ry - 32 - (12 if last_fold else 0), ry, "more" if last_fold else r["key"]))
         ry -= 36
+    if qrest:
+        if fold:
+            ry -= 12                 # 叠着的两层露在下面,让开
+        draw_queue(qshown, qfold, len(qrest), ry, W, now, sub, row_a)
 
 
-def topbar(HH, W, t, n, isee, light):
+def draw_queue(qshown, qfold, nq, ry, W, now, sub, row_a):
+    """11-17 C-2.5 灵动岛下段「排队中」(用户在小样里定):分隔线 + 一行一个,整行变暗;
+    最右边(正在做的行写「刚刚」的那一栏)写 zZ,3 秒轻轻一亮一暗;超过 Q_FOLD 个折成「还有 N 个在排队」,点开看全部。"""
+    lab = _tr("island.queued", "排队中")
+    lw = text_w(lab, 10.5, False)
+    mid = ry - 10
+    for x0, x1 in ((16, W / 2 - lw / 2 - 8), (W / 2 + lw / 2 + 8, W - 16)):
+        box(lroot, x0, mid, max(0, x1 - x0), 1, 0, 0.25 * sub, rgb=ink())
+    text(lroot, lab, 10.5, False, W / 2 - lw / 2, mid, lw + 4, sub * 0.75)
+    ry -= 20
+    qa = Q_ALPHA
+    for r in qshown:
+        box(lroot, 10, ry - 32, W - 20, 32, 10, row_a * qa)
+        m = ry - 16
+        dot(lroot, 24, m, 4, color(r), breath=False, a=qa)
+        nm = r.get("who") or r["app"]
+        nw = min(text_w(nm, 12.5, False), 50)
+        text(lroot, nm, 12.5, False, 34, m, 50, sub * qa)
+        show_lab = lab == "排队中"            # 中文照小样写「排队中」;英文行太挤,分隔线已写 Queued 就不重复
+        vw = text_w(lab, 12.5, True) if show_lab else -8
+        if show_lab:
+            text(lroot, lab, 12.5, True, 34 + nw + 8, m, vw + 4, qa)
+        q = r["queued"]
+        detail = _tr("island.queue_at", "第 {n} · 等 {app}", n=q.get("pos", 1), app=q.get("app", ""))
+        dx = 34 + nw + 8 + vw + 8
+        text(lroot, detail, 11.5, False, dx, m, max(0, W - dx - 58), sub * qa)   # 太长截成「…」,右边留给 zZ(用户 11-17 问过)
+        z = text(lroot, "zZ", 11, True, W - 50, m, 26, sub * 0.8, right=True)
+        an = Quartz.CABasicAnimation.animationWithKeyPath_("opacity")
+        an.setFromValue_(1.0); an.setToValue_(0.4); an.setDuration_(1.5); an.setAutoreverses_(True); an.setRepeatCount_(1e9)
+        an.setTimingFunction_(Quartz.CAMediaTimingFunction.functionWithName_("easeInEaseOut"))
+        an.setTimeOffset_(Quartz.CACurrentMediaTime() % 3.0)   # 复查 11-17:整岛每秒重画,按绝对时间接上,不从头播(不然一闪一闪)
+        z.addAnimation_forKey_(an, "zz")
+        hits.append((0, W, ry - 32, ry, r["key"]))
+        ry -= 36
+    if not qfold and nq > Q_FOLD:            # 复查 11-17:点开后要能收回
+        fl = _tr("island.fold", "折叠 ⌃")
+        bw = text_w(fl, 11, True) + 18
+        box(lroot, W - 10 - bw, ry - 22, bw, 20, 10, row_a * 1.6)
+        text(lroot, fl, 11, True, W - 10 - bw + 9, ry - 12, bw, sub)
+        hits.append((W - 14 - bw, W, ry - 24, ry, "qmore"))
+    if qfold:
+        box(lroot, 10, ry - 32, W - 20, 32, 10, row_a * qa)
+        m = ry - 16
+        dot(lroot, 24, m, 4, (0.55, 0.55, 0.58), breath=False, a=qa)
+        text(lroot, _tr("island.queue_more", "还有 {n} 个在排队", n=nq - 1), 12.5, False, 34, m, W - 120, sub * qa)
+        hits.append((0, W, ry - 32, ry, "qmore"))
+
+
+def topbar(HH, W, t, n, isee, light, nq=0):
     """顶部按钮栏(照真悬浮窗):平时写「SeeU · N 个任务」;鼠标移上来换成 I See / 灯光 / …… / 看画面 / 收起。看画面、收起只有图标。"""
     cy = HH - TB_H / 2
     sub = 0.72 if look_dark() else 0.6
     if not st.get("hover") and not st.get("light_open"):
         dot(lroot, 18, cy, 4, color(t))
-        text(lroot, _tr("island.cap", "SeeU · {n} 个任务", n=n), 12.5, True, 30, cy, 200, sub)
+        cap = _tr("island.cap_q", "SeeU · {n} 个任务 · 排队 {q}", n=n, q=nq) if nq else _tr("island.cap", "SeeU · {n} 个任务", n=n)
+        text(lroot, cap, 12.5, True, 30, cy, 230, sub)
         isee_here = isee and t.get("kind") == "browser"
         if isee_here or light != "off":    # 开着的开关在角上留个小标记(I See 只管浏览器,顶卡不是浏览器就不放)
             x = W - 16

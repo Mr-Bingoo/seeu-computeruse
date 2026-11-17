@@ -594,6 +594,14 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
     for name, act in steps:
         try:
             outcome, png = _try(app, act, min_change, expect_factory() if expect_factory else None)
+        except ax.AXRetry as ex:          # 复查 11-17(C-2.7):暂时忙 / 窗口不对 —— 不是拒绝,AI 稍后或先点一下再试
+            done_before = bool(tried)     # 前面已经走过一条路(后台点 / 打字可能已经发出去了)
+            tried.append((name, f"{ex.outcome}:{ex}"))
+            if ex.outcome == "busy" and done_before:
+                # 二次复查:后台那一下其实发出去了,报 busy 会让 AI 再来一遍(字打两遍、开关点两次)→ 报 ineffective,让它先看
+                return dict(outcome="ineffective", route=name, tried=tried, png=png, reason=str(ex), code="busy_after_try",
+                            note=AFTER_TRY_NOTE)
+            return dict(outcome=ex.outcome, route=name, tried=tried, png=png, reason=str(ex), code=ex.code)
         except ax.AXRefused as ex:
             tried.append((name, f"refused:{ex}"))
             return dict(outcome="refused", route=name, tried=tried, png=png, reason=str(ex))
@@ -617,6 +625,9 @@ def _ladder(app, steps, min_change=0.003, expect_factory=None):
     last = tried[-1][1] if tried else "failed"
     out = "refused" if str(last).startswith("refused") else ("ineffective" if last == "ineffective" else "failed")
     return dict(outcome=out, route=tried[-1][0] if tried else None, tried=tried, png=png)
+
+
+AFTER_TRY_NOTE = "后台已经试过一次(可能已经生效、只是画面没变),借真鼠标那一步排不上;先看一眼(see)再决定要不要再做"
 
 
 def _user_busy(ex):
@@ -814,9 +825,17 @@ def _real_mouse(app, fn, modal=False):
                     # 先按老规矩查(没弹窗时不多读一遍);弹着的话,AI 明确指着弹窗里面(_in_modal)才放过
                     if not (callable(modal) and _in_modal(app, *modal())):
                         raise
-        r = dl.acquire(PROJECT, f"SeeU 真鼠标:{app}", attended=True)
+        try:            # 11-17:占着的是别的 SeeU 任务就排队等它借完(最多 15 秒);别的项目占着照协议直接拒
+            from seeu import sched as _sc
+            r = _sc.real_wait(lambda: dl.acquire(PROJECT, f"SeeU 真鼠标:{app}", attended=True),
+                              lambda h: bool(h) and str(h.get("label", "")).startswith("SeeU 真鼠标"))
+        except ImportError:
+            r = dl.acquire(PROJECT, f"SeeU 真鼠标:{app}", attended=True)
         if not r["ok"]:
-            raise ax.AXRefused("桌面锁被占:" + dl.describe(r["held"]))
+            msg = "桌面锁被占:" + dl.describe(r["held"]) + (f"(排队等了 {r['waited']:.0f} 秒还没轮到)" if r.get("waited") else "")
+            if str((r.get("held") or {}).get("label", "")).startswith("SeeU 真鼠标"):
+                raise ax.AXRetry(msg, "busy", "busy")     # 复查 11-17(C-2.7):别的 SeeU 任务借着 = 暂时忙,稍后再试(不是拒绝)
+            raise ax.AXRefused(msg)
         try:
             _halo("real", 5)              # 借用系统鼠标期间亮光圈(按档位);结束后 0.8 秒淡出
             with ig.FrontState(avoid_owner=bg.split_target(app)[0] if _is_canvas(app) else None):
@@ -1006,9 +1025,9 @@ def _cursor_serve():
     import socket
     import subprocess
     from seeu_lib import cursor_overlay as co
-    if _cursor_up[0]:
+    if _cursor_up[0] and time.time() - _cursor_up[0] < 20:     # 复查 11-17:原来一个进程只拉起一次,显示进程退了以后再也不画
         return
-    _cursor_up[0] = True
+    _cursor_up[0] = time.time()
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         probe.bind(("127.0.0.1", co.PORT))   # 绑得上 = 没人在监听 → 拉起(名牌/颜色每条消息自带)
@@ -1046,6 +1065,11 @@ def _watch(app, kind=None, x=None, y=None):
             ww.show(g["id"], mode)
         except TypeError:                               # 长进程里是旧版 watch_window
             ww.show(g["id"])
+        try:                                            # 11-17:灵动岛那行的圆点用这个任务的光标色
+            from seeu import sched as _sc
+            getattr(ww, "tint", lambda *a, **k: None)(_sc.cursor_hex(_cursor_style("bg")[1]))
+        except Exception:
+            pass
         try:
             bg._W["mode"] = mode                          # 下一次后台动作立刻切回紫色
         except Exception:
@@ -1068,11 +1092,25 @@ def _cursor(app, kind, x, y, mode="bg", force=False):
         if force or _cursor_visible(app, x, y):
             _cursor_serve()
             label, color = _cursor_style(mode)
-            t = co.show(kind, x, y, label, color, owner=bg.split_target(app)[0])   # 显示进程自己每 0.2s 查遮挡,两次动作之间被挡也会藏
+            owner = bg.split_target(app)[0]
+            # 11-17 C-2.5:一个任务一只光标(key = 任务显示名);后台模式名牌按规则(只剩一只写 SeeU,多只写任务名)
+            from seeu import sched as _sc
+            key = _sc.cursor_key()
+            if mode != "real":
+                label, color = key, _sc.cursor_color(color)
+            import inspect
+            if "key" in inspect.signature(co.show).parameters:
+                t = co.show(kind, x, y, label, color, owner=owner, key=key, auto=mode != "real")
+            else:                   # 长进程里是旧版 cursor_overlay(没有 key)
+                t = co.show(kind, x, y, label, color, owner=owner)   # 显示进程自己每 0.2s 查遮挡,两次动作之间被挡也会藏
             # C-1.3:光标按距离走 0.22~0.65 秒,show 返回要等多久;长进程里是旧版就返回 None,按老的 MOVE_S
             time.sleep(min(1.0, t) if isinstance(t, (int, float)) else co.MOVE_S)
         else:
-            co.send("hide")
+            try:        # 11-17:只藏自己这只(原来 hide 一藏全藏,会把别的任务的光标也藏掉)
+                from seeu import sched as _sc
+                getattr(co, "hide", lambda k=None: co.send("hide"))(_sc.cursor_key())
+            except Exception:
+                co.send("hide")
     except Exception:
         pass
 
@@ -1223,7 +1261,18 @@ def type(app, text, enter=False, fallback=True, allow=None):
     #   C-1.3 Codex:空格后面的字全丢了,截图有变化就报成功,回车照按 → 差点把半句话发出去。
     from seeu import web
     browser = web.is_browser(app)
-    steps = [("后台打字", lambda: bk.type_to(app, text, enter=False))]
+    wcheck = _focus_window_check(app)
+
+    def _bg_type():
+        with _TypeLock(app):
+            if wcheck:          # 老的长进程可能 import 了没有 check 参数的 bgkey,没有就照旧打
+                try:
+                    return bk.type_to(app, text, enter=False, check=wcheck)
+                except TypeError as ex:
+                    if "check" not in str(ex):
+                        raise
+            return bk.type_to(app, text, enter=False)
+    steps = [("后台打字", _bg_type)]
     # 10-30:浏览器不走前台兜底——藏着/在后面的窗口截图看不出字变,后台其实打进去了也判"没变",
     # 兜底就把浏览器拉到前台(实测抢了用户桌面)、还会叠出重复字。网页填表按编号用 web.type 才核实得了。
     if fallback and not real_allowed(allow):
@@ -1379,6 +1428,88 @@ def _focus_secret(app):
         return None
 
 
+WRONG_WINDOW = ("输入框不在「{want}」这个窗口里(现在焦点在「{got}」):可能刚才那一下没点上,或者别的任务把焦点点走了。"
+                "SeeU 没打,免得写进别的窗口;先点一下「{want}」里的输入框再打")
+TYPE_LOCK_WAIT_S = 10      # 等别的任务往同一个 App 打完字最多这么久,超时报忙(不无限等)
+
+
+def _focus_window_check(app):
+    """11-17 C-2.5 两任务实测:后台打字只认 App 当前焦点框,「App「标题」」的标题没核对 → 两个任务交错时字写进对方窗口,
+    点没生效时也会写进同 App 的别的窗口,还报 delivered。带标题时返回 check(pid):焦点控件所在窗口标题不是目标就 AXRefused。
+    不带标题、画布类、读不到焦点或窗口标题(镜像、自绘界面)→ 不查(返回 None / 放过),跟原来一样。"""
+    title = bg.split_target(app)[1]
+    if title is None or _is_canvas(app):
+        return None
+
+    def focus_title(el):
+        f = ax.attr(el, "AXFocusedUIElement")
+        w = ax.attr(f, "AXWindow") if f is not None else None
+        return ax.attr(w, "AXTitle") if w is not None else None
+
+    def check(pid):
+        try:
+            el, _ = ax.app_element(pid)
+            got = focus_title(el)
+        except Exception:
+            return
+        if got is None or got == title:
+            return
+        # 先在后台把目标窗口设成这个 App 的主窗口(11-17 实测:文本编辑在后台时焦点跟着过去、前台不变),再核一次。
+        # 复查 11-17:目标 App 正在前台时不换(用户可能正在它另一个窗口里打字,换了等于抢用户的窗口),直接报窗口不对
+        try:
+            from seeu_lib import input_guard as _ig
+            fa = _ig.frontmost_app()
+            w = None if (fa and fa.get("pid") == pid) else ax.main_window(el, title)
+            if w is not None:
+                ax.set_attr(w, "AXMain", True)
+                time.sleep(0.15)
+                got = focus_title(el)
+        except Exception:
+            pass
+        if got is not None and got != title:
+            raise ax.AXRetry(WRONG_WINDOW.format(want=title, got=got or "没标题的窗口"), "failed", "wrong_window")
+    return check
+
+
+class _TypeLock:
+    """同一个 App 同一时间只让一个 SeeU 进程后台打字(聚焦 → 核对窗口 → 打字 这一段不被别的任务插进来)。
+    锁 ~/.seeu/seeu_typelock/<App>.lock(flock,进程退出自动放);等 TYPE_LOCK_WAIT_S 秒拿不到就 AXRefused 报忙。"""
+    def __init__(self, app):
+        import hashlib
+        d = os.path.expanduser("~/.seeu/seeu_typelock")
+        self.path = os.path.join(d, hashlib.md5(bg.split_target(app)[0].encode("utf-8")).hexdigest()[:12] + ".lock")
+        self.app, self.f = app, None
+
+    def __enter__(self):
+        import fcntl
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            self.f = open(self.path, "a")
+        except Exception:
+            self.f = None               # 锁文件开不了就不锁(跟原来一样),不因为这个打不了字
+            return self
+        t0 = time.time()
+        while True:
+            try:
+                fcntl.flock(self.f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except OSError:
+                if time.time() - t0 > TYPE_LOCK_WAIT_S:
+                    self.f.close()
+                    self.f = None
+                    raise ax.AXRetry(f"另一个任务正在往「{bg.split_target(self.app)[0]}」打字,等了 {TYPE_LOCK_WAIT_S} 秒还没完,这次没打;稍后再试",
+                                     "busy", "busy")
+                time.sleep(0.1)
+
+    def __exit__(self, *a):
+        if self.f:
+            try:
+                import fcntl
+                fcntl.flock(self.f.fileno(), fcntl.LOCK_UN)
+            finally:
+                self.f.close()
+
+
 def _focused_text(app):
     """目标 App 当前焦点输入框里的文字(辅助功能读,App 在后台也能读);读不到返回 None。"""
     if _is_canvas(app):
@@ -1421,6 +1552,9 @@ def _front_type(app, ig, text, enter):
     fa = ig.frontmost_app()
     if not fa or fa["pid"] != pid:
         raise RuntimeError(f"没能把 {app} 切到前台(现在是 {fa and fa['name']})")
+    wcheck = _focus_window_check(app)
+    if wcheck:
+        wcheck(pid)
     try:
         bk.type_unicode(pid, text)
         if enter:
@@ -1802,6 +1936,46 @@ def _report(r):
     if r.get("reason"):                 # 10-29 Skill:被拦/做不到时把「卡在…原因…怎么办」也打出来,给 AI 照着转述
         print(f"原因  {r['reason']}")
     return 0 if r["outcome"] == "delivered" else (3 if r["outcome"] == "refused" else 1)
+
+
+# ---------------------------------------------------------------- 多任务调度(11-17 C-2.5,见 sched.py、SeeU-多任务调度设计.md)
+# 对外动作统一包一层:同一个 App 一次一个任务(排队、动完接着占几秒)、排太久按位置点先核画面、记录用时。
+# 内部互相调用(mirror_open_app 里调 tap / type)走的也是包过的名字,sched 按「同一进程嵌套」只在最外层占 / 让 / 记。
+try:
+    from seeu import sched as _sched
+
+    def _by_pos(args, kwargs):
+        """按位置点 → 返回那个屏幕点(防过时只比它附近);按编号 / 名字 → None(轮到时会重新找控件)。"""
+        t = args[0] if args else kwargs.get("target")
+        return tuple(t[:2]) if isinstance(t, (tuple, list)) and len(t) >= 2 else None
+
+    _raw_shoot = shoot
+
+    def shoot(app):                                   # noqa: F811 —— 记截图用时(任务窗口协议的数据)
+        t0 = time.time()
+        try:
+            return _raw_shoot(app)
+        finally:
+            _sched.add_heavy("shot", time.time() - t0)
+
+    see = _sched.scheduled("see", lease=False)(see)
+    tap = _sched.scheduled("tap", positional=_by_pos, lease="focus", focus=True)(tap)
+    long_press = _sched.scheduled("long_press", positional=_by_pos, lease="focus", focus=True)(long_press)
+    scroll = _sched.scheduled("scroll", lease="focus")(scroll)
+    # 外部评审 11-17:打字 / 按键是往「当前焦点」里送 → 上一步之后别的任务动过焦点就不做(MCP 带输入框时整段占着,不查)
+    type = _sched.scheduled("type", focus=True, focus_check=lambda a, k: True)(type)          # noqa: A001
+    press = _sched.scheduled("press", focus=True, focus_check=lambda a, k: True)(press)
+    menu = _sched.scheduled("menu", focus=True)(menu)
+    drag = _sched.scheduled("drag", positional=lambda a, k: (lambda p: tuple(p[0][:2]) if p else True)(a[0] if a else k.get("pts")),
+                            focus=True)(drag)
+    mirror_home = _sched.scheduled("mirror_home", focus=True)(mirror_home)
+    _raw_mirror_open = mirror_open_app
+    _mirror_open_s = _sched.scheduled("mirror_open_app", focus=True)(lambda app, name: _raw_mirror_open(name, app=app))
+
+    def mirror_open_app(name, app="iPhone Mirroring"):      # noqa: F811 —— 第一个参数是要开的 App 名,目标是镜像
+        return _mirror_open_s(app, name)
+except Exception:   # noqa: BLE001 —— 调度模块出问题不影响 SeeU 本身
+    pass
 
 
 def main(argv=None):

@@ -938,3 +938,11 @@ def _ax_tabs(app):
             if d < 12 and ax.attr(e, "AXRole") != "AXWebArea":
                 stack.extend((c, d + 1) for c in ax.attr(e, "AXChildren") or [])
     return out
+
+
+# 11-17 C-2.5 多任务调度:网页里打字会碰浏览器的焦点,同一个浏览器一次一个任务打(点、滚动走网页脚本,不用排)。
+try:
+    from seeu import sched as _sched
+    type = _sched.scheduled("web_type")(type)            # noqa: A001
+except Exception:   # noqa: BLE001
+    pass

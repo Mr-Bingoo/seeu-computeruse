@@ -73,21 +73,41 @@ GLOW_BREATH = 0.55      # 呼吸幅度:最暗时 = 1 - 0.55
 OCCLUDE_CHECK_S = 0.2   # 带 owner 的光标多久查一次遮挡
 SEE_THROUGH = ("Screenshot", "screencaptureui")   # 截图工具的全屏透明层,不算挡住
 IDLE_EXIT_S = 600    # 硬上限:空闲 10 分钟自动退出,不留孤儿进程
+# 11-17 C-2.5 多任务:一个任务一个光标(见 SeeU-多任务调度设计.md 六之三)
+MAX_CURSORS = 8      # 同时最多几只光标(再多挤掉最久没动的)
+WAIT_ALPHA = 0.45    # 排队中整只光标的透明度(打瞌睡 + 变淡)
+WAIT_MAX_S = 40      # 排队提示最多显示这么久(调度那边排队上限 30 秒),没人来收就自己停
+ZZ_S = 2.7           # 一个 z 飘完的时长;3 个错开 1/3
+ZZ_FROM, ZZ_TO = (17, 3), (32, -22)   # z 飘的起点、终点(相对尖端,y 朝下)
 
 
-def show(kind, x, y, label=None, color=None, owner=None):
+def show(kind, x, y, label=None, color=None, owner=None, key=None, auto=False):
     """move/click 带名牌和颜色(color = (r,g,b) 0~1)。名牌可含空格/中文。
     owner = 目标 App 名(如 "iPhone Mirroring"):显示进程每 OCCLUDE_CHECK_S 秒自己查光标下最上层窗口是不是它,
-    不是(被别的窗口挡住 / 不在当前桌面)就立刻藏,露出来再显示。不带 owner 就不查(老调用不受影响)。"""
+    不是(被别的窗口挡住 / 不在当前桌面)就立刻藏,露出来再显示。不带 owner 就不查(老调用不受影响)。
+    11-17 C-2.5:key = 光标名(哪个任务;不同 key 各一只光标,不传 = 跟老调用共用一只);
+    auto = 名牌按规则显示:屏幕上只有它一只光标时写「SeeU」,多只时写 label(任务名)。"""
     parts = [kind, round(x, 1), round(y, 1),
              quote(label, safe="@") if label else "-",                       # "-" = 用默认
              ",".join(f"{c:.3f}" for c in color) if color else "-"]
-    if owner:
-        parts.append(quote(owner, safe=""))
+    if owner or key:
+        parts.append(quote(owner, safe="") if owner else "-")
+    if key:
+        parts += [quote(str(key), safe=""), "auto" if auto else "fixed"]
     send(*parts)
     prev, _last_xy[0] = _last_xy[0], (float(x), float(y))
     # C-1.3:返回光标大约多久走到位(调用方等这么久再动手,波纹才对得上);第一次没有上一个位置,按老的 MOVE_S
     return travel_s(prev[0], prev[1], x, y) if prev else MOVE_S
+
+
+def wait(key, on=True):
+    """11-17 C-2.5:这个任务在排队 → 它的光标打瞌睡(飘 z)+ 变淡;on=False 收掉(它下一次动作也会自动收)。"""
+    send("wait", quote(str(key), safe=""), 1 if on else 0)
+
+
+def hide(key=None):
+    """藏光标:带 key 只藏那个任务的,不带全藏(老行为)。"""
+    send("hide", quote(str(key), safe="")) if key else send("hide")
 
 
 def glow(color, secs=2.0):
@@ -348,10 +368,13 @@ def serve(label=None, color=None):
             return True
 
         def drawRect_(self, rect):
+            cs = getattr(self, "_cs", None)
+            if cs is None:
+                return
             cx, cy = TIP
-            r_, g_, b_ = st["color"]
-            if st["ring_t0"] is not None and time.time() >= st["ring_t0"]:
-                p = min(1.0, (time.time() - st["ring_t0"]) / RING_S)
+            r_, g_, b_ = cs["color"]
+            if cs["ring_t0"] is not None and time.time() >= cs["ring_t0"]:
+                p = min(1.0, (time.time() - cs["ring_t0"]) / RING_S)
                 r = 5 + 20 * p
                 NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 0.8 * (1 - p)).set()
                 ring = NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx - r, cy - r, 2 * r, 2 * r))
@@ -359,252 +382,481 @@ def serve(label=None, color=None):
                 ring.stroke()
             # C-1.3 起箭头、光晕、名牌都是图层(见 build_layers),这里只画点击波纹
 
-    win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-        NSMakeRect(0, 0, WIN_W, WIN_H), NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False)
-    win.setOpaque_(False)
-    win.setBackgroundColor_(NSColor.clearColor())
-    win.setHasShadow_(False)   # C-1.3:有光晕后窗口阴影会把半透明光晕投成一圈深色圆盘
-    win.setIgnoresMouseEvents_(True)
-    win.setLevel_(NSScreenSaverWindowLevel)
-    # 10-14 C-1.1(实测切桌面残影):光标窗口不再"跨所有桌面",改成"显示时跟到当前桌面":
-    # 用户切走时它留在原桌面、跟着原桌面一起滑走,不会在新桌面上停一下;再出现时 orderFront 把它带到当前桌面。
-    win.setCollectionBehavior_(NSWindowCollectionBehaviorMoveToActiveSpace
-                               | NSWindowCollectionBehaviorStationary
-                               | NSWindowCollectionBehaviorFullScreenAuxiliary)
-    view = CursorView.alloc().initWithFrame_(NSMakeRect(0, 0, WIN_W, WIN_H))
-    win.setContentView_(view)
-    win.setAlphaValue_(0.0)
+    def make_cursor(key, lab0, col0):
+        """11-17 C-2.5:一个任务一个光标(各自的窗口、图层、位置、动画、遮挡)。原来整个 serve 只有一个,这段原样搬进来。"""
+        cs = dict(key=key, cur=None, frm=None, to=None, t0=0.0, ring_t0=None, dur=MOVE_S, ctl=None, tilt=0.0, sway=0.0,
+                  press_t0=None, arrive_t=0.0, redraw_n=0, last=time.time(), shown=False, label=lab0, color=col0,
+                  label_raw=lab0, auto=False, owner=None, occluded=False, occ_t=0.0, waiting=False)
+        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(0, 0, WIN_W, WIN_H), NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False)
+        win.setReleasedWhenClosed_(False)
+        win.setOpaque_(False)
+        win.setBackgroundColor_(NSColor.clearColor())
+        win.setHasShadow_(False)   # C-1.3:有光晕后窗口阴影会把半透明光晕投成一圈深色圆盘
+        win.setIgnoresMouseEvents_(True)
+        win.setLevel_(NSScreenSaverWindowLevel)
+        # 10-14 C-1.1(实测切桌面残影):光标窗口不再"跨所有桌面",改成"显示时跟到当前桌面":
+        # 用户切走时它留在原桌面、跟着原桌面一起滑走,不会在新桌面上停一下;再出现时 orderFront 把它带到当前桌面。
+        win.setCollectionBehavior_(NSWindowCollectionBehaviorMoveToActiveSpace
+                                   | NSWindowCollectionBehaviorStationary
+                                   | NSWindowCollectionBehaviorFullScreenAuxiliary)
+        view = CursorView.alloc().initWithFrame_(NSMakeRect(0, 0, WIN_W, WIN_H))
+        view._cs = cs
+        win.setContentView_(view)
+        win.setAlphaValue_(0.0)
 
-    # ---- C-1.3 箭头 / 光晕 / 名牌做成图层:原地摆、光晕呼吸交给系统动画,Python 不用每帧重画
-    # (实测每帧重画时进程 ~9%,旧版不画 ~2.7%)。图层坐标统一成 y 朝下(跟 TIP 一致)。
-    view.setWantsLayer_(True)
-    _root = view.layer()
-    host = Quartz.CALayer.layer()
-    host.setFrame_(_root.bounds())
-    host.setGeometryFlipped_(not _root.isGeometryFlipped())
-    _root.addSublayer_(host)
-    _scale = NSScreen.mainScreen().backingScaleFactor() if NSScreen.mainScreen() else 2.0
-    glow_l, arrow_l, pill_l = Quartz.CALayer.layer(), Quartz.CALayer.layer(), Quartz.CALayer.layer()
-    for _l in (glow_l, arrow_l, pill_l):
-        _l.setContentsScale_(_scale)
-        host.addSublayer_(_l)
-    APAD = 3.0                                    # 箭头图片四周留白(白描边不被裁)
-    AW, AH = 18 + 2 * APAD, 21 + 2 * APAD
+        # ---- C-1.3 箭头 / 光晕 / 名牌做成图层:原地摆、光晕呼吸交给系统动画,Python 不用每帧重画
+        # (实测每帧重画时进程 ~9%,旧版不画 ~2.7%)。图层坐标统一成 y 朝下(跟 TIP 一致)。
+        view.setWantsLayer_(True)
+        _root = view.layer()
+        host = Quartz.CALayer.layer()
+        host.setFrame_(_root.bounds())
+        host.setGeometryFlipped_(not _root.isGeometryFlipped())
+        _root.addSublayer_(host)
+        _scale = NSScreen.mainScreen().backingScaleFactor() if NSScreen.mainScreen() else 2.0
+        glow_l, arrow_l, pill_l = Quartz.CALayer.layer(), Quartz.CALayer.layer(), Quartz.CALayer.layer()
+        for _l in (glow_l, arrow_l, pill_l):
+            _l.setContentsScale_(_scale)
+            host.addSublayer_(_l)
+        APAD = 3.0                                    # 箭头图片四周留白(白描边不被裁)
+        AW, AH = 18 + 2 * APAD, 21 + 2 * APAD
 
-    def _img(w, h, draw):
-        def handler(rect):
-            draw()
-            return True
-        return NSImage.imageWithSize_flipped_drawingHandler_((w, h), True, handler)
+        def _img(w, h, draw):
+            def handler(rect):
+                draw()
+                return True
+            return NSImage.imageWithSize_flipped_drawingHandler_((w, h), True, handler)
 
-    def _contents(layer, img):
-        layer.setContents_(img.layerContentsForContentsScale_(_scale))
+        def _contents(layer, img):
+            layer.setContents_(img.layerContentsForContentsScale_(_scale))
 
-    def build_layers():
-        """按当前颜色/名牌重做三张图。只在颜色或名牌变了时调用。"""
-        r_, g_, b_ = st["color"]
-        Quartz.CATransaction.begin()
-        Quartz.CATransaction.setDisableActions_(True)
-        R = GLOW_R
+        def build_layers():
+            """按当前颜色/名牌重做三张图。只在颜色或名牌变了时调用。"""
+            r_, g_, b_ = cs["color"]
+            Quartz.CATransaction.begin()
+            Quartz.CATransaction.setDisableActions_(True)
+            R = GLOW_R
 
-        def dglow():
+            def dglow():
+                NSGradient.alloc().initWithStartingColor_endingColor_(
+                    NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0),
+                    NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 0.0)
+                ).drawFromCenter_radius_toCenter_radius_options_(NSMakePoint(R, R), 0, NSMakePoint(R, R), R, 0)
+            _contents(glow_l, _img(2 * R, 2 * R, dglow))
+            glow_l.setBounds_(Quartz.CGRectMake(0, 0, 2 * R, 2 * R))
+            glow_l.setPosition_((TIP[0] + 6, TIP[1] + 8))
+
+            def darrow():
+                def P(x, y):
+                    return NSMakePoint(APAD + x, APAD + y)
+
+                def quad(path, ctrl, end):
+                    path.curveToPoint_controlPoint1_controlPoint2_(P(*end), P(*ctrl), P(*ctrl))
+                path = NSBezierPath.bezierPath()
+                path.moveToPoint_(P(0.5, 1.5))
+                path.lineToPoint_(P(4, 17.5))
+                quad(path, (4.6, 19.8), (6.2, 18.2))
+                path.lineToPoint_(P(9.2, 13.5))
+                path.lineToPoint_(P(14.8, 12.6))
+                quad(path, (17, 12.1), (15.3, 10.6))
+                path.lineToPoint_(P(2, 0))
+                quad(path, (0, -0.8), (0.5, 1.5))
+                path.closePath()
+                path.setLineJoinStyle_(1)
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0).set()
+                path.fill()
+                NSColor.whiteColor().set()
+                path.setLineWidth_(1.6)
+                path.stroke()
+            _contents(arrow_l, _img(AW, AH, darrow))
+            arrow_l.setBounds_(Quartz.CGRectMake(0, 0, AW, AH))
+            # 转轴 = 箭头中心 ARROW_C;position 放在 TIP + ARROW_C,尖端就落在 TIP
+            arrow_l.setAnchorPoint_(((APAD + ARROW_C[0]) / AW, (APAD + ARROW_C[1]) / AH))
+            arrow_l.setPosition_((TIP[0] + ARROW_C[0], TIP[1] + ARROW_C[1]))
+
+            # 名牌(样式 B):箭头右下方的小胶囊;10-14:浅色底用深色字,深色底用白字
+            light = 0.299 * r_ + 0.587 * g_ + 0.114 * b_ > 0.62
+            fg = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.10, 0.17, 0.27, 1.0) if light else NSColor.whiteColor()
+            attrs = {NSFontAttributeName: NSFont.systemFontOfSize_weight_(10, 0.23), NSForegroundColorAttributeName: fg}
+            text = NSAttributedString.alloc().initWithString_attributes_(cs["label"], attrs)
+            tw, th = text.size().width, text.size().height
+            pw, ph = tw + 12, th + 4
+
+            def dpill():
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0).set()
+                NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(NSMakeRect(0, 0, pw, ph), ph / 2, ph / 2).fill()
+                text.drawAtPoint_(NSMakePoint(6, 2))
+            _contents(pill_l, _img(pw, ph, dpill))
+            pill_l.setFrame_(Quartz.CGRectMake(TIP[0] + 13, TIP[1] + 17, pw, ph))
+            Quartz.CATransaction.commit()
+
+        def _basic(key, frm, to, dur, auto=True, repeat=1e9, ease="easeInEaseOut"):
+            a = Quartz.CABasicAnimation.animationWithKeyPath_(key)
+            a.setFromValue_(frm)
+            a.setToValue_(to)
+            a.setDuration_(dur)
+            a.setAutoreverses_(auto)
+            a.setRepeatCount_(repeat)
+            a.setRemovedOnCompletion_(False)
+            a.setTimingFunction_(Quartz.CAMediaTimingFunction.functionWithName_(ease))
+            return a
+
+        # 光晕呼吸:透明度 0.19~0.41 来回(原来 0.55 ×(0.55±0.2)),半个来回 0.45π 秒
+        glow_l.addAnimation_forKey_(_basic("opacity", 0.19, 0.41, 0.45 * math.pi), "breath")
+
+        def press_now():
+            """点击按下:箭头缩到 0.82 再弹回,光晕放大一下。"""
+            k = Quartz.CAKeyframeAnimation.animationWithKeyPath_("transform.scale")
+            tot = PRESS_S[0] + PRESS_S[1]
+            k.setValues_([1.0, 0.82, 1.0])
+            k.setKeyTimes_([0.0, PRESS_S[0] / tot, 1.0])
+            k.setDuration_(tot)
+            arrow_l.addAnimation_forKey_(k, "press")
+            g = Quartz.CAKeyframeAnimation.animationWithKeyPath_("transform.scale")
+            g.setValues_([1.0, 1.27, 1.0])
+            g.setKeyTimes_([0.0, 0.25, 1.0])
+            g.setDuration_(0.4)
+            glow_l.addAnimation_forKey_(g, "press")
+
+        # ---- C-1.4 待机呼吸 + 聚焦:反光层、尖端亮点挂在箭头图层下面(跟着一起缩放),只建一次
+        def _cgpath_arrow():
+            cp = Quartz.CGPathCreateMutable()
+            P = lambda x, y: (APAD + x, APAD + y)
+            Quartz.CGPathMoveToPoint(cp, None, *P(0.5, 1.5))
+            Quartz.CGPathAddLineToPoint(cp, None, *P(4, 17.5))
+            Quartz.CGPathAddQuadCurveToPoint(cp, None, *P(4.6, 19.8), *P(6.2, 18.2))
+            Quartz.CGPathAddLineToPoint(cp, None, *P(9.2, 13.5))
+            Quartz.CGPathAddLineToPoint(cp, None, *P(14.8, 12.6))
+            Quartz.CGPathAddQuadCurveToPoint(cp, None, *P(17, 12.1), *P(15.3, 10.6))
+            Quartz.CGPathAddLineToPoint(cp, None, *P(2, 0))
+            Quartz.CGPathAddQuadCurveToPoint(cp, None, *P(0, -0.8), *P(0.5, 1.5))
+            Quartz.CGPathCloseSubpath(cp)
+            return cp
+
+        shine_box = Quartz.CALayer.layer()           # 只露出箭头形状里的那部分反光
+        shine_box.setFrame_(Quartz.CGRectMake(0, 0, AW, AH))
+        _mask = Quartz.CAShapeLayer.layer()
+        _mask.setFrame_(Quartz.CGRectMake(0, 0, AW, AH))
+        _mask.setPath_(_cgpath_arrow())
+        shine_box.setMask_(_mask)
+        band_l, flash_l = Quartz.CALayer.layer(), Quartz.CALayer.layer()
+        for _l in (band_l, flash_l):
+            _l.setContentsScale_(_scale)
+            _l.setOpacity_(0.0)
+        shine_box.addSublayer_(band_l)
+        arrow_l.addSublayer_(shine_box)
+        arrow_l.addSublayer_(flash_l)
+        _ux, _uy = SHINE_TIP[0] - SHINE_TAIL[0], SHINE_TIP[1] - SHINE_TAIL[1]
+        _ul = math.hypot(_ux, _uy)
+        _ux, _uy = _ux / _ul, _uy / _ul
+        BS = 48.0
+
+        def dband():
+            clear = NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.0)
+            NSGradient.alloc().initWithColors_atLocations_colorSpace_(
+                [clear, NSColor.whiteColor(), clear], [0.0, 0.5, 1.0], NSColorSpace.genericRGBColorSpace()
+            ).drawFromPoint_toPoint_options_(NSMakePoint(BS / 2 - _ux * SHINE_W, BS / 2 - _uy * SHINE_W),
+                                             NSMakePoint(BS / 2 + _ux * SHINE_W, BS / 2 + _uy * SHINE_W), 0)
+        _contents(band_l, _img(BS, BS, dband))
+        band_l.setBounds_(Quartz.CGRectMake(0, 0, BS, BS))
+        band_l.setPosition_((APAD + SHINE_TAIL[0], APAD + SHINE_TAIL[1]))
+        FR = 4.5
+
+        def dflash():
             NSGradient.alloc().initWithStartingColor_endingColor_(
-                NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0),
-                NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 0.0)
-            ).drawFromCenter_radius_toCenter_radius_options_(NSMakePoint(R, R), 0, NSMakePoint(R, R), R, 0)
-        _contents(glow_l, _img(2 * R, 2 * R, dglow))
-        glow_l.setBounds_(Quartz.CGRectMake(0, 0, 2 * R, 2 * R))
-        glow_l.setPosition_((TIP[0] + 6, TIP[1] + 8))
+                NSColor.whiteColor(), NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.0)
+            ).drawFromCenter_radius_toCenter_radius_options_(NSMakePoint(FR, FR), 0, NSMakePoint(FR, FR), FR, 0)
+        _contents(flash_l, _img(2 * FR, 2 * FR, dflash))
+        flash_l.setBounds_(Quartz.CGRectMake(0, 0, 2 * FR, 2 * FR))
+        flash_l.setPosition_((APAD + 1.4, APAD + 1.5))
 
-        def darrow():
-            def P(x, y):
-                return NSMakePoint(APAD + x, APAD + y)
+        def _loop(key, times, values, total):
+            a = Quartz.CAKeyframeAnimation.animationWithKeyPath_(key)
+            a.setValues_(values)
+            a.setKeyTimes_([t / total for t in times])
+            a.setDuration_(total)
+            a.setRepeatCount_(1e9)
+            a.setRemovedOnCompletion_(False)
+            return a
 
-            def quad(path, ctrl, end):
-                path.curveToPoint_controlPoint1_controlPoint2_(P(*end), P(*ctrl), P(*ctrl))
-            path = NSBezierPath.bezierPath()
-            path.moveToPoint_(P(0.5, 1.5))
-            path.lineToPoint_(P(4, 17.5))
-            quad(path, (4.6, 19.8), (6.2, 18.2))
-            path.lineToPoint_(P(9.2, 13.5))
-            path.lineToPoint_(P(14.8, 12.6))
-            quad(path, (17, 12.1), (15.3, 10.6))
-            path.lineToPoint_(P(2, 0))
-            quad(path, (0, -0.8), (0.5, 1.5))
-            path.closePath()
-            path.setLineJoinStyle_(1)
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0).set()
-            path.fill()
-            NSColor.whiteColor().set()
-            path.setLineWidth_(1.6)
-            path.stroke()
-        _contents(arrow_l, _img(AW, AH, darrow))
-        arrow_l.setBounds_(Quartz.CGRectMake(0, 0, AW, AH))
-        # 转轴 = 箭头中心 ARROW_C;position 放在 TIP + ARROW_C,尖端就落在 TIP
-        arrow_l.setAnchorPoint_(((APAD + ARROW_C[0]) / AW, (APAD + ARROW_C[1]) / AH))
-        arrow_l.setPosition_((TIP[0] + ARROW_C[0], TIP[1] + ARROW_C[1]))
+        def breathe(on):
+            """待机呼吸 + 每 FOCUS_EVERY 次聚焦到尖端。全交给系统动画,Python 只在开始/停下时调一次。"""
+            if on == cs.get("breathing"):
+                return
+            cs["breathing"] = on
+            if not on:
+                for l, k in ((arrow_l, "breath"), (glow_l, "breath2"), (band_l, "pos"), (band_l, "op"), (flash_l, "op")):
+                    l.removeAnimationForKey_(k)
+                return
+            total = BREATH_S * FOCUS_EVERY
+            n = 24 * FOCUS_EVERY
+            ts = [total * i / n for i in range(n + 1)]
+            bs = [0.5 - 0.5 * math.cos(2 * math.pi * t / BREATH_S) for t in ts]
+            tr = []
+            for b in bs:      # 以尖端为中心缩放:绕转轴(箭头中心)放大后,再把尖端挪回原处
+                k = 1 + BREATH_AMP * b
+                tr.append(NSValue.valueWithCATransform3D_(Quartz.CATransform3DScale(
+                    Quartz.CATransform3DMakeTranslation((k - 1) * ARROW_C[0], (k - 1) * ARROW_C[1], 0), k, k, 1)))
+            arrow_l.addAnimation_forKey_(_loop("transform", ts, tr, total), "breath")
+            g = Quartz.CAAnimationGroup.animation()   # 光晕同步:透明度 0.19~0.41、略放大
+            g.setAnimations_([_loop("opacity", ts, [0.19 + 0.22 * b for b in bs], total),
+                              _loop("transform.scale", ts, [1 + 0.1 * b for b in bs], total)])
+            g.setDuration_(total)
+            g.setRepeatCount_(1e9)
+            g.setRemovedOnCompletion_(False)
+            glow_l.addAnimation_forKey_(g, "breath2")
+            # 反光:最后 FOCUS_S 秒(缩回原大小)从尾部扫到尖端,越近越亮;到点尖端闪一下,下一轮开头 0.45 秒淡掉
+            f0 = total - FOCUS_S
+            st_ = [f0 + FOCUS_S * i / 10 for i in range(11)]
+            ss = [i / 10 for i in range(11)]
+            ee = [s_ * s_ * (3 - 2 * s_) for s_ in ss]
+            pos = [NSValue.valueWithPoint_(NSMakePoint(APAD + SHINE_TAIL[0] + (SHINE_TIP[0] - SHINE_TAIL[0]) * e,
+                                                              APAD + SHINE_TAIL[1] + (SHINE_TIP[1] - SHINE_TAIL[1]) * e))
+                   for e in ee]
+            p_start = pos[0]
+            band_l.addAnimation_forKey_(_loop("position", [0.0, f0] + st_, [p_start, p_start] + pos, total), "pos")
+            band_l.addAnimation_forKey_(_loop("opacity", [0.0, f0 - 0.001] + st_,
+                                              [0.0, 0.0] + [0.35 + 0.6 * e for e in ee[:-1]] + [0.0], total), "op")
+            flash_l.addAnimation_forKey_(_loop("opacity", [0.0, 0.45, total - 0.15, total],
+                                               [0.9, 0.0, 0.0, 0.9], total), "op")
 
-        # 名牌(样式 B):箭头右下方的小胶囊;10-14:浅色底用深色字,深色底用白字
-        light = 0.299 * r_ + 0.587 * g_ + 0.114 * b_ > 0.62
-        fg = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.10, 0.17, 0.27, 1.0) if light else NSColor.whiteColor()
-        attrs = {NSFontAttributeName: NSFont.systemFontOfSize_weight_(10, 0.23), NSForegroundColorAttributeName: fg}
-        text = NSAttributedString.alloc().initWithString_attributes_(st["label"], attrs)
-        tw, th = text.size().width, text.size().height
-        pw, ph = tw + 12, th + 4
+        def set_tilt(a):
+            Quartz.CATransaction.begin()
+            Quartz.CATransaction.setDisableActions_(True)
+            arrow_l.setAffineTransform_(Quartz.CGAffineTransformMakeRotation(a))
+            Quartz.CATransaction.commit()
 
-        def dpill():
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0).set()
-            NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(NSMakeRect(0, 0, pw, ph), ph / 2, ph / 2).fill()
-            text.drawAtPoint_(NSMakePoint(6, 2))
-        _contents(pill_l, _img(pw, ph, dpill))
-        pill_l.setFrame_(Quartz.CGRectMake(TIP[0] + 13, TIP[1] + 17, pw, ph))
-        Quartz.CATransaction.commit()
+        build_layers()
 
-    def _basic(key, frm, to, dur, auto=True, repeat=1e9, ease="easeInEaseOut"):
-        a = Quartz.CABasicAnimation.animationWithKeyPath_(key)
-        a.setFromValue_(frm)
-        a.setToValue_(to)
-        a.setDuration_(dur)
-        a.setAutoreverses_(auto)
-        a.setRepeatCount_(repeat)
-        a.setRemovedOnCompletion_(False)
-        a.setTimingFunction_(Quartz.CAMediaTimingFunction.functionWithName_(ease))
-        return a
+        def place(x, y):
+            win.setFrameOrigin_(NSMakePoint(x - TIP[0], screen_h - y - (WIN_H - TIP[1])))
 
-    # 光晕呼吸:透明度 0.19~0.41 来回(原来 0.55 ×(0.55±0.2)),半个来回 0.45π 秒
-    glow_l.addAnimation_forKey_(_basic("opacity", 0.19, 0.41, 0.45 * math.pi), "breath")
 
-    def press_now():
-        """点击按下:箭头缩到 0.82 再弹回,光晕放大一下。"""
-        k = Quartz.CAKeyframeAnimation.animationWithKeyPath_("transform.scale")
-        tot = PRESS_S[0] + PRESS_S[1]
-        k.setValues_([1.0, 0.82, 1.0])
-        k.setKeyTimes_([0.0, PRESS_S[0] / tot, 1.0])
-        k.setDuration_(tot)
-        arrow_l.addAnimation_forKey_(k, "press")
-        g = Quartz.CAKeyframeAnimation.animationWithKeyPath_("transform.scale")
-        g.setValues_([1.0, 1.27, 1.0])
-        g.setKeyTimes_([0.0, 0.25, 1.0])
-        g.setDuration_(0.4)
-        glow_l.addAnimation_forKey_(g, "press")
+        # ---- 11-17 C-2.5 打瞌睡(排队中,用户在小样里定):箭头右上方飘起 3 个 z,越飘越大淡出;整只光标变淡在 tick 里做
+        zz_layers = []
+        for _i in range(3):
+            _z = Quartz.CALayer.layer()
+            _z.setContentsScale_(_scale)
+            _z.setOpacity_(0.0)
+            host.addSublayer_(_z)
+            zz_layers.append(_z)
 
-    # ---- C-1.4 待机呼吸 + 聚焦:反光层、尖端亮点挂在箭头图层下面(跟着一起缩放),只建一次
-    def _cgpath_arrow():
-        cp = Quartz.CGPathCreateMutable()
-        P = lambda x, y: (APAD + x, APAD + y)
-        Quartz.CGPathMoveToPoint(cp, None, *P(0.5, 1.5))
-        Quartz.CGPathAddLineToPoint(cp, None, *P(4, 17.5))
-        Quartz.CGPathAddQuadCurveToPoint(cp, None, *P(4.6, 19.8), *P(6.2, 18.2))
-        Quartz.CGPathAddLineToPoint(cp, None, *P(9.2, 13.5))
-        Quartz.CGPathAddLineToPoint(cp, None, *P(14.8, 12.6))
-        Quartz.CGPathAddQuadCurveToPoint(cp, None, *P(17, 12.1), *P(15.3, 10.6))
-        Quartz.CGPathAddLineToPoint(cp, None, *P(2, 0))
-        Quartz.CGPathAddQuadCurveToPoint(cp, None, *P(0, -0.8), *P(0.5, 1.5))
-        Quartz.CGPathCloseSubpath(cp)
-        return cp
+        def build_zz():
+            from AppKit import NSStrokeWidthAttributeName, NSStrokeColorAttributeName
+            r_, g_, b_ = cs["color"]
+            za = {NSFontAttributeName: NSFont.systemFontOfSize_weight_(10, 0.62),
+                  NSForegroundColorAttributeName: NSColor.colorWithCalibratedRed_green_blue_alpha_(r_, g_, b_, 1.0),
+                  NSStrokeWidthAttributeName: -4.0,
+                  NSStrokeColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.9)}
+            zt = NSAttributedString.alloc().initWithString_attributes_("z", za)
+            zw, zh = zt.size().width + 2, zt.size().height + 2
+            img = _img(zw, zh, lambda: zt.drawAtPoint_(NSMakePoint(1, 1)))
+            for zl in zz_layers:
+                _contents(zl, img)
+                zl.setBounds_(Quartz.CGRectMake(0, 0, zw, zh))
+                zl.setPosition_((TIP[0] + ZZ_FROM[0], TIP[1] + ZZ_FROM[1]))
 
-    shine_box = Quartz.CALayer.layer()           # 只露出箭头形状里的那部分反光
-    shine_box.setFrame_(Quartz.CGRectMake(0, 0, AW, AH))
-    _mask = Quartz.CAShapeLayer.layer()
-    _mask.setFrame_(Quartz.CGRectMake(0, 0, AW, AH))
-    _mask.setPath_(_cgpath_arrow())
-    shine_box.setMask_(_mask)
-    band_l, flash_l = Quartz.CALayer.layer(), Quartz.CALayer.layer()
-    for _l in (band_l, flash_l):
-        _l.setContentsScale_(_scale)
-        _l.setOpacity_(0.0)
-    shine_box.addSublayer_(band_l)
-    arrow_l.addSublayer_(shine_box)
-    arrow_l.addSublayer_(flash_l)
-    _ux, _uy = SHINE_TIP[0] - SHINE_TAIL[0], SHINE_TIP[1] - SHINE_TAIL[1]
-    _ul = math.hypot(_ux, _uy)
-    _ux, _uy = _ux / _ul, _uy / _ul
-    BS = 48.0
+        def set_wait(on):
+            """排队中:飘 z(待机呼吸、光点停掉,免得两种效果叠在一起);不排队了收掉。"""
+            if bool(on) == cs["waiting"]:
+                return
+            cs["waiting"] = bool(on)
+            cs["wait_fade_until"] = time.time() + 0.4
+            if on:
+                breathe(False)
+                t0 = Quartz.CACurrentMediaTime()
+                for i, zl in enumerate(zz_layers):
+                    g = Quartz.CAAnimationGroup.animation()
+                    op = Quartz.CAKeyframeAnimation.animationWithKeyPath_("opacity")
+                    op.setValues_([0.0, 1.0, 0.0])
+                    op.setKeyTimes_([0.0, 0.2, 1.0])
+                    mv = Quartz.CABasicAnimation.animationWithKeyPath_("position")
+                    mv.setFromValue_(NSValue.valueWithPoint_(NSMakePoint(TIP[0] + ZZ_FROM[0], TIP[1] + ZZ_FROM[1])))
+                    mv.setToValue_(NSValue.valueWithPoint_(NSMakePoint(TIP[0] + ZZ_TO[0], TIP[1] + ZZ_TO[1])))
+                    sc = Quartz.CABasicAnimation.animationWithKeyPath_("transform.scale")
+                    sc.setFromValue_(0.6)
+                    sc.setToValue_(1.5)
+                    g.setAnimations_([op, mv, sc])
+                    g.setDuration_(ZZ_S)
+                    g.setRepeatCount_(1e9)
+                    g.setBeginTime_(t0 + i * ZZ_S / 3)
+                    g.setRemovedOnCompletion_(False)
+                    zl.addAnimation_forKey_(g, "zz")
+            else:
+                for zl in zz_layers:
+                    zl.removeAnimationForKey_("zz")
 
-    def dband():
-        clear = NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.0)
-        NSGradient.alloc().initWithColors_atLocations_colorSpace_(
-            [clear, NSColor.whiteColor(), clear], [0.0, 0.5, 1.0], NSColorSpace.genericRGBColorSpace()
-        ).drawFromPoint_toPoint_options_(NSMakePoint(BS / 2 - _ux * SHINE_W, BS / 2 - _uy * SHINE_W),
-                                         NSMakePoint(BS / 2 + _ux * SHINE_W, BS / 2 + _uy * SHINE_W), 0)
-    _contents(band_l, _img(BS, BS, dband))
-    band_l.setBounds_(Quartz.CGRectMake(0, 0, BS, BS))
-    band_l.setPosition_((APAD + SHINE_TAIL[0], APAD + SHINE_TAIL[1]))
-    FR = 4.5
+        build_zz()
 
-    def dflash():
-        NSGradient.alloc().initWithStartingColor_endingColor_(
-            NSColor.whiteColor(), NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.0)
-        ).drawFromCenter_radius_toCenter_radius_options_(NSMakePoint(FR, FR), 0, NSMakePoint(FR, FR), FR, 0)
-    _contents(flash_l, _img(2 * FR, 2 * FR, dflash))
-    flash_l.setBounds_(Quartz.CGRectMake(0, 0, 2 * FR, 2 * FR))
-    flash_l.setPosition_((APAD + 1.4, APAD + 1.5))
+        class _Cur:
+            pass
+        c = _Cur()
+        c.st, c.win, c.view = cs, win, view
+        c.build_layers, c.breathe, c.set_tilt, c.place, c.press_now = build_layers, breathe, set_tilt, place, press_now
+        c.build_zz, c.set_wait = build_zz, set_wait
+        return c
 
-    def _loop(key, times, values, total):
-        a = Quartz.CAKeyframeAnimation.animationWithKeyPath_(key)
-        a.setValues_(values)
-        a.setKeyTimes_([t / total for t in times])
-        a.setDuration_(total)
-        a.setRepeatCount_(1e9)
-        a.setRemovedOnCompletion_(False)
-        return a
+    curs = {}                   # 光标名(任务)-> 光标;老调用方不带名字 = "_"
+    lab_n = [0]                 # 上一帧「在显示的光标」个数,变了就重排名牌(1 个写 SeeU,多个写任务名)
+    started = time.time()
+    activity = [started]        # 最后一次收到光标消息(move / click / wait / hide);空闲退出看它(复查 11-17:光标回收后不能算空闲起点)
 
-    def breathe(on):
-        """待机呼吸 + 每 FOCUS_EVERY 次聚焦到尖端。全交给系统动画,Python 只在开始/停下时调一次。"""
-        if on == st.get("breathing"):
+    def get_cur(key, lab, col):
+        c = curs.get(key)
+        if c is None:
+            if len(curs) >= MAX_CURSORS:              # 有上限:挤掉最久没动的那个
+                old = min(curs.values(), key=lambda x: x.st["last"])
+                retire(old)
+                curs.pop(old.st["key"], None)
+            c = make_cursor(key, lab, col)
+            curs[key] = c
+        return c
+
+    def retire(c):
+        """回收一只光标的窗口(复查 11-17:只 orderOut 靠引用计数放,改成明确 close)。"""
+        try:
+            c.set_wait(False)
+            c.win.orderOut_(None)
+            c.win.close()
+        except Exception:
+            pass
+
+    def live(c, now):
+        return c.st["to"] is not None and now - c.st["last"] < FADE_AFTER_S and not c.st["occluded"]
+
+    def want_label(c, n):
+        return "SeeU" if (c.st["auto"] and n <= 1) else c.st["label_raw"]
+
+    def relabel(now, force=False):
+        n = sum(1 for c in curs.values() if live(c, now))
+        if n == lab_n[0] and not force:
             return
-        st["breathing"] = on
-        if not on:
-            for l, k in ((arrow_l, "breath"), (glow_l, "breath2"), (band_l, "pos"), (band_l, "op"), (flash_l, "op")):
-                l.removeAnimationForKey_(k)
-            return
-        total = BREATH_S * FOCUS_EVERY
-        n = 24 * FOCUS_EVERY
-        ts = [total * i / n for i in range(n + 1)]
-        bs = [0.5 - 0.5 * math.cos(2 * math.pi * t / BREATH_S) for t in ts]
-        tr = []
-        for b in bs:      # 以尖端为中心缩放:绕转轴(箭头中心)放大后,再把尖端挪回原处
-            k = 1 + BREATH_AMP * b
-            tr.append(NSValue.valueWithCATransform3D_(Quartz.CATransform3DScale(
-                Quartz.CATransform3DMakeTranslation((k - 1) * ARROW_C[0], (k - 1) * ARROW_C[1], 0), k, k, 1)))
-        arrow_l.addAnimation_forKey_(_loop("transform", ts, tr, total), "breath")
-        g = Quartz.CAAnimationGroup.animation()   # 光晕同步:透明度 0.19~0.41、略放大
-        g.setAnimations_([_loop("opacity", ts, [0.19 + 0.22 * b for b in bs], total),
-                          _loop("transform.scale", ts, [1 + 0.1 * b for b in bs], total)])
-        g.setDuration_(total)
-        g.setRepeatCount_(1e9)
-        g.setRemovedOnCompletion_(False)
-        glow_l.addAnimation_forKey_(g, "breath2")
-        # 反光:最后 FOCUS_S 秒(缩回原大小)从尾部扫到尖端,越近越亮;到点尖端闪一下,下一轮开头 0.45 秒淡掉
-        f0 = total - FOCUS_S
-        st_ = [f0 + FOCUS_S * i / 10 for i in range(11)]
-        ss = [i / 10 for i in range(11)]
-        ee = [s_ * s_ * (3 - 2 * s_) for s_ in ss]
-        pos = [NSValue.valueWithPoint_(NSMakePoint(APAD + SHINE_TAIL[0] + (SHINE_TIP[0] - SHINE_TAIL[0]) * e,
-                                                          APAD + SHINE_TAIL[1] + (SHINE_TIP[1] - SHINE_TAIL[1]) * e))
-               for e in ee]
-        p_start = pos[0]
-        band_l.addAnimation_forKey_(_loop("position", [0.0, f0] + st_, [p_start, p_start] + pos, total), "pos")
-        band_l.addAnimation_forKey_(_loop("opacity", [0.0, f0 - 0.001] + st_,
-                                          [0.0, 0.0] + [0.35 + 0.6 * e for e in ee[:-1]] + [0.0], total), "op")
-        flash_l.addAnimation_forKey_(_loop("opacity", [0.0, 0.45, total - 0.15, total],
-                                           [0.9, 0.0, 0.0, 0.9], total), "op")
+        lab_n[0] = n
+        for c in curs.values():
+            lab = want_label(c, n)
+            if lab != c.st["label"]:
+                c.st["label"] = lab
+                c.build_layers()
 
-    def set_tilt(a):
-        Quartz.CATransaction.begin()
-        Quartz.CATransaction.setDisableActions_(True)
-        arrow_l.setAffineTransform_(Quartz.CGAffineTransformMakeRotation(a))
-        Quartz.CATransaction.commit()
+    def on_move(msg, now):
+        activity[0] = now
+        x, y = float(msg[1]), float(msg[2])
+        # 10-14 可选第 4/5 段:名牌(URL 编码)、颜色 "r,g,b";不带就回到启动时的默认(老发法不受影响)
+        lab = unquote(msg[3]) if len(msg) >= 4 and msg[3] != "-" else label
+        col = _parse_color(msg[4]) if len(msg) >= 5 and msg[4] != "-" else None
+        col = col or color
+        owner = unquote(msg[5]) if len(msg) >= 6 and msg[5] != "-" else None
+        # 11-17 C-2.5 第 7/8 段:光标名(哪个任务)、名牌规则 auto(只有它一个时写 SeeU)/ fixed
+        key = unquote(msg[6]) if len(msg) >= 7 and msg[6] != "-" else "_"
+        auto = len(msg) >= 8 and msg[7] == "auto"
+        c = get_cur(key, lab, col)
+        cs = c.st
+        cs["owner"] = owner
+        cs["occluded"], cs["occ_t"] = False, 0.0
+        cs["label_raw"], cs["auto"] = lab, auto
+        cs["last"] = now
+        n = sum(1 for o in curs.values() if live(o, now) or o is c)
+        lab_shown = want_label(c, n)
+        if (lab_shown, col) != (cs["label"], cs["color"]):
+            recolor = col != cs["color"]
+            cs["label"], cs["color"] = lab_shown, col
+            c.build_layers()
+            if recolor:
+                c.build_zz()
+            c.view.setNeedsDisplay_(True)
+        c.set_wait(False)                            # 动了 = 不在排队了
+        cs["frm"] = cs["cur"] or (x, y)
+        cs["to"], cs["t0"] = (x, y), now
+        # C-1.3 弧线:控制点在中点往一侧偏(距离 × ARC_K),时长按距离算
+        fx_, fy_ = cs["frm"]
+        d_ = math.hypot(x - fx_, y - fy_)
+        cs["dur"] = travel_s(fx_, fy_, x, y) if cs["cur"] else 0.0
+        side = 1 if (int(now * 1000) % 2) else -1
+        off = min(ARC_MAX, d_ * ARC_K) * side
+        nx_, ny_ = (-(y - fy_) / d_, (x - fx_) / d_) if d_ > 1 else (0.0, 0.0)
+        cs["ctl"] = ((fx_ + x) / 2 + nx_ * off, (fy_ + y) / 2 + ny_ * off)
+        cs["arrive_t"] = now + cs["dur"]
+        cs["ring_t0"] = now + cs["dur"] if msg[0] == "click" else cs["ring_t0"]
+        cs["press_t0"] = now + cs["dur"] if msg[0] == "click" else cs["press_t0"]
+        relabel(now, force=True)
 
-    build_layers()
+    def hide(c, now):
+        c.st["cur"], c.st["ring_t0"], c.st["last"] = None, None, now - FADE_AFTER_S - 2
+        c.set_wait(False)
 
-    def place(x, y):
-        win.setFrameOrigin_(NSMakePoint(x - TIP[0], screen_h - y - (WIN_H - TIP[1])))
+    def step_cursor(c, now):
+        """一个光标一帧:移动、倾斜、待机呼吸、按下、遮挡、透明度(原来 tick 里那一段,按光标各算各的)。"""
+        cs, win = c.st, c.win
+        moving = False
+        if cs["to"]:
+            p = min(1.0, (now - cs["t0"]) / cs["dur"]) if cs["dur"] > 0 else 1.0
+            if OVERSHOOT > 0:                # 惯性:冲过一点再回(easeOutBack)
+                q = p - 1
+                e = q * q * ((OVERSHOOT + 1) * q + OVERSHOOT) + 1
+            else:
+                e = 1 - (1 - p) ** 3
+            u = min(e, 1.15)
+            fx, fy = cs["frm"]
+            tx, ty = cs["to"]
+            kx, ky = cs["ctl"] or ((fx + tx) / 2, (fy + ty) / 2)
+            nxt = ((1 - u) ** 2 * fx + 2 * (1 - u) * u * kx + u * u * tx,
+                   (1 - u) ** 2 * fy + 2 * (1 - u) * u * ky + u * u * ty)
+            vx = nxt[0] - cs["cur"][0] if cs["cur"] else 0.0
+            moving = p < 1.0
+            if nxt != cs["cur"]:
+                cs["cur"] = nxt
+                c.place(*nxt)
+            want = max(-TILT_MAX, min(TILT_MAX, vx * TILT_K)) if moving else 0.0
+            old_tilt = cs["tilt"]
+            cs["tilt"] += (want - cs["tilt"]) * 0.18
+            if abs(cs["tilt"]) < 0.002 and not moving:
+                cs["tilt"] = 0.0
+            if moving:
+                c.breathe(False)
+            if cs["tilt"] != old_tilt:
+                c.set_tilt(cs["tilt"])           # 只在移动/回正时每帧改一下图层角度,不重画
+            # 待机呼吸 + 光点:停下 IDLE_AFTER_S 秒后交给系统动画;排队中(打瞌睡)不呼吸(11-17 用户定:两种等法分开)
+            if not moving and cs["tilt"] == 0.0 and now - cs["arrive_t"] >= IDLE_AFTER_S and not cs["waiting"]:
+                c.breathe(True)
+            if cs["press_t0"] is not None and now >= cs["press_t0"]:
+                cs["press_t0"] = None
+                c.press_now()
+        if cs["waiting"]:
+            if now - cs.get("wait_t", now) > WAIT_MAX_S:     # 排队提示有上限:没人来收就自己停(调度那边最多等 30 秒)
+                c.set_wait(False)
+            else:
+                cs["last"] = max(cs["last"], now - 1)        # 排队中不淡出
+        idle = now - cs["last"]
+        # 10-14:两次动作之间窗口变了(用户开浏览器挡住、切桌面)也要自己藏,别等下一次动作
+        if cs["owner"] and cs["to"] and idle < FADE_AFTER_S + 1 and now - cs["occ_t"] >= OCCLUDE_CHECK_S:
+            cs["occ_t"] = now
+            cs["occluded"] = not _owner_on_top(cs["owner"], *cs["to"])
+        target_alpha = 1.0 if idle < FADE_AFTER_S else max(0.0, 1 - (idle - FADE_AFTER_S))
+        if cs["waiting"]:
+            target_alpha = min(target_alpha, WAIT_ALPHA)
+        if cs["occluded"]:
+            target_alpha = 0.0
+        if cs["to"] and abs(win.alphaValue() - target_alpha) > 0.01:
+            if target_alpha > 0 and (not cs["shown"] or win.alphaValue() < 0.01):
+                win.orderFrontRegardless()     # 从藏着到显示:顺带把窗口带到当前桌面
+                cs["shown"] = True
+            a = win.alphaValue()
+            if target_alpha > 0 and now < cs.get("wait_fade_until", 0):
+                step = (1 / 60.0) / 0.25      # 排队变淡 / 轮到变亮:0.25 秒过渡
+                win.setAlphaValue_(min(target_alpha, a + step) if target_alpha > a else max(target_alpha, a - step))
+            else:
+                win.setAlphaValue_(target_alpha)   # 被挡、藏、到点淡出:照原来一步到位(10-14「立刻藏」)
+        if cs["ring_t0"] is not None:
+            if now - cs["ring_t0"] > RING_S:
+                cs["ring_t0"] = None
+            c.view.setNeedsDisplay_(True)
+        return idle
 
     class Ticker(NSObject):
         def spaceChanged_(self, _n):
             # 切桌面:带 owner 的光标下一帧马上重查遮挡(不等 0.2 秒一轮)
-            st["occ_t"] = 0.0
+            for c in curs.values():
+                c.st["occ_t"] = 0.0
 
         def tick_(self, _t):
             now = time.time()
@@ -614,32 +866,24 @@ def serve(label=None, color=None):
                 except BlockingIOError:
                     break
                 if len(msg) >= 3 and msg[0] in ("move", "click"):
-                    x, y = float(msg[1]), float(msg[2])
-                    # 10-14 可选第 4/5 段:名牌(URL 编码)、颜色 "r,g,b";不带就回到启动时的默认(老发法不受影响)
-                    lab = unquote(msg[3]) if len(msg) >= 4 and msg[3] != "-" else label
-                    col = _parse_color(msg[4]) if len(msg) >= 5 and msg[4] != "-" else None
-                    st["owner"] = unquote(msg[5]) if len(msg) >= 6 else None
-                    st["occluded"], st["occ_t"] = False, 0.0
-                    col = col or color
-                    if (lab, col) != (st["label"], st["color"]):
-                        st["label"], st["color"] = lab, col
-                        build_layers()
-                        view.setNeedsDisplay_(True)
-                    st["frm"] = st["cur"] or (x, y)
-                    st["to"], st["t0"], st["last"] = (x, y), now, now
-                    # C-1.3 弧线:控制点在中点往一侧偏(距离 × ARC_K),时长按距离算
-                    fx_, fy_ = st["frm"]
-                    d_ = math.hypot(x - fx_, y - fy_)
-                    st["dur"] = travel_s(fx_, fy_, x, y) if st["cur"] else 0.0
-                    side = 1 if (int(now * 1000) % 2) else -1
-                    off = min(ARC_MAX, d_ * ARC_K) * side
-                    nx_, ny_ = (-(y - fy_) / d_, (x - fx_) / d_) if d_ > 1 else (0.0, 0.0)
-                    st["ctl"] = ((fx_ + x) / 2 + nx_ * off, (fy_ + y) / 2 + ny_ * off)
-                    st["arrive_t"] = now + st["dur"]
-                    st["ring_t0"] = now + st["dur"] if msg[0] == "click" else st["ring_t0"]
-                    st["press_t0"] = now + st["dur"] if msg[0] == "click" else st["press_t0"]
-                elif msg and msg[0] == "hide":    # 10-14 SeeU:目标位置被挡/不在当前桌面 → 立刻藏,下次出现直接到位不滑过来
-                    st["cur"], st["ring_t0"], st["last"] = None, None, now - FADE_AFTER_S - 2
+                    on_move(msg, now)
+                elif msg and msg[0] == "hide":    # 10-14 SeeU:目标位置被挡/不在当前桌面 → 立刻藏;11-17 带光标名只藏那一个
+                    activity[0] = now
+                    if len(msg) >= 2:
+                        c = curs.get(unquote(msg[1]))
+                        if c:
+                            hide(c, now)
+                    else:
+                        for c in curs.values():
+                            hide(c, now)
+                elif len(msg) == 3 and msg[0] == "wait":     # 11-17:wait 光标名 1|0 —— 排队中打瞌睡 + 变淡
+                    activity[0] = now
+                    c = curs.get(unquote(msg[1]))
+                    if c and c.st["to"] is not None and c.st["cur"] is not None:
+                        on = msg[2] == "1"
+                        if on:
+                            c.st["wait_t"], c.st["last"] = now, now
+                        c.set_wait(on)
                 elif len(msg) == 3 and msg[0] == "glow":   # 10-14 屏幕边缘光圈:glow r,g,b 秒数
                     col = _parse_color(msg[1]) or st["glow_color"]
                     if not glows or st.get("glow_screens") != len(NSScreen.screens()):
@@ -690,58 +934,17 @@ def serve(label=None, color=None):
                         gw.setAlphaValue_(a)
                         if a > 0 and not gw.isVisible():
                             gw.orderFrontRegardless()
-            moving = False
-            if st["to"]:
-                p = min(1.0, (now - st["t0"]) / st["dur"]) if st["dur"] > 0 else 1.0
-                if OVERSHOOT > 0:                # 惯性:冲过一点再回(easeOutBack)
-                    q = p - 1
-                    e = q * q * ((OVERSHOOT + 1) * q + OVERSHOOT) + 1
-                else:
-                    e = 1 - (1 - p) ** 3
-                u = min(e, 1.15)
-                fx, fy = st["frm"]
-                tx, ty = st["to"]
-                kx, ky = st["ctl"] or ((fx + tx) / 2, (fy + ty) / 2)
-                nxt = ((1 - u) ** 2 * fx + 2 * (1 - u) * u * kx + u * u * tx,
-                       (1 - u) ** 2 * fy + 2 * (1 - u) * u * ky + u * u * ty)
-                vx = nxt[0] - st["cur"][0] if st["cur"] else 0.0
-                moving = p < 1.0
-                if nxt != st["cur"]:
-                    st["cur"] = nxt
-                    place(*nxt)
-                want = max(-TILT_MAX, min(TILT_MAX, vx * TILT_K)) if moving else 0.0
-                old_tilt = st["tilt"]
-                st["tilt"] += (want - st["tilt"]) * 0.18
-                if abs(st["tilt"]) < 0.002 and not moving:
-                    st["tilt"] = 0.0
-                if moving:
-                    breathe(False)
-                if st["tilt"] != old_tilt:
-                    set_tilt(st["tilt"])           # 只在移动/回正时每帧改一下图层角度,不重画
-                # 待机呼吸:停下 IDLE_AFTER_S 秒后交给系统动画(停多久呼吸多久,Python 不管)
-                if not moving and st["tilt"] == 0.0 and now - st["arrive_t"] >= IDLE_AFTER_S:
-                    breathe(True)
-                if st["press_t0"] is not None and now >= st["press_t0"]:
-                    st["press_t0"] = None
-                    press_now()
-            idle = now - st["last"]
-            # 10-14:两次动作之间窗口变了(用户开浏览器挡住、切桌面)也要自己藏,别等下一次动作
-            if st["owner"] and st["to"] and idle < FADE_AFTER_S + 1 and now - st["occ_t"] >= OCCLUDE_CHECK_S:
-                st["occ_t"] = now
-                st["occluded"] = not _owner_on_top(st["owner"], *st["to"])
-            target_alpha = 1.0 if idle < FADE_AFTER_S else max(0.0, 1 - (idle - FADE_AFTER_S))
-            if st["occluded"]:
-                target_alpha = 0.0
-            if st["to"] and abs(win.alphaValue() - target_alpha) > 0.01:
-                if target_alpha > 0 and (not st["shown"] or win.alphaValue() < 0.01):
-                    win.orderFrontRegardless()     # 从藏着到显示:顺带把窗口带到当前桌面
-                    st["shown"] = True
-                win.setAlphaValue_(target_alpha)
-            if st["ring_t0"] is not None:
-                if now - st["ring_t0"] > RING_S:
-                    st["ring_t0"] = None
-                view.setNeedsDisplay_(True)
-            if idle > IDLE_EXIT_S and now - st["glow_last"] > IDLE_EXIT_S and now > st["glow_until"] and not toasts:
+            last_any = activity[0]
+            for key in list(curs):
+                c = curs[key]
+                idle = step_cursor(c, now)
+                last_any = max(last_any, c.st["last"])
+                # 淡出完了、又过了一会:回收这个光标(别的任务的光标不受影响)
+                if idle > FADE_AFTER_S + 5 and c.win.alphaValue() < 0.01 and not c.st["waiting"]:
+                    retire(c)
+                    curs.pop(key, None)
+            relabel(now)
+            if now - last_any > IDLE_EXIT_S and now - st["glow_last"] > IDLE_EXIT_S and now > st["glow_until"] and not toasts:
                 NSApplication.sharedApplication().terminate_(None)
 
     app = NSApplication.sharedApplication()

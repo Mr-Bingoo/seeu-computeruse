@@ -66,6 +66,53 @@ def _load(strict=False):
         return {}
 
 
+LOCK = os.path.expanduser("~/.seeu/seeu_isee.lock")    # 11-16:改 I See 那几项时的文件锁(同密钥,不跟 SEEU_HOME)
+LOCK_WAIT_S = 5
+
+
+try:                     # 按「有哪个用哪个」选,不看 sys.platform(测试会把它换掉)
+    import fcntl as _fcntl
+except ImportError:      # Windows
+    _fcntl = None
+
+
+class _Locked:
+    """改设置里 I See 那几项(开 / 关 / 到期关)时拿的锁:几个进程同时改不会互相冲掉(到期自动关跟用户刚点开撞上,
+    复查提的)。最多等 LOCK_WAIT_S 秒,拿不到抛 RuntimeError(不无限等)。有 fcntl 用 flock(Mac),没有用 msvcrt.locking(Windows)。"""
+    def __enter__(self):
+        os.makedirs(os.path.dirname(LOCK), exist_ok=True)
+        self.f = open(LOCK, "a+b")
+        t0 = time.time()
+        while True:
+            try:
+                if _fcntl:
+                    _fcntl.flock(self.f.fileno(), _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+                else:
+                    import msvcrt
+                    self.f.seek(0)
+                    msvcrt.locking(self.f.fileno(), msvcrt.LK_NBLCK, 1)
+                return self
+            except OSError:
+                if time.time() - t0 > LOCK_WAIT_S:
+                    self.f.close()
+                    raise RuntimeError(_L("I See 的设置正被别的程序改着,等了几秒还没好,没改;过一会儿再试",
+                                          "Another program is changing the I See setting; gave up after a few seconds, try again shortly"))
+                time.sleep(0.05)
+
+    def __exit__(self, *exc):
+        try:
+            if _fcntl:
+                _fcntl.flock(self.f.fileno(), _fcntl.LOCK_UN)
+            else:
+                import msvcrt
+                self.f.seek(0)
+                msvcrt.locking(self.f.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        self.f.close()
+        return False
+
+
 def _save(d):
     tmp = SETTINGS + f".{os.getpid()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -163,7 +210,7 @@ def file_on(d):
 _FORGED_LOGGED = False
 
 
-def status():
+def status(_again=False):
     """{on, source(环境变量/设置文件), until(到期时间文字或 None)}。过期的顺手关掉并提醒一次。"""
     env = os.environ.get("SEEU_ISEE", "").strip().lower()
     if env in ("0", "off", "关", "false"):
@@ -185,11 +232,23 @@ def status():
     except ValueError:
         expired = True          # 11-16:到期时间写坏了按已过期(原来当没过期 = 一直开着)
     if expired:
-        d[KEY] = "关"
-        d.pop(KEY_UNTIL, None)
-        d.pop(KEY_PROOF, None)
-        _drop_secret()
-        _save(d)
+        try:
+            with _Locked():
+                d2 = _load()
+                if d2.get(KEY_PROOF) != d.get(KEY_PROOF):
+                    # 读到之后有人刚开 / 关过(锁外读的是旧的)→ 不动它,按现在的内容重新算一次
+                    changed = True
+                else:
+                    changed = False
+                    d2[KEY] = "关"
+                    d2.pop(KEY_UNTIL, None)
+                    d2.pop(KEY_PROOF, None)
+                    _drop_secret()
+                    _save(d2)
+        except RuntimeError:
+            return dict(on=False, source="设置文件", until=until, expired=True)     # 拿不到锁:按到期算关,不写
+        if changed:            # 只重算一次,别来回转
+            return status(True) if not _again else dict(on=False, source="设置文件", until=until)
         _expired_notice()
         return dict(on=False, source="设置文件", until=until, expired=True)
     return dict(on=True, source="设置文件", until=until)
@@ -293,12 +352,13 @@ def on(hours=DEFAULT_HOURS, by=None):
         raise PermissionError(_L("I See 只能你自己开(悬浮窗上的 I See 按钮,或自己在终端里敲命令),AI 不能替你开",
                                  "Only you can turn on I See (the I See button on the overlay, or typing the command in a terminal yourself)"))
     hours = float(hours)
-    d = _load(strict=True)
-    d[KEY] = "开"
-    d[KEY_UNTIL] = time.strftime(FMT, time.localtime(time.time() + hours * 3600)) if hours else None
-    nonce = os.urandom(8).hex()
-    d[KEY_PROOF] = nonce + "." + _proof(d[KEY_UNTIL], nonce, _secret(create=True))
-    _save(d)
+    with _Locked():
+        d = _load(strict=True)
+        d[KEY] = "开"
+        d[KEY_UNTIL] = time.strftime(FMT, time.localtime(time.time() + hours * 3600)) if hours else None
+        nonce = os.urandom(8).hex()
+        d[KEY_PROOF] = nonce + "." + _proof(d[KEY_UNTIL], nonce, _secret(create=True))
+        _save(d)
     log("on", hours=hours)
     try:
         os.remove(LIVE)          # 新一轮从 0 计
@@ -308,12 +368,13 @@ def on(hours=DEFAULT_HOURS, by=None):
 
 
 def off():
-    d = _load(strict=True)
-    d[KEY] = "关"
-    d.pop(KEY_UNTIL, None)
-    d.pop(KEY_PROOF, None)
-    _save(d)
-    _drop_secret()
+    with _Locked():
+        d = _load(strict=True)
+        d[KEY] = "关"
+        d.pop(KEY_UNTIL, None)
+        d.pop(KEY_PROOF, None)
+        _save(d)
+        _drop_secret()
     log("off")
 
 

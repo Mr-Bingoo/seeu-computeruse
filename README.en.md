@@ -112,7 +112,7 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 
 - Claude, Codex, Cursor, Trae, VS Code: connected by the `install` command above.
 - WorkBuddy, Doubao: create a custom connector (local / STDIO) in their own settings and enter `python3 -m seeu mcp`; the same works for any other MCP client.
-- Windows only: Claude can be connected with one command but hasn't been tried in real use yet; for Doubao, install the x64 build for now (as of November 2026), the ARM build can't connect yet.
+- Windows only: Claude can be connected with one command, but this hasn't been tested yet; for Doubao, install the x64 build for now (as of November 2026), the ARM build can't connect yet.
 - Mac only: if you prefer skill marketplaces, `npx skills add Mr-Bingoo/seeu-computeruse` also works. It only installs the instructions for the AI; the first time you use it, the AI follows them to install and connect SeeU.
 
 **Qwen (千问)**: Qwen only accepts tools started with `npx`, so install [Node.js](https://nodejs.org) first.
@@ -122,7 +122,7 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 3. Mac only: grant "千问" (Qwen) Accessibility and Screen & System Audio Recording, then quit and reopen Qwen.
 
 - The first time you add the connection, Qwen often shows "connection failed" (连接失败) or does nothing; restart Qwen and open the Connections page again.
-- Windows only: the installer on Qwen's site is an older build without the "Work" page. After installing, click "New version" (新版本) at the top right to update (possibly twice), then restart Qwen until "Daily / Work" (日常 / 工作) appears at the top left.
+- Windows only: the installer on Qwen's site (as of November 2026) is an older build without the "Work" page. After installing, click "New version" (新版本) at the top right to update (possibly twice), then restart Qwen until "Daily / Work" (日常 / 工作) appears at the top left.
 - Qwen asks you to click "Allow" every time it opens an app itself, so in Qwen SeeU adds one more tool that opens apps in the background: the app opens behind your current window and the app you are using stays in front. Terminals, script apps, password apps, System Settings, browsers (use SeeU's web tools for pages), other AI clients and remote-access apps are not opened for you.
 
 ## Update and remove
@@ -189,7 +189,7 @@ Almost every model maker is building stronger "AI operates the computer" abiliti
 
 1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands.)
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
-3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for anything private first.
+3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
 <!-- /sync:notes -->
 
 ## Docs

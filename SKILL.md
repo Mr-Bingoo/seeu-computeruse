@@ -66,6 +66,9 @@ Every action prints one result line (in Python: `outcome` in the returned dict):
 | `partial` | Only part of the text was typed | `see` what's in the field, then finish typing or clear and retype |
 | `refused` | Blocked by a safety rule or the allow list, or the target window is on another desktop (borrowing the mouse would switch the user there) | **Stop**, pass the reason line to the user, don't try to work around it (allow list: ask the user whether to add the site, see web pages above; other desktop: ask the user to switch there or move the window here, then `see` again) |
 | `failed` | Error | Read the error; if the target wasn't found, `see` first |
+| `busy` | Another task is using the same app and the wait ran out (several AI tasks at once) | Not blocked: wait a few seconds and retry, or do something else first; if it keeps happening, tell the user |
+
+With several AI tasks at once, a few results carry a `code` that says what to do next: `focus_moved` (another task changed the app's focus after your last step) → for typing, repeat with the field's number as target (SeeU taps it and types in one go); for a key press, tap the spot first, then press · `stale` (you waited in the queue and the window moved or changed) → `see` again before tapping · `wrong_window` (the focused field is in another window of the same app) → tap the field in the right window first · `busy_after_try` (outcome `ineffective`: the background route already ran once, the real-mouse step couldn't get a turn) → `see` before repeating, it may already have worked.
 The reason line has three parts — where it is stuck, why, what to do. Pass it to the user in plain language.
 
 ## 5. When stuck

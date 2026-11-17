@@ -185,6 +185,8 @@ Edge、Arc 这类 Chrome 内核的浏览器，大概率也能按上面 Chrome �
 - 现成的入口：`seeu/stealth.py`（一句话启动、输入前自检、退出）。
 
 ## I See · 我知风险模式
+标语「You see SeeU, I know you see. I See.」倒过来读，最先撞见的是 I See：暂时不管过程，先拿结果。这个模式就是这样。
+
 **它是什么**：开了以后，SeeU 中途不再停下来问你，遇到问题自动换办法接着做，做不到的先记下来跳过，最后给你一份报告：做成了什么、跳过了什么和原因、打开什么权限能多做。名字和 SeeU 是一对：SeeU 是「看着你操作」，I See 是「我知道了，放手去做」。目前只管网页操作这一块。
 
 **风险先说清**：
@@ -247,7 +249,7 @@ Edge、Arc 这类 Chrome 内核的浏览器，大概率也能按上面 Chrome �
 
 1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
 2. 开完或改完授权，要完全退出 AI 客户端再打开，才会生效。
-3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有隐私。
+3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有涉及个人隐私。
 <!-- /sync:notes -->
 
 ### 补充说明

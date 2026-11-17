@@ -223,11 +223,35 @@ def ensure_serve():
         time.sleep(0.1)
 
 
+def who_name(who=None):
+    """任务名:调用方传的 > 环境变量 SEEU_PROJECT(项目)> SEEU_TASK_DISPLAY(11-17 C-2.6,同 Mac:SeeU 调度起的显示名,
+    AI 会话叫 Claude、Claude2…,跟排队提示、光标名牌对得上)。没有就 ""。"""
+    return str(who if who is not None else (os.environ.get("SEEU_PROJECT") or os.environ.get("SEEU_TASK_DISPLAY") or "")).strip()
+
+
 def browser(app, step="", who=None, note="", web=False, wid=0):
     """note = 这一步的原因(AI 填的 why),卡片上「正在…」下面一行灰字。
     web = 这是 SeeU 专用浏览器里的网页任务(按钮栏上才出 I See 按钮;I See 只管这条路,同 Mac「只在浏览器任务里出现」)。"""
     ensure_serve()
-    send("browser", app, step, who or os.environ.get("SEEU_PROJECT") or "", note or "", bool(web), int(wid or 0))
+    send("browser", app, step, who_name(who), note or "", bool(web), int(wid or 0))
+
+
+def queue(app, on=True, pos=1, holder="", who=None, color=None):
+    """11-17 C-2.6(同 Mac watch_window.queue):这个任务在排队等 app(on=False 排完了)。pos = 排第几,holder = 谁占着,
+    color = 任务光标色 "#RRGGBB"。岛把它放进下段「排队中」(变暗、右边 zZ)。旧版显示进程不认识,直接忽略。"""
+    if os.environ.get("SEEU_NO_WATCH") == "1" or sys.platform != "win32":
+        return
+    if on:
+        ensure_serve()
+    send("queue", str(app or ""), 1 if on else 0, int(pos or 1), str(holder or ""), who_name(who), str(color or ""))
+
+
+def tint(color, who=None):
+    """11-17:这个任务的光标颜色("#RRGGBB"),岛上那行圆点跟它一致。没有任务名不发,不拉起显示进程。"""
+    w = who_name(who)
+    if not w or not color or os.environ.get("SEEU_NO_WATCH") == "1" or sys.platform != "win32":
+        return
+    send("tint", w, str(color))
 
 
 def mark(fx, fy, wid=0):
@@ -245,7 +269,7 @@ def borrow(app="", kind="mouse"):
 
 def stuck(app, step, why, todo, who=None):
     ensure_serve()
-    send("stuck", app, step, why, todo, who or os.environ.get("SEEU_PROJECT") or "")
+    send("stuck", app, step, why, todo, who_name(who))
 
 
 # ───────── 每一帧画什么(纯计算,Mac 上也能离线测) ─────────
@@ -687,6 +711,39 @@ def task_key(who, app):
     return (who or "").strip() or (app or "").strip() or "SeeU"
 
 
+Q_ALPHA = 0.55       # 排队那几行整体的淡度(同 Mac,用户 11-17 在小样里定)
+Q_FOLD = 2           # 排队超过这么多行就折成「还有 N 个在排队」
+
+
+def hex_rgb(h):
+    """"#RRGGBB" → (r, g, b) 0~255;认不出返回 None。"""
+    try:
+        h = str(h).strip().lstrip("#")
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) if len(h) == 6 else None
+    except ValueError:
+        return None
+
+
+def queued(t):
+    """11-17 C-2.6(同 Mac):在排队等别的任务用完同一个窗口(借鼠标 / 卡住优先,不算排队)。"""
+    return bool(t.get("queued")) and not t.get("borrow") and not t.get("why")
+
+
+def q_label():
+    return "Queued" if is_en() else "排队中"
+
+
+def q_detail(t):
+    """排队行的小字:第几 · 等哪个程序。"""
+    q = t.get("queued") or {}
+    return ("#%d · waiting for %s" if is_en() else "第 %d · 等 %s") % (int(q.get("pos") or 1), q.get("app") or "")
+
+
+def zz_alpha(tm):
+    """右侧 zZ 的明暗:3 秒一个来回,1 → 0.4 → 1(同 Mac:按绝对时间算,重画不会从头播)。"""
+    return 0.7 + 0.3 * math.cos(2 * math.pi * (tm % 3.0) / 3.0)
+
+
 def alive_tasks(tasks, now):
     """还算在跑的任务:TASK_KEEP_S 内有动静,或卡住了在等人处理(同 Mac)。顺手把借鼠标的状态算出来。"""
     out = []
@@ -705,7 +762,7 @@ def ordered(alive, now, ost):
             and not (a[0].get("borrow") or a[0].get("why")) and not pick.get(a[0]["key"], 0) > pick.get(cur["key"], 0):
         a.remove(cur)
         a.insert(0, cur)
-    a.sort(key=lambda t: (not t.get("borrow"), not t.get("why")))
+    a.sort(key=lambda t: (not t.get("borrow"), not t.get("why"), queued(t)))   # 借鼠标 > 卡住 > 最近有动作 > 排队中(排队的永远不上顶)
     if a and a[0]["key"] != ost.get("top"):
         ost["top"], ost["top_since"] = a[0]["key"], now
     return a
@@ -721,6 +778,8 @@ def t_verb(t):
         return tr(BORROW_TEXT.get(t["borrow"], BORROW_TEXT["mouse"])[0])
     if t.get("why"):
         return stuck_line(t["why"])
+    if queued(t):
+        return q_label()
     step = (t.get("step") or "").strip()
     step = step[2:] if step.startswith("正在") else step
     return tr_step(step) if step else tr("等下一步")
@@ -729,6 +788,8 @@ def t_verb(t):
 def t_headline(t):
     if t.get("borrow") or t.get("why"):
         return t_verb(t)
+    if queued(t):            # 全都在排队时顶卡写清楚排第几、等谁(同 Mac)
+        return q_label() + " · " + q_detail(t)
     step = (t.get("step") or "").strip()
     step = step[2:] if step.startswith("正在") else step
     return doing(step) if step else tr("等下一步")
@@ -751,7 +812,7 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
     dark = theme == "dark"
     sub = 0.72 if dark else 0.6
     lead, rest = a[0], a[1:]
-    col = lambda t_: ORANGE if t_.get("borrow") else T["dot"]   # noqa: E731   卡住不靠红色,靠文字说(同 Mac 10-27)
+    col = lambda t_: ORANGE if t_.get("borrow") else (t_.get("color") or T["dot"])   # noqa: E731   卡住不靠红色,靠文字说(同 Mac 10-27);11-17 圆点用任务光标色
     notes = []
     if lead.get("borrow"):
         notes.append(tr(BORROW_TEXT.get(lead["borrow"], BORROW_TEXT["mouse"])[1]))
@@ -761,10 +822,16 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
         notes.append(tr(ISEE_NOTE))
     steps = [x for x in (lead.get("steps") or [])[1:3] if x]
     card_h = 14 + 16 + 28 + 20 * len(notes) + (18 * len(steps) + 8 if steps else 0) + 8
+    qrest = sorted((r_ for r_ in rest if queued(r_)), key=lambda r_: (r_.get("queued") or {}).get("t", 0))   # 11-17:排队的放下段,先排的在前
+    rest = [r_ for r_ in rest if not queued(r_)]
+    nq = len(qrest) + (1 if queued(lead) else 0)
     more_row = len(rest) > MAX_ROWS
     fold = more_row and not ui.get("more")
     shown = rest[:MAX_ROWS] if fold else rest[:MAX_ROWS_ALL]
-    HH = TB_H + card_h + 6 + len(shown) * 36 + 4 + ((12 if fold else 26) if more_row else 0)
+    qfold = len(qrest) > Q_FOLD and not ui.get("qmore")
+    qshown = qrest[:1] if qfold else qrest[:MAX_ROWS_ALL]
+    q_h = (20 + 36 * (len(qshown) + (1 if qfold else 0)) + (26 if (not qfold and len(qrest) > Q_FOLD) else 0)) if qrest else 0
+    HH = TB_H + card_h + 6 + len(shown) * 36 + 4 + ((12 if fold else 26) if more_row else 0) + q_h
     W = ISLAND_W
     capw = int(29 + measure("I See" if isee_on else "SeeU", 14.5, True) + 14 + 0.5)
     w = capw + (W - capw) * k
@@ -791,7 +858,10 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
                              "card", ui.get("mouse"))     # 岛上点「看画面」= 单看顶上那个任务(同 Mac)
         else:                                     # 平时顶栏写「SeeU · N 个任务」,开着的开关在角上留个小标记
             prims.append(("dot", bx + 18, cy, 4, _a(col(lead), A)))
-            prims.append(("txt", bx + 30, cy, ("SeeU · %d tasks" if is_en() else "SeeU · %d 个任务") % len(a), 12.5, True, _a(ink, A * sub), "l"))
+            cap = ("SeeU · %d tasks" if is_en() else "SeeU · %d 个任务") % len(a)
+            if nq:
+                cap += (" · %d queued" if is_en() else " · 排队 %d") % nq
+            prims.append(("txt", bx + 30, cy, cap, 12.5, True, _a(ink, A * sub), "l"))
             mx = bx + W - 16
             if light != "off":
                 _icon_light(prims, mx, cy, light, ink, a1)
@@ -844,8 +914,60 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
             prims.append(("txt", bx + W - 24, mid, t_ago(r_, now), 11, False, _a(ink, A * sub * 0.8), "r"))
             hits.append(("more" if last_fold else "row:" + r_["key"], bx, ry, W, 32 + (12 if last_fold else 0)))
             ry += 36
+        if qrest:
+            if fold:
+                ry += 12                          # 叠着的两层露在下面,让开
+            ry = _draw_queue(prims, hits, qshown, qfold, len(qrest), bx, ry, W, tm, ink, sub, row_a, A, measure, box, col)
     return dict(shape=(x, y, w, h, r), prims=prims, hits=hits, card=(CW - M - W, y, W, HH), height=HH,
                 close=next(((hx, hy, hw, hh) for nm, hx, hy, hw, hh in hits if nm == "collapse"), None))
+
+
+def _draw_queue(prims, hits, qshown, qfold, nq, bx, ry, W, tm, ink, sub, row_a, A, measure, box, col):
+    """11-17 C-2.6 岛下段「排队中」(同 Mac draw_queue,用户在小样里定):分隔线 + 一行一个,整行变暗;
+    最右边(正在做的行写「刚刚」的那一栏)写 zZ,3 秒轻轻一亮一暗;超过 Q_FOLD 个折成「还有 N 个在排队」,点开看全部。返回画完的 y。"""
+    lab = q_label()
+    lw = measure(lab, 10.5, False)
+    mid = ry + 10
+    for x0, x1 in ((16, W / 2 - lw / 2 - 8), (W / 2 + lw / 2 + 8, W - 16)):
+        if x1 > x0:
+            prims.append(("line", bx + x0, mid, bx + x1, mid, _a(ink, A * 0.25 * sub), 1.0))
+    prims.append(("txt", bx + W / 2, mid, lab, 10.5, False, _a(ink, A * sub * 0.75), "c"))
+    ry += 20
+    qa = Q_ALPHA
+    za = zz_alpha(tm)
+    for r_ in qshown:
+        prims.append(("rr", bx + 10, ry, W - 20, 32, 10, box(row_a * qa)))
+        m = ry + 16
+        prims.append(("dot", bx + 24, m, 4, _a(col(r_), A * qa)))
+        nm = fit(r_.get("who") or r_.get("app") or "SeeU", 12.5, False, 50, measure)
+        nw = min(measure(nm, 12.5, False), 50)
+        prims.append(("txt", bx + 34, m, nm, 12.5, False, _a(ink, A * sub * qa), "l"))
+        show_lab = not is_en()                    # 中文照小样写「排队中」;英文行太挤,分隔线已写 Queued 就不重复(同 Mac)
+        vw = measure(lab, 12.5, True) if show_lab else -8
+        if show_lab:
+            prims.append(("txt", bx + 34 + nw + 8, m, lab, 12.5, True, _a(ink, A * qa), "l"))
+        dx = 34 + nw + 8 + vw + 8
+        prims.append(("txt", bx + dx, m, fit(q_detail(r_), 11.5, False, max(0, W - dx - 58), measure), 11.5, False,
+                      _a(ink, A * sub * qa), "l"))       # 太长截成「…」,右边留给 zZ
+        prims.append(("txt", bx + W - 24, m, "zZ", 11, True, _a(ink, A * sub * 0.8 * za), "r"))
+        hits.append(("row:" + r_["key"], bx, ry, W, 32))
+        ry += 36
+    if not qfold and nq > Q_FOLD:                 # 点开后要能收回
+        fl = tr("折叠 ⌃")
+        bw = measure(fl, 11, True) + 18
+        prims.append(("rr", bx + W - 10 - bw, ry + 2, bw, 20, 10, box(row_a * 1.6)))
+        prims.append(("txt", bx + W - 10 - bw / 2, ry + 12, fl, 11, True, _a(ink, A * sub), "c"))
+        hits.append(("qmore", bx + W - 14 - bw, ry, bw + 14, 24))
+        ry += 26
+    if qfold:
+        prims.append(("rr", bx + 10, ry, W - 20, 32, 10, box(row_a * qa)))
+        m = ry + 16
+        prims.append(("dot", bx + 24, m, 4, _a((140, 140, 148), A * qa)))
+        more = ("%d more queued" if is_en() else "还有 %d 个在排队") % (nq - 1)
+        prims.append(("txt", bx + 34, m, fit(more, 12.5, False, W - 120, measure), 12.5, False, _a(ink, A * sub * qa), "l"))
+        hits.append(("qmore", bx, ry, W, 32))
+        ry += 36
+    return ry
 
 
 def glow_wanted(light, mode):
@@ -939,6 +1061,7 @@ def serve():
               h_tgt=None, h_from=None, h_t0=-9.0, h_show=None, shim=False, solo=None, multi=False,
               w_tgt=None, w_from=None, w_show=None, rs=None, pic_on=False, view_geo=None)
     tasks = {}                # 任务名 -> 状态(多任务岛用;只有一个在跑时照旧是单任务卡片)
+    tint_cache = {}           # 11-17:任务还没上岛时先收到的光标色,上岛时用
     ost = {}                  # 岛上谁排在顶上(ordered() 用)
     glow = dict(hwnd=None, mem=None, color=None, until=0.0, env=0.0, shown=False, alpha=-1, last=0.0, t=time.time())
     pos = wt.POINT()          # 浮标窗口(整块画布)现在在屏幕哪,每帧由悬浮标位置 cap + 展开方式算出来
@@ -1258,7 +1381,7 @@ def serve():
         if st["borrow"]:
             info = dict(info, borrow=st["borrow"])
         lk = min(1.0, (now - st["light_t0"]) / 0.22) if st["light_open"] else 0.0
-        ui = dict(light=st["light"], light_k=ease(lk) if lk < 1 else 1.0, why=st["why"], isee=st["isee"], more=st["more"], mouse=st.get("mouse"))
+        ui = dict(light=st["light"], light_k=ease(lk) if lk < 1 else 1.0, why=st["why"], isee=st["isee"], more=st["more"], qmore=st.get("qmore"), mouse=st.get("mouse"))
         al = alive_tasks(tasks, now)
         if st["solo"] and not any(t_["key"] == st["solo"] for t_ in al):
             st["solo"] = None                     # 单看的那个任务结束了:回到岛
@@ -1440,6 +1563,8 @@ def serve():
             toggle(False)
         elif name == "more":                       # 岛:叠着的那几行展开 / 折叠
             st["more"] = not st["more"]
+        elif name == "qmore":                      # 11-17:岛下段排队的那几行展开 / 折叠
+            st["qmore"] = not st.get("qmore")
         elif name.startswith("row:"):              # 岛:点下面某一行 → 换到顶上
             ost.setdefault("pick", {})[name[4:]] = time.time()
         elif name == "light":
@@ -1472,8 +1597,10 @@ def serve():
             key = task_key(who, app)
             t_ = tasks.get(key)
             if t_ is None:
-                t_ = tasks[key] = dict(key=key, who=who or "", app=app or "SeeU", step="", steps=[], born=now, last=now)
+                t_ = tasks[key] = dict(key=key, who=who or "", app=app or "SeeU", step="", steps=[], born=now, last=now,
+                                       color=tint_cache.pop(key, None))
             t_["who"], t_["app"], t_["last"] = who or "", app or "SeeU", now
+            t_["queued"] = None                   # 有别的动作 = 不在排队了(同 Mac)
             return t_
 
         if m[0] == "browser" and len(m) >= 3:
@@ -1515,6 +1642,35 @@ def serve():
             if not st["open"]:
                 st["borrow_auto"] = True
                 toggle(True)
+        elif m[0] == "queue" and len(m) >= 3:     # 11-17 C-2.6:[queue, 程序, 开/关, 排第几, 谁占着, 任务名, 颜色](同 Mac)
+            who_, app_ = (str(m[5]) if len(m) > 5 else ""), str(m[1] or "")
+            key = task_key(who_, app_)
+            t_ = tasks.get(key)
+            on = bool(m[2])
+            if on:
+                if t_ is None:
+                    t_ = tasks[key] = dict(key=key, who=who_, app=app_ or "SeeU", step="", steps=[], born=now, last=now,
+                                           color=tint_cache.pop(key, None))
+                t_["queued"] = dict(app=app_, pos=int(m[3]) if len(m) > 3 and isinstance(m[3], (int, float)) else 1,
+                                    holder=str(m[4]) if len(m) > 4 else "", t=now)
+                t_["last"] = now
+                st["last_msg"] = now
+            elif t_ is not None:
+                t_["queued"] = None
+                if not t_.get("step") and not t_.get("steps") and not t_.get("wid") and not t_.get("why"):
+                    tasks.pop(key, None)          # 只排过队、没动过手(排不上就走了)→ 直接从岛上撤,别挂着「等下一步」(同 Mac 复查 11-17)
+            if t_ is not None and len(m) > 6 and hex_rgb(m[6]):
+                t_["color"] = hex_rgb(m[6])
+        elif m[0] == "tint" and len(m) >= 3:      # 11-17:任务光标色(只记颜色,不算动作:不续命、不改步骤)
+            key = task_key(str(m[1]), "")
+            c_ = hex_rgb(m[2])
+            if c_:
+                if key in tasks:
+                    tasks[key]["color"] = c_
+                else:
+                    tint_cache[key] = c_
+                    if len(tint_cache) > 32:
+                        tint_cache.clear()
         elif m[0] == "mark" and len(m) >= 3:          # 点击位置:记在点的那个窗口的任务上(没说是哪个窗口就记在当前任务上)
             wid = int(m[3]) if len(m) > 3 and isinstance(m[3], (int, float)) else 0
             t_ = next((x for x in tasks.values() if wid and x.get("wid") == wid), None) or st["info"]

@@ -83,6 +83,15 @@ How to work (look → act → look again):
    ineffective = the screen did not change, try one more time with a different target or wording;
    partial = only part of the text was typed; refused = blocked by a safety rule or the allow list — stop and pass
    the reason to the user, do not try to work around it (allow list: ask the user whether to add the site, see 5); failed = an error occurred, call seeu_see first;
+   busy = another task is using the same app right now and the wait ran out — not blocked: wait a few seconds and
+   retry, or do something else first; if it keeps happening, tell the user several tasks are using that app;
+   failed with code focus_moved = another task changed the app's focus after your last step: for seeu_type redo it passing
+   target (the field's number) so SeeU taps the field and types in one go; for seeu_press tap the spot first, then press;
+   failed with code stale = you waited in the queue and the window moved or changed meanwhile: seeu_see again before tapping;
+   failed with code wrong_window = the focused field is in another window of that app: tap the field in the right window first;
+   ineffective with code busy_after_try = the background route was already tried once (it may have worked): seeu_see before
+   repeating it. If you work with several sub-agents at once, always
+   pass target to seeu_type: sub-agents share one SeeU task and are not queued against each other;
    ask_user = this step needs to borrow the user's real mouse/keyboard for a few seconds and the setting says to ask:
    ask the user to choose "just this once" / "allow for this session" / "refuse", then repeat the same call with
    allow_real="once" or "auto"; if they refuse, stop and tell them where you're stuck.
@@ -301,7 +310,7 @@ def _allow_hint(r):
 
 def _result_text(r):
     lines = [f"outcome: {r.get('outcome')}"]
-    for k, label in (("route", "route"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("step", "stuck at"),
+    for k, label in (("route", "route"), ("code", "code"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("step", "stuck at"),
                      ("xy", "clicked at"), ("state", "page state")):
         if r.get(k):
             lines.append(f"{label}: {to_en(str(r[k]))}")
@@ -408,11 +417,23 @@ def do_type(a):
         r = web.type(app, _target(a), a["text"], tab=_tab(a.get("tab")))
     else:
         if a.get("target") not in (None, ""):
-            # 只后台点一下输入框(点框常常画面不变 → ineffective 也照打,打字自己会核实);
-            # 不走真鼠标那条路:那条要把 App 拉到前台(藏着的 App 会露出来、抢用户前台)
-            tr = seeu.tap(app, _target(a), real=False)
-            if tr.get("outcome") in ("failed", "refused"):
-                return ["Tapping the field failed:\n" + _result_text(tr)], True
+            # 外部评审 11-17 第 1 条:点框 + 打字在一次占用里做完,中间不让别的任务插进来抢焦点
+            from seeu import sched
+            tg = _target(a)
+            try:
+                # 复查 11-17(C-2.7):按位置点框时,排完队先核对画面 / 窗口位置(跟单独点一样),变了就不点不打
+                with sched.hold(app, pt=tg if isinstance(tg, tuple) else None):
+                    # 只后台点一下输入框(点框常常画面不变 → ineffective 也照打,打字自己会核实);
+                    # 不走真鼠标那条路:那条要把 App 拉到前台(藏着的 App 会露出来、抢用户前台)
+                    tr = seeu.tap(app, tg, real=False)
+                    if tr.get("outcome") in ("failed", "refused", "busy"):     # 11-17:排不上队也别接着打(框没点上,字会打到别处)
+                        return ["Tapping the field failed:\n" + _result_text(tr)], tr.get("outcome") not in ("busy",)
+                    r = _remember_ask(a, seeu.type(app, a["text"], enter=bool(a.get("enter")), allow=_allow(a)))
+            except sched.Busy as ex:
+                r = dict(outcome="busy", code="busy", reason=str(ex), queue=ex.info)
+            except sched.Stale as ex:
+                r = dict(outcome="failed", code="stale", reason=str(ex), queue=ex.info)
+            return [_result_text(r)], r.get("outcome") in ("failed", "refused")
         r = _remember_ask(a, seeu.type(app, a["text"], enter=bool(a.get("enter")), allow=_allow(a)))
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
@@ -469,6 +490,12 @@ def do_open_app(a):
         return ["outcome: refused\nreason: seeu_open_app is not available in this client — open the app the usual way"], True
     from seeu import openapp
     r = openapp.open_app(a["app"])
+    if r.get("outcome") in ("delivered", "unverified"):
+        try:            # 外部评审 11-17:开 App 也会动焦点,记成「这个任务最后动过它」
+            from seeu import sched
+            sched.mark_focus(r.get("name") or a["app"])
+        except Exception:   # noqa: BLE001
+            pass
     txt = _result_text(r)
     if r.get("name"):
         txt += f"\napp: {r['name']}"
@@ -731,6 +758,13 @@ def handle(msg):
         return None
     if method == "initialize":
         want = params.get("protocolVersion")
+        try:            # 11-17 多任务调度:这个服务进程 = 一个任务;名字用客户端报的(悬浮标、排队提示里看得到)
+            os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")
+            ci = params.get("clientInfo") or {}
+            if isinstance(ci, dict) and ci.get("name"):
+                os.environ["SEEU_TASK_CLIENT"] = str(ci["name"])[:40]   # 显示名由 sched 起(Claude、Claude2…,同名自动编号)
+        except Exception:   # noqa: BLE001
+            pass
         res = {"protocolVersion": want if want in PROTOCOLS else PROTOCOLS[-1],
                "capabilities": {"tools": {}},
                "serverInfo": {"name": "seeu", "version": VERSION},
@@ -758,6 +792,7 @@ def _wire(out):
 
 
 def main():
+    os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 11-17:同一个 AI 会话的几步算同一个任务
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
     os.dup2(2, 1)                       # 之后 fd 1(含子进程)都进 stderr
     sys.stdout = sys.stderr

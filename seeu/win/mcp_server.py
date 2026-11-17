@@ -104,7 +104,14 @@ How to work (look → act → look again):
 4. Outcomes: delivered = done and verified; unverified = done but could not be verified, check with seeu_see;
    ineffective = nothing changed, try once more with a different target; partial = only part of the text was typed;
    refused = blocked by a safety rule or the user is busy — stop and pass the reason to the user, do not work around it;
-   failed = an error, call seeu_see first; ask_user = the next fallback borrows the user's real mouse/keyboard (or the
+   failed = an error, call seeu_see first;
+   busy = another task is using the same window (or borrowing the mouse) right now and the wait ran out — not blocked:
+   wait a few seconds and retry, or do something else first; if it keeps happening, tell the user several tasks are using it;
+   failed with code stale = you waited in the queue and the window moved or changed meanwhile: seeu_see again before clicking;
+   failed with code focus_moved = another task changed the window's focus after your last step: redo it passing target
+   (the field's number) so SeeU clicks the field and types in one go. With several sub-agents at once, always pass target
+   to seeu_type / seeu_press: sub-agents share one SeeU task and are not queued against each other;
+   ask_user = the next fallback borrows the user's real mouse/keyboard (or the
    foreground for ~0.2 s) and the setting says to ask: ask "just this once" / "allow for this session" / "refuse", then
    repeat the same call with allow_real="once" or "auto"; if they refuse, stop and say where you're stuck.
 5. If the same step has no effect twice in a row, stop and tell the user where you are stuck and what the screen shows.
@@ -341,7 +348,7 @@ def _target(a, need=True):
 
 def _result(r):
     lines = [f"outcome: {r.get('outcome')}"]
-    for k, label in (("route", "route"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("xy", "clicked at"),
+    for k, label in (("route", "route"), ("code", "code"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("xy", "clicked at"),
                      ("enter", "return key"), ("how", "how")):
         if r.get(k):
             lines.append(f"{label}: {en(r[k])}")
@@ -615,6 +622,12 @@ def do_open_app(a):
         return ["outcome: refused\nreason: seeu_open_app is not available in this client — open the app the usual way"], True
     from seeu.win import openapp
     r = openapp.open_app(a["app"])
+    if r.get("outcome") in ("delivered", "unverified"):
+        try:            # 外部评审 11-17:开 App 也会动焦点,记成「这个任务最后动过它」
+            from seeu import sched
+            sched.mark_focus(a["app"])
+        except Exception:   # noqa: BLE001
+            pass
     txt = _result(r) + (f"\napp: {r['name']}" if r.get("name") else "") + (f"\nwindow: {r['window']}" if r.get("window") else "")
     return [txt], r.get("outcome") not in ("delivered", "unverified")
 
@@ -682,6 +695,12 @@ def _show_float(name, a):
         fs = float_step(name, a)
         if fs:
             from seeu.win import floatwin
+            try:            # 11-17:先分好任务显示名(Claude、Claude2…),浮标上这一行跟后面的排队、光标名牌是同一个任务
+                from seeu import sched
+                sched.touch()
+                floatwin.tint(sched.cursor_hex())
+            except Exception:   # noqa: BLE001
+                pass
             floatwin.browser(fs[0], fs[1], note=fs[2], web=fs[3], wid=_float_wid(a, fs[3]))
     except Exception:   # noqa: BLE001
         pass
@@ -739,6 +758,13 @@ def handle(msg):
         return None
     if method == "initialize":
         want = params.get("protocolVersion")
+        try:            # 11-17 C-2.6 多任务调度(同 Mac):这个服务进程 = 一个任务;名字用客户端报的(浮标、光标名牌、排队提示里看得到)
+            os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")
+            ci = params.get("clientInfo") or {}
+            if isinstance(ci, dict) and ci.get("name"):
+                os.environ["SEEU_TASK_CLIENT"] = str(ci["name"])[:40]   # 显示名由 sched 起(Claude、Claude2…,同名自动编号)
+        except Exception:   # noqa: BLE001
+            pass
         res = {"protocolVersion": want if want in PROTOCOLS else PROTOCOLS[-1], "capabilities": {"tools": {}},
                "serverInfo": {"name": "seeu", "version": VERSION}, "instructions": INSTRUCTIONS}
     elif method == "ping":
@@ -762,6 +788,7 @@ def _wire(out):
 
 
 def main():
+    os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 11-17:同一个 AI 会话的几步算同一个任务
     # Windows 的标准输入输出默认不是 UTF-8:协议一律按 UTF-8 收发
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1, newline="\n")
     os.dup2(2, 1)

@@ -23,6 +23,10 @@ class UserBusy(RuntimeError):
     """用户正在用电脑,SeeU 不借。"""
 
 
+class SeeUBusy(UserBusy):
+    """别的 SeeU 任务正在借鼠标键盘,排队等到上限还没轮到(11-17 C-2.6 多任务调度)。不是被拦:稍后重试。"""
+
+
 class MOUSEINPUT(ctypes.Structure):
     _fields_ = [("dx", wt.LONG), ("dy", wt.LONG), ("mouseData", wt.DWORD), ("dwFlags", wt.DWORD),
                 ("time", wt.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
@@ -144,10 +148,56 @@ def _tell_float(top, kind):
         pass
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def slot():
+    """借前台 / 借真鼠标那几百毫秒:SeeU 任务之间一次一个(sched.real_slot,最多等 15 秒,排不上抛 SeeUBusy)。
+    调度模块出问题就不排(跟原来一样)。"""
+    try:
+        from seeu import sched
+        cm = sched.real_slot()
+        cm.__enter__()
+    except Exception as ex:   # noqa: BLE001
+        if type(ex).__name__ == "Busy":
+            raise SeeUBusy(str(ex))
+        yield
+        return
+    try:
+        yield
+    finally:
+        cm.__exit__(None, None, None)
+
+
 def borrow(top, act, kind="mouse"):
     """让路 → 拉前台 → act() → 还原前台和鼠标。返回 dict(held_ms, back)。kind = 借的是鼠标还是键盘(浮标上的提示用)。"""
     if W.other_desktop(top):        # 先查再让路、再亮浮标:不借就别打扰
         raise RuntimeError(W.OTHER_DESKTOP)
+    # 11-17 C-2.6:几个 SeeU 任务同时要借真鼠标 → 排队,一次一个(同 Mac 的 sched.real_wait,最多等 15 秒)
+    try:
+        from seeu import sched
+        slot = sched.real_slot()
+    except Exception:   # noqa: BLE001 —— 调度模块出问题不挡借鼠标(跟原来一样)
+        slot = None
+    if slot is None:
+        return _borrow(top, act, kind)
+    try:
+        waited = slot.__enter__()
+    except sched.Busy as ex:
+        raise SeeUBusy(str(ex))
+    except Exception:   # noqa: BLE001
+        return _borrow(top, act, kind)
+    try:
+        r = _borrow(top, act, kind)
+        if waited and waited >= 0.5:
+            r["waited"] = waited
+        return r
+    finally:
+        slot.__exit__(None, None, None)
+
+
+def _borrow(top, act, kind):
     wait_idle()
     _tell_float(top, kind)
     fg0, c0 = W.foreground(), W.cursor()

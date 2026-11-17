@@ -219,6 +219,15 @@ def _cursor_style(mode):
     return "SeeU", _hex(st.get("后台模式颜色", ""), C.PURPLE)
 
 
+def _task_key():
+    """这个任务的光标名(sched 起的显示名:Claude、Claude2…;项目名照旧)。拿不到 = None(跟老写法共用一只)。"""
+    try:
+        from seeu import sched as _sc
+        return _sc.cursor_key()
+    except Exception:   # noqa: BLE001
+        return None
+
+
 def _cursor(h, kind, x, y, mode="bg"):
     """画光标并等它走到位(最多 1 秒,让波纹跟动作对上)。看不见就不画。"""
     if os.environ.get("SEEU_NO_CURSOR"):
@@ -232,10 +241,18 @@ def _cursor(h, kind, x, y, mode="bg"):
             from seeu.win import api
             top = W.top_of(int(api.user32.WindowFromPoint(_wt.POINT(int(x), int(y))) or 0))
             if top and int(top) != int(h) and W.cls(top) not in ("SeeUFloat", "SeeUCursor", "SeeUToast"):
-                C.hide()
+                C.hide(_task_key())          # 11-17:只藏自己这只(别的任务的光标不受影响)
                 return
         label, color = _cursor_style(mode)
-        t = C.show(kind, x, y, label, color, owner=int(h))
+        # 11-17 C-2.6(照 Mac):一个任务一只光标,key = 任务显示名;后台模式名牌按规则(只剩一只写 SeeU,多只写任务名)、颜色用任务色
+        key = _task_key()
+        if key and mode != "real":
+            try:
+                from seeu import sched as _sc
+                label, color = key, _sc.cursor_color(color)
+            except Exception:   # noqa: BLE001
+                pass
+        t = C.show(kind, x, y, label, color, owner=int(h), key=key, auto=mode != "real")
         time.sleep(min(1.0, t))
     except Exception:   # noqa: BLE001
         pass
@@ -586,7 +603,20 @@ def _gate(r, allow, what, h=None):
     return r
 
 
+SEEU_BUSY_MARK = "别的 SeeU 任务正在借用户的鼠标键盘"     # = sched.REAL_WHY 开头
+
+
+def _is_busy(why):
+    """_ladder 记下的错(「error:…」)是不是「用户在用电脑」/「别的 SeeU 任务在借鼠标」。"""
+    w = str(why)
+    return "用户正在用电脑" in w or SEEU_BUSY_MARK in w
+
+
 def _busy(r, ex):
+    from seeu.win import real as _rl
+    if isinstance(ex, getattr(_rl, "SeeUBusy", ())) or SEEU_BUSY_MARK in str(ex):   # 11-17:别的 SeeU 任务在借鼠标,排不上 → busy(稍后重试),不是被拦
+        r.update(outcome="busy", code="busy", reason=str(ex))
+        return r
     r.update(outcome="refused", code="user_busy", reason=str(ex))
     return r
 
@@ -625,7 +655,9 @@ def tap(app, target, allow=None, real=True, stale_check=True):
         def borrow():
             if not W.other_desktop(h):
                 _cursor(h, "click", x, y, "real")
-            info.update(inputs.borrow_front(h, lambda: uia.press(e)))
+            from seeu.win import real as _rl
+            with _rl.slot():                     # 复查 11-17 C-2.6:借前台也会动前台窗口,跟借真鼠标一起排队
+                info.update(inputs.borrow_front(h, lambda: uia.press(e)))
             if info.get("stolen") and not info.get("back"):
                 raise RuntimeError("按下了,但前台没还回去")
         steps.append(("借前台按下", borrow))
@@ -644,7 +676,7 @@ def tap(app, target, allow=None, real=True, stale_check=True):
         except real.UserBusy as ex:
             return _busy(r, ex)
         tried += r2["tried"]
-        busy = [t for t in r2["tried"] if "用户正在用电脑" in str(t[1])]
+        busy = [t for t in r2["tried"] if _is_busy(t[1])]
         if busy:
             r2.update(tried=tried, xy=r["xy"])
             return _busy(r2, busy[0][1][len("error:"):])
@@ -671,7 +703,7 @@ def _real_step(r, h, name, fn, near, allow, what):
         r2 = _ladder(h, [(name, lambda: info.update(fn()))], near=near)
     except real.UserBusy as ex:
         return _busy(r, ex)
-    busy = [t for t in r2["tried"] if "用户正在用电脑" in str(t[1])]
+    busy = [t for t in r2["tried"] if _is_busy(t[1])]
     r2["tried"] = list(r["tried"]) + r2["tried"]
     if busy:
         return _busy(r2, busy[0][1][len("error:"):])
@@ -828,7 +860,7 @@ def type(app, text, enter=False, at=None, allow=None):
             if bad:
                 return bad
         r0 = tap(app, (ax_, ay_), real=False, stale_check=False)
-        if r0["outcome"] == "refused":
+        if r0["outcome"] in ("refused", "busy"):     # 11-17:排不上队也别接着打(框没点上,字会打到别处)
             return r0
         time.sleep(0.2)
     if _is_browser(win):
@@ -904,7 +936,7 @@ def type(app, text, enter=False, at=None, allow=None):
                 return _busy(r, ex)
             r2["tried"] = r["tried"] + r2["tried"]
             r2["borrow"] = info
-            busy = [t for t in r2["tried"] if "用户正在用电脑" in str(t[1])]
+            busy = [t for t in r2["tried"] if _is_busy(t[1])]
             if busy:
                 return _busy(r2, busy[0][1][len("error:"):])
             r = r2
@@ -955,7 +987,7 @@ def press(app, key, *mods, at=None):
             if bad:
                 return bad
         r0 = tap(app, (ax_, ay_), real=False, stale_check=False)
-        if r0["outcome"] == "refused":
+        if r0["outcome"] in ("refused", "busy"):     # 11-17:排不上队也别接着打(框没点上,字会打到别处)
             return r0
         time.sleep(0.2)
     if _is_browser(win):
@@ -1167,3 +1199,70 @@ def main(argv=None):
         return _report(ex)
     _usage()
     return 2
+
+
+# ─────────────────────────────── 多任务调度(11-17 C-2.6,照 Mac act.py 末尾;见 seeu/sched.py) ───────────────────────────────
+# 对外动作统一包一层:同一个窗口一次一个任务(排队、动完接着占几秒)、排太久按位置点先核画面、记录用时。
+# Windows 按窗口分(打字、点击直投目标窗口,不同窗口互不干扰);内部互相调用(type 里先点框)按同一进程嵌套只在最外层占 / 让。
+
+def shoot(app):
+    """排队前先截一张(轮到时比画面用)。返回 W.capture 的 (w, h, BGRA);截不到 None。"""
+    try:
+        return _shot(_win(app)["hwnd"])
+    except Exception:   # noqa: BLE001
+        return None
+
+
+STALE_BOX_PX = 60       # 防过时只比点击点上下左右这么多像素(同 _changed 的 near)
+
+
+def _stale_change(app, before, pt=None):
+    """排队前后这个窗口变了多少(0~1)。pt = 点击的屏幕点 → 只比它附近,别处一直在动(视频、转圈)不算。
+    窗口大小变了算全变;截不到返回 None(不拦)。"""
+    if not before:
+        return None
+    try:
+        win = _win(app)
+        after = _shot(win["hwnd"])
+    except Exception:   # noqa: BLE001
+        return None
+    if not after:
+        return None
+    if before[0] != after[0] or before[1] != after[1]:
+        return 1.0
+    box = None
+    if isinstance(pt, (tuple, list)) and len(pt) >= 2:
+        rx, ry = _rel(win, float(pt[0]), float(pt[1]))
+        r = STALE_BOX_PX
+        box = (int(rx - r), int(ry - r), int(rx + r), int(ry + r))
+    return W.diff_percent(before[2], after[2], box=box, w=after[0] if box else 0, step=2) / 100.0
+
+
+try:
+    from seeu import sched as _sched
+
+    def _by_pos(args, kwargs):
+        """按位置点 → 返回那个屏幕点(防过时只比它附近);按编号 / 名字 → None(轮到时会重新找控件)。"""
+        t = args[0] if args else kwargs.get("target")
+        return tuple(t[:2]) if isinstance(t, (tuple, list)) and len(t) >= 2 else None
+
+    _raw_shot = _shot
+
+    def _shot(hwnd):                                   # noqa: F811 —— 记截图用时(任务窗口协议的数据)
+        t0 = time.time()
+        try:
+            return _raw_shot(hwnd)
+        finally:
+            _sched.add_heavy("shot", time.time() - t0)
+
+    see = _sched.scheduled("see", lease=False)(see)
+    tap = _sched.scheduled("tap", positional=_by_pos, focus=True)(tap)
+    long_press = _sched.scheduled("long_press", positional=_by_pos, focus=True)(long_press)
+    drag = _sched.scheduled("drag", positional=lambda a, k: (lambda p: tuple(p[0][:2]) if p else True)(a[0] if a else k.get("pts")),
+                            focus=True)(drag)
+    # 外部评审 11-17:不带输入框(at)的打字 / 按键往「当前焦点」里送 → 上一步之后别的任务动过焦点就不做;带 at 的一次占用里先点框再打
+    type = _sched.scheduled("type", focus=True, focus_check=lambda a, k: k.get("at", a[2] if len(a) > 2 else None) is None)(type)   # noqa: A001
+    press = _sched.scheduled("press", focus=True, focus_check=lambda a, k: k.get("at") is None)(press)
+    scroll = _sched.scheduled("scroll")(scroll)
+except Exception:   # noqa: BLE001 —— 调度模块出问题不影响 SeeU 本身
+    pass
