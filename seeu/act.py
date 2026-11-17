@@ -544,11 +544,11 @@ def _fine_expect(app, at=None, min_change=0.003):
                 return _fine_area(keep, png, box, (at[0] * scale, at[1] * scale), scale) >= FINE_TAP_PT2
             total = (box[2] - box[0]) * (box[3] - box[1]) / (scale * scale)
             return _fine_area(keep, png, box, None, scale) >= total * FINE_KEY_PCT
-        expect.rebase = lambda: shutil.copyfile(shoot(app), keep)    # 11-18 复查:排完队重拍,比的是这张(见 _act_and_verify)
+        expect.rebase = lambda: shutil.copyfile(shoot(app), keep)    # 11-17 复查:排完队重拍,比的是这张(见 _act_and_verify)
         return expect
     return factory
 
-_REBASE = threading.local()      # 11-18 C-2.8:借真鼠标排完队、真要动手前,重拍「动作前」那张图(见 _act_and_verify、_real_mouse)
+_REBASE = threading.local()      # 11-17 C-2.8:借真鼠标排完队、真要动手前,重拍「动作前」那张图(见 _act_and_verify、_real_mouse)
 
 
 def _rebase():
@@ -572,7 +572,7 @@ def _act_and_verify(app, act, expect=None, box=None, min_change=0.003, timeout=2
         shutil.copyfile(shoot(app), before)
         def rebase():
             shutil.copyfile(shoot(app), before)
-            rb = getattr(expect, "rebase", None)      # 11-18 复查:给了 expect(镜像 / 模拟器的精细核实、文字核实)时比的是它自己记的那张
+            rb = getattr(expect, "rebase", None)      # 11-17 复查:给了 expect(镜像 / 模拟器的精细核实、文字核实)时比的是它自己记的那张
             if rb:
                 rb()
         _REBASE.f = rebase
@@ -884,7 +884,7 @@ def _real_mouse(app, fn, modal=False):
             if str((r.get("held") or {}).get("label", "")).startswith("SeeU 真鼠标"):
                 raise ax.AXRetry(msg, "busy", "busy")     # 复查 11-17(C-2.7):别的 SeeU 任务借着 = 暂时忙,稍后再试(不是拒绝)
             raise ax.AXRefused(msg)
-        _rebase()                         # 11-18 C-2.8:让路、排队都等完了,真动手前重拍「动作前」
+        _rebase()                         # 11-17 C-2.8:让路、排队都等完了,真动手前重拍「动作前」
         try:
             _halo("real", 5)              # 借用系统鼠标期间亮光圈(按档位);结束后 0.8 秒淡出
             with ig.FrontState(avoid_owner=bg.split_target(app)[0] if _is_canvas(app) else None):
@@ -1584,7 +1584,7 @@ def _text_changed_factory(app):
 
         def expect(png):
             return _focused_text(app) not in (None, st["before"])
-        expect.rebase = lambda: st.update(before=_focused_text(app))      # 11-18 复查:排完队重读「动作前」的文字
+        expect.rebase = lambda: st.update(before=_focused_text(app))      # 11-17 复查:排完队重读「动作前」的文字
         return expect
     return factory
 

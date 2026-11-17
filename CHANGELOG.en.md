@@ -4,7 +4,7 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
-## v1.4.1 (2026-11-18)
+## v1.4.1 (2026-11-17)
 
 A few improvements: browsers work on another desktop too, and several sessions sharing SeeU take turns more smoothly and reliably.
 

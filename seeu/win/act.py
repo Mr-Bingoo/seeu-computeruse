@@ -373,7 +373,7 @@ def _verify(hwnd, act, near=None, read=None, timeout=2.5):
     chrome = _is_chrome(hwnd)
     sig0, names0 = _snap(hwnd, chrome)
 
-    def rebase():       # 11-18 C-2.8:借前台 / 借真鼠标排完队、等完用户停手,真动手前重拍「动作前」(原来那张是排队前的)
+    def rebase():       # 11-17 C-2.8:借前台 / 借真鼠标排完队、等完用户停手,真动手前重拍「动作前」(原来那张是排队前的)
         nonlocal before, txt0, title0, sig0, names0
         b = _shot(hwnd)
         if b is None:
@@ -671,7 +671,7 @@ def tap(app, target, allow=None, real=True, stale_check=True):
                 _cursor(h, "click", x, y, "real")
             from seeu.win import real as _rl
             with _rl.slot():                     # 复查 11-17 C-2.6:借前台也会动前台窗口,跟借真鼠标一起排队
-                _rl.rebase()                     # 11-18 C-2.8:排完队重拍「动作前」
+                _rl.rebase()                     # 11-17 C-2.8:排完队重拍「动作前」
                 info.update(inputs.borrow_front(h, lambda: uia.press(e)))
             if info.get("stolen") and not info.get("back"):
                 raise RuntimeError("按下了,但前台没还回去")

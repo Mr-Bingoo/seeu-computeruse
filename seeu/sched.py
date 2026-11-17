@@ -27,7 +27,7 @@ STALE_CHANGE = 0.03    # 排队期间目标窗口画面变了这么多(像素占
 RECENT_S = 60.0        # 「同时在用 SeeU 的任务」按最近这么久动过算
 POLL_S = 0.15
 BUSY_MAX_S = 120.0     # 「正在做」超过这么久没报到(见 BEAT_S)当卡死,清掉(某个动作挂住时别把 App 一直占着)
-BEAT_S = 20.0          # 11-18 C-2.8:动作做得久(打很长一段字)时,每这么久报一次「还在做」,别被别人当卡死插进来
+BEAT_S = 20.0          # 11-17 C-2.8:动作做得久(打很长一段字)时,每这么久报一次「还在做」,别被别人当卡死插进来
 BUSY_HARD_S = 600.0    # 报到最多报这么久;一个动作超过它就不再报,再过 BUSY_MAX_S 被当卡死清掉
 FLOCK_WAIT_S = 5.0     # 等状态文件锁最多这么久;拿不到就不排(放行),不让整个 SeeU 卡住
 STALE_BOX_PT = 80      # 防过时只比点击点附近这么大一块(点),画面别处一直在动(镜像、视频)不算
@@ -389,7 +389,7 @@ def _win_key(app):
     """Windows 按窗口分(11-17 C-2.6):Windows 打字、点击直投目标窗口,不同窗口互不干扰;同一个窗口才要排队。
     键 = 「程序名#窗口号」,同一个窗口不管写成 notepad / 记事本 / #窗口号 都对得上。找不到窗口就按写法本身。"""
     a = str(app or "").strip()
-    if a.startswith(WEB_KEY):             # 11-18 C-2.8:SeeU 专用浏览器(调试端口,没有可找的窗口)按浏览器名排
+    if a.startswith(WEB_KEY):             # 11-17 C-2.8:SeeU 专用浏览器(调试端口,没有可找的窗口)按浏览器名排
         return a
     now = time.time()
     hit = _WKEY.get(a)
@@ -574,7 +574,7 @@ def _turn(key, tid, name, pid, now, t0, info, queued, d):
 def release(app, key=None, focus=False, keep=True):
     """动完一步:不马上放,接着占 LEASE_S 秒(同一任务的下一步直接用),到点自动让出。key = acquire 返回的 info["key"]。
     focus=True:这一步会动这个 App 的焦点(点、打字、按键、菜单、开 App…),记成「它最后动过焦点」。
-    keep=False:这一步被拦下、什么都没做(focus_moved / stale)→ 马上让出,不接着占(11-18 C-2.8:原来白让排队的人多等约 6 秒)。"""
+    keep=False:这一步被拦下、什么都没做(focus_moved / stale)→ 马上让出,不接着占(11-17 C-2.8:原来白让排队的人多等约 6 秒)。"""
     key = key or _key(app)
     d = _depthmap()
     if d.get(key, 0) > 1:
@@ -606,7 +606,7 @@ def release(app, key=None, focus=False, keep=True):
 
 @contextlib.contextmanager
 def _beat(key):
-    """11-18 C-2.8:占着 App 做一个动作期间,每 BEAT_S 秒把「正在做」的开始时间刷成现在,别人不会因为做得久(超过 BUSY_MAX_S)
+    """11-17 C-2.8:占着 App 做一个动作期间,每 BEAT_S 秒把「正在做」的开始时间刷成现在,别人不会因为做得久(超过 BUSY_MAX_S)
     把它当卡死清掉、插进来串字。最多报 BUSY_HARD_S 秒;不是自己占着了就停。出错不管(不影响动作)。"""
     stop = threading.Event()
     try:
@@ -688,7 +688,7 @@ def hold(app, pt=None):
             with _beat(info.get("key")):
                 yield info
     finally:
-        release(app, key=info.get("key"), keep=not stale)    # 11-18:防过时拦下 = 什么都没做,马上让出。复查 11-17(C-2.7):焦点记录交给里面真动过手的那几步(嵌套时记下,这里一起写)
+        release(app, key=info.get("key"), keep=not stale)    # 11-17:防过时拦下 = 什么都没做,马上让出。复查 11-17(C-2.7):焦点记录交给里面真动过手的那几步(嵌套时记下,这里一起写)
 
 
 def mark_focus(app):

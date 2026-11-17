@@ -198,7 +198,7 @@ def borrow(top, act, kind="mouse"):
         slot.__exit__(None, None, None)
 
 
-REBASE = threading.local()      # 11-18 C-2.8:act._verify 放进来的「重拍动作前」函数
+REBASE = threading.local()      # 11-17 C-2.8:act._verify 放进来的「重拍动作前」函数
 
 
 def rebase():
