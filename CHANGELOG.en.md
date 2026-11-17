@@ -6,7 +6,7 @@ Plain talk about each release, no scapegoats to sacrifice here! What's new, what
 
 ## v1.4.0 (2026-11-17)
 
-Several sessions in the same AI client can now use SeeU at the same time: one at a time per app, the others wait in line; each session gets its own cursor, and text no longer lands in the wrong window. (Different clients open at once should queue the same way, but that hasn't been tested yet; sub-agents inside one session count as one and don't queue against each other.)
+Several sessions in the same AI client can now use SeeU at the same time: one at a time per app, the others wait in line; each session gets its own cursor, and text no longer lands in the wrong window. (Different AI clients open at once queue the same way, tested with Claude + Codex; sub-agents inside one session count as one and don't queue against each other.)
 
 - **Several sessions at once take turns** (Mac and Windows): only one session's AI acts in an app at a time (on Windows, in a window), and it keeps the app for a few seconds for its next step; other sessions wait in line for up to 30 seconds, and if their turn doesn't come they're told "busy, try again shortly" instead of cutting in. Borrowing your mouse and keyboard also takes turns between sessions.
 - **One cursor per session**: each cursor shows which session it is (Claude, Claude2…) in its own color; one that's waiting dozes off (Zz) and fades. Open the badge and the island shows who's waiting too.
