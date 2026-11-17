@@ -818,10 +818,21 @@ def _ax_app(app):
     return ax, el
 
 
+def _ax_windows(ax, el):
+    """浏览器的窗口,当前窗口排最前。11-17 C-2.8 实测:AXWindows 只列当前桌面上的窗口,浏览器窗口在别的桌面时
+    一个都没有(当前桌面有这个浏览器的别的窗口时还会读成那个);AXFocusedWindow / AXMainWindow 跨桌面也拿得到
+    (原生 App 的 ax.main_window 一直这么取)。"""
+    out = []
+    for w in [ax.attr(el, "AXFocusedWindow"), ax.attr(el, "AXMainWindow")] + list(ax.attr(el, "AXWindows") or []):
+        if w is not None and not any(w == x for x in out):
+            out.append(w)
+    return out
+
+
 def _ax_webarea(ax, el, wait_s=5.0):
     t0 = time.time()
     while True:
-        for w in ax.attr(el, "AXWindows") or []:
+        for w in _ax_windows(ax, el):
             stack = [(w, 0)]
             while stack:
                 e, d = stack.pop()
@@ -928,7 +939,7 @@ def _ax_type(app, it, text, mode):
 def _ax_tabs(app):
     ax, el = _ax_app(app)
     out = []
-    for w in (ax.attr(el, "AXWindows") or [])[:1]:
+    for w in _ax_windows(ax, el)[:1]:
         stack = [(w, 0)]
         while stack:
             e, d = stack.pop()

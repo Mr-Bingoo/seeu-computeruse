@@ -26,7 +26,9 @@ STALE_AFTER_S = 3.0    # 排队超过这么久才轮到的「按位置点」,先
 STALE_CHANGE = 0.03    # 排队期间目标窗口画面变了这么多(像素占比)就不点
 RECENT_S = 60.0        # 「同时在用 SeeU 的任务」按最近这么久动过算
 POLL_S = 0.15
-BUSY_MAX_S = 120.0     # 「正在做」超过这么久当卡死,清掉(某个动作挂住时别把 App 一直占着)
+BUSY_MAX_S = 120.0     # 「正在做」超过这么久没报到(见 BEAT_S)当卡死,清掉(某个动作挂住时别把 App 一直占着)
+BEAT_S = 20.0          # 11-18 C-2.8:动作做得久(打很长一段字)时,每这么久报一次「还在做」,别被别人当卡死插进来
+BUSY_HARD_S = 600.0    # 报到最多报这么久;一个动作超过它就不再报,再过 BUSY_MAX_S 被当卡死清掉
 FLOCK_WAIT_S = 5.0     # 等状态文件锁最多这么久;拿不到就不排(放行),不让整个 SeeU 卡住
 STALE_BOX_PT = 80      # 防过时只比点击点附近这么大一块(点),画面别处一直在动(镜像、视频)不算
 SAMPLES_MAX = 5 * 1024 * 1024
@@ -380,10 +382,15 @@ _WKEY = {}          # Windows:App 写法 → (记下的时间, 占用键);同一
 WKEY_TTL = 2.0
 
 
+WEB_KEY = "web:"        # Windows 专用浏览器的占用键前缀(win/web.py)
+
+
 def _win_key(app):
     """Windows 按窗口分(11-17 C-2.6):Windows 打字、点击直投目标窗口,不同窗口互不干扰;同一个窗口才要排队。
     键 = 「程序名#窗口号」,同一个窗口不管写成 notepad / 记事本 / #窗口号 都对得上。找不到窗口就按写法本身。"""
     a = str(app or "").strip()
+    if a.startswith(WEB_KEY):             # 11-18 C-2.8:SeeU 专用浏览器(调试端口,没有可找的窗口)按浏览器名排
+        return a
     now = time.time()
     hit = _WKEY.get(a)
     if hit and now - hit[0] < WKEY_TTL:
@@ -404,6 +411,9 @@ def _win_key(app):
 def label_of(key):
     """占用键 → 给人看的 App 名(灵动岛「等 记事本」、排队提示用):Windows 的「notepad#1234」只留程序名。"""
     k = str(key or "")
+    if k.startswith(WEB_KEY):
+        k = k[len(WEB_KEY):]
+        return k[:1].upper() + k[1:]
     if WIN and "#" in k and k.rsplit("#", 1)[1].isdigit():
         k = k.rsplit("#", 1)[0]
         if k.islower():
@@ -561,9 +571,10 @@ def _turn(key, tid, name, pid, now, t0, info, queued, d):
         return False
 
 
-def release(app, key=None, focus=False):
+def release(app, key=None, focus=False, keep=True):
     """动完一步:不马上放,接着占 LEASE_S 秒(同一任务的下一步直接用),到点自动让出。key = acquire 返回的 info["key"]。
-    focus=True:这一步会动这个 App 的焦点(点、打字、按键、菜单、开 App…),记成「它最后动过焦点」。"""
+    focus=True:这一步会动这个 App 的焦点(点、打字、按键、菜单、开 App…),记成「它最后动过焦点」。
+    keep=False:这一步被拦下、什么都没做(focus_moved / stale)→ 马上让出,不接着占(11-18 C-2.8:原来白让排队的人多等约 6 秒)。"""
     key = key or _key(app)
     d = _depthmap()
     if d.get(key, 0) > 1:
@@ -583,7 +594,7 @@ def release(app, key=None, focus=False):
                 a = st["apps"].get(key)
                 now = time.time()
                 if a and a.get("owner") == tid:
-                    a["busy"], a["until"] = False, now + LEASE_S
+                    a["busy"], a["until"] = False, now + (LEASE_S if keep else 0)
                 if focus:
                     st.setdefault("focus", {})[key] = {"tid": tid, "name": (st.get("names") or {}).get(tid) or me()[1], "t": now}
                 if (a and a.get("owner") == tid) or focus:
@@ -591,6 +602,44 @@ def release(app, key=None, focus=False):
             return
         except Exception:
             continue
+
+
+@contextlib.contextmanager
+def _beat(key):
+    """11-18 C-2.8:占着 App 做一个动作期间,每 BEAT_S 秒把「正在做」的开始时间刷成现在,别人不会因为做得久(超过 BUSY_MAX_S)
+    把它当卡死清掉、插进来串字。最多报 BUSY_HARD_S 秒;不是自己占着了就停。出错不管(不影响动作)。"""
+    stop = threading.Event()
+    try:
+        tid = me()[0]
+    except Exception:
+        tid = None
+    t0 = time.time()
+
+    def run():
+        while not stop.wait(BEAT_S):
+            if time.time() - t0 > BUSY_HARD_S:
+                return
+            try:
+                with _flock():
+                    st = _load()
+                    a = st["apps"].get(key)
+                    if not (a and a.get("owner") == tid and a.get("busy")):
+                        return
+                    a["since"] = time.time()
+                    _save(st)
+            except Exception:
+                pass
+    th = None
+    if tid:
+        try:
+            th = threading.Thread(target=run, name="seeu-beat", daemon=True)
+            th.start()
+        except Exception:
+            th = None
+    try:
+        yield
+    finally:
+        stop.set()
 
 
 class Stale(Exception):
@@ -627,13 +676,19 @@ def hold(app, pt=None):
     except Exception:
         yield None
         return
+    stale = False
     try:
         why = _stale_why(app, snap, pt, info)
         if why:
+            stale = True
             raise Stale(why, info)
-        yield info
+        if info.get("nested"):
+            yield info
+        else:
+            with _beat(info.get("key")):
+                yield info
     finally:
-        release(app, key=info.get("key"))    # 复查 11-17(C-2.7):焦点记录交给里面真动过手的那几步(嵌套时记下,这里一起写)
+        release(app, key=info.get("key"), keep=not stale)    # 11-18:防过时拦下 = 什么都没做,马上让出。复查 11-17(C-2.7):焦点记录交给里面真动过手的那几步(嵌套时记下,这里一起写)
 
 
 def mark_focus(app):
@@ -894,7 +949,11 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                     if why:
                         r = dict(outcome="failed", route=None, tried=[], png=None, code="stale", reason=why, queue=info)
                         return r
-                    r = fn(*args, **kwargs)
+                    if info and not info.get("nested"):
+                        with _beat(info.get("key")):
+                            r = fn(*args, **kwargs)
+                    else:
+                        r = fn(*args, **kwargs)
                     if isinstance(r, dict) and info:
                         note = queue_note(info)
                         if note:
@@ -907,7 +966,8 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                         # 不然别的任务的插队保护会被它顶掉)
                         release(app, key=info.get("key"), focus=bool(focus) and isinstance(r, dict)
                                 and (r.get("outcome") in ACTED or r.get("code") == "wrong_window")
-                                and r.get("code") not in ("focus_moved", "stale"))
+                                and r.get("code") not in ("focus_moved", "stale"),
+                                keep=not (isinstance(r, dict) and r.get("code") in ("focus_moved", "stale")))
             finally:
                 if own_heavy:
                     out = (r.get("code") or r.get("outcome")) if isinstance(r, dict) else "error"

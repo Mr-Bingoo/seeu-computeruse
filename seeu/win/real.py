@@ -10,6 +10,7 @@
 """
 import ctypes
 import ctypes.wintypes as wt
+import threading
 import time
 
 from seeu.win import api, inputs, safety, window as W
@@ -197,8 +198,22 @@ def borrow(top, act, kind="mouse"):
         slot.__exit__(None, None, None)
 
 
+REBASE = threading.local()      # 11-18 C-2.8:act._verify 放进来的「重拍动作前」函数
+
+
+def rebase():
+    """排完队、等完用户停手,真动手前调:让 act._verify 重拍「动作前」(那张原来是排队前拍的)。出错不管。"""
+    f = getattr(REBASE, "f", None)
+    if f:
+        try:
+            f()
+        except Exception:   # noqa: BLE001
+            pass
+
+
 def _borrow(top, act, kind):
     wait_idle()
+    rebase()
     _tell_float(top, kind)
     fg0, c0 = W.foreground(), W.cursor()
     t0 = time.time()

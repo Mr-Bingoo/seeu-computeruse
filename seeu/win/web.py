@@ -404,3 +404,25 @@ def close_tab(tab, browser="chrome"):
     d = _load(browser)
     if d:
         cdp._http(d["port"], f"/json/close/{tab}")
+
+
+# 11-18 C-2.8(照 Mac web/__init__.py 末尾):专用浏览器里打字(含写完按回车)同一个浏览器一次一个任务,
+# 别的任务的回车 / 打字插进来会落到别的框里。占用键「web:chrome」(没有可找的窗口,见 sched._win_key)。调度模块出问题就不排。
+try:
+    from seeu import sched as _sched
+    _type_raw = type
+    _type_s = _sched.scheduled("web_type")(lambda app, *a, **k: _type_raw(*a, **k))
+
+    def type(target, text, tab=None, browser="chrome", mode="replace", enter=False):      # noqa: A001
+        return _type_s(_sched.WEB_KEY + str(browser), target, text, tab=tab, browser=browser, mode=mode, enter=enter)
+    type.__doc__ = _type_raw.__doc__
+
+    # 复查 11-18:按键(回车等)也按标签页投给网页里当前的框,别的任务正在打字时插进来会落进它的框 → 同一把(Mac 浏览器按键也跟打字同一个占用键)
+    _key_raw = key
+    _key_s = _sched.scheduled("web_press")(lambda app, *a, **k: _key_raw(*a, **k))
+
+    def key(name, *mods, tab=None, browser="chrome"):
+        return _key_s(_sched.WEB_KEY + str(browser), name, *mods, tab=tab, browser=browser)
+    key.__doc__ = _key_raw.__doc__
+except Exception:   # noqa: BLE001
+    pass

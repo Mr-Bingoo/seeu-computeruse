@@ -24,6 +24,7 @@ import os
 import re
 import sys
 import tempfile
+import threading
 import time
 
 from seeu_lib import mac_input as mi
@@ -543,8 +544,55 @@ def _fine_expect(app, at=None, min_change=0.003):
                 return _fine_area(keep, png, box, (at[0] * scale, at[1] * scale), scale) >= FINE_TAP_PT2
             total = (box[2] - box[0]) * (box[3] - box[1]) / (scale * scale)
             return _fine_area(keep, png, box, None, scale) >= total * FINE_KEY_PCT
+        expect.rebase = lambda: shutil.copyfile(shoot(app), keep)    # 11-18 复查:排完队重拍,比的是这张(见 _act_and_verify)
         return expect
     return factory
+
+_REBASE = threading.local()      # 11-18 C-2.8:借真鼠标排完队、真要动手前,重拍「动作前」那张图(见 _act_and_verify、_real_mouse)
+
+
+def _rebase():
+    f = getattr(_REBASE, "f", None)
+    if f:
+        try:
+            f()
+        except Exception:   # noqa: BLE001 —— 重拍不成就用原来那张(跟以前一样)
+            pass
+
+
+def _act_and_verify(app, act, expect=None, box=None, min_change=0.003, timeout=2.5, interval=0.4):
+    """同 seeu_lib.wait.act_and_verify(做 → 反复截图比「动作前」),多一条:act 里排队等过(借真鼠标等别的任务、等用户停手),
+    真动手前调 _rebase() 重拍「动作前」—— 原来那张是排队前拍的,等的这段时间画面自己变了会被当成「点成了」(复查 11-17 第三批)。"""
+    import shutil
+    import tempfile
+    from seeu_lib import wait
+    tmpdir = tempfile.mkdtemp(prefix="verify_")
+    before = os.path.join(tmpdir, "before.png")
+    try:
+        shutil.copyfile(shoot(app), before)
+        def rebase():
+            shutil.copyfile(shoot(app), before)
+            rb = getattr(expect, "rebase", None)      # 11-18 复查:给了 expect(镜像 / 模拟器的精细核实、文字核实)时比的是它自己记的那张
+            if rb:
+                rb()
+        _REBASE.f = rebase
+        try:
+            result = act()
+        finally:
+            _REBASE.f = None
+        t0 = time.time()
+        while True:
+            time.sleep(interval)
+            png = shoot(app)
+            change = wait.frame_change(before, png, box)
+            ok = bool(expect(png)) if expect else change >= min_change
+            if ok:
+                return {"outcome": "delivered", "png": png, "change": change, "result": result}
+            if time.time() - t0 + interval > timeout:
+                return {"outcome": "ineffective", "png": png, "change": change, "result": result}
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
 
 def _try(app, act, min_change, expect=None):
     from seeu_lib import wait
@@ -569,8 +617,8 @@ def _try(app, act, min_change, expect=None):
             ig.note_injected()
         done.append(1)
     try:
-        r = wait.act_and_verify(lambda: shoot(app), act_once, expect=expect, box=_verify_box(app, first),
-                                min_change=min_change, timeout=2.5, interval=0.4)
+        r = _act_and_verify(app, act_once, expect=expect, box=_verify_box(app, first), min_change=min_change,
+                            timeout=2.5, interval=0.4)
     except RuntimeError:
         if not done:
             raise
@@ -836,6 +884,7 @@ def _real_mouse(app, fn, modal=False):
             if str((r.get("held") or {}).get("label", "")).startswith("SeeU 真鼠标"):
                 raise ax.AXRetry(msg, "busy", "busy")     # 复查 11-17(C-2.7):别的 SeeU 任务借着 = 暂时忙,稍后再试(不是拒绝)
             raise ax.AXRefused(msg)
+        _rebase()                         # 11-18 C-2.8:让路、排队都等完了,真动手前重拍「动作前」
         try:
             _halo("real", 5)              # 借用系统鼠标期间亮光圈(按档位);结束后 0.8 秒淡出
             with ig.FrontState(avoid_owner=bg.split_target(app)[0] if _is_canvas(app) else None):
@@ -1531,8 +1580,12 @@ def _text_changed_factory(app):
         return None
 
     def factory():
-        before = _focused_text(app)
-        return lambda png: _focused_text(app) not in (None, before)
+        st = {"before": _focused_text(app)}
+
+        def expect(png):
+            return _focused_text(app) not in (None, st["before"])
+        expect.rebase = lambda: st.update(before=_focused_text(app))      # 11-18 复查:排完队重读「动作前」的文字
+        return expect
     return factory
 
 

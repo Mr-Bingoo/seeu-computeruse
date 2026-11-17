@@ -4,6 +4,17 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.4.1 (2026-11-18)
+
+A few improvements: browsers work on another desktop too, and several sessions sharing SeeU take turns more smoothly and reliably.
+
+- **Browsers can be read and filled in on another desktop** (Mac): without the browser switch or the extension, a Safari or Chrome window used to vanish from SeeU's view once it was on another desktop, and if another window of the same browser was open on the current desktop, SeeU could read that one instead. Now it goes straight to the window you're using, so it can read and fill in pages on another desktop too. (A minimized window can be read, but typing doesn't go in.)
+- **A blocked step lets go right away** (Mac and Windows): when SeeU blocks a session's step and nothing was done, that session no longer keeps the app, so the next session in line doesn't wait a few seconds for nothing.
+- **Long typing isn't cut into** (Mac and Windows): a step that took more than two minutes used to be treated as stuck, and another session could cut in; now it keeps reporting "still working" while it works (up to 10 minutes).
+- **SeeU's own browser on Windows queues typing and keys too**: as on the Mac, only one session at a time types or presses Enter in the same browser.
+- **Waiting before borrowing the mouse no longer fakes a success** (Mac and Windows): if the step that borrows your mouse first waited for another session or for you to stop, it used to compare against the picture from before the wait, so a screen that changed by itself counted as a successful click; now it takes a fresh picture after the wait.
+- **What you need to do**: after updating, quit the AI client completely and open it again.
+
 ## v1.4.0 (2026-11-17)
 
 Several sessions in the same AI client can now use SeeU at the same time: one at a time per app, the others wait in line; each session gets its own cursor, and text no longer lands in the wrong window. (Different AI clients open at once queue the same way, tested with Claude + Codex; sub-agents inside one session count as one and don't queue against each other.)
