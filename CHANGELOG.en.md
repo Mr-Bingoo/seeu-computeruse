@@ -2,7 +2,19 @@
 
 [中文](CHANGELOG.md) | English
 
-Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
+Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac and Linux, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
+
+## v1.5.0 (2026-11-21)
+
+The Linux preview is here: on GNOME desktops such as Ubuntu, the AI can now look at windows, press buttons and type into fields in the background, without getting in your way.
+
+- **Linux preview**: for the GNOME desktop (Wayland, Ubuntu's default) with Python 3.10 or newer; tested on Ubuntu 26.04, both x64 and ARM. It can look at windows (screenshot + numbered list), press buttons by number in the background, type Chinese and English into fields, scroll, pick menu items, long-press, drag and read text from screenshots; web pages go through SeeU's own background browser (Chromium or Chrome). What can't be done in the background (clicking by screen position, input fields in VS Code, emulators) borrows your mouse and keyboard for a few seconds, under the same "borrow mouse" setting as on the Mac and Windows. If the computer doesn't meet these requirements, the connect step says so up front.
+- **Visible on Linux too**: the proxy cursor, the floating badge (opens into a card and the island, with I See and the live view), the glow around the screen while borrowing, and toasts look the same as on the Mac; several conversations still queue, each with its own cursor.
+- **Extra care on Linux**: nothing happens while the screen is locked; your mouse and keyboard aren't borrowed while a system dialog (password, authorization) is open; with several same-named windows of one app open, text never goes into a window the AI didn't look at; an editor's "Run" menu, which runs the file as a program, is never clicked; terminals embedded in apps aren't touched; your own browser is look-only (web pages always go through the background browser, so the allow list can't be bypassed).
+- **Hand the link to an AI to install**: works on Linux too; tested with Codex in the ChatGPT desktop app, which downloaded, installed and connected SeeU by itself following the README. One-step setup covers Claude Code, Codex, Cursor and VS Code.
+- **Understands a miscopied window name** (Windows, Linux): with several windows of one app open, an AI sometimes copied the instructions' "App「window title」" literally as "App" and the window wasn't found; now SeeU just matches the title, and the instructions use real names as examples.
+- **Docs**: the README, "What is SeeU" and the diagrams now cover Linux; "What is SeeU" has a new "Splits itself · several tasks in parallel" section.
+- **What you need to do**: on the Mac and Windows, after updating, quit the AI client completely and open it again. On Linux, install it the first time as the README's "Install" section says, then log out and back in once.
 
 ## v1.4.2 (2026-11-18)
 

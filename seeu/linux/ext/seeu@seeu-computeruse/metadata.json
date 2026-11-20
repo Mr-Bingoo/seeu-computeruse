@@ -1,0 +1,15 @@
+{
+  "uuid": "seeu@seeu-computeruse",
+  "name": "SeeU",
+  "description": "SeeU helper: window positions, pointer position, lock signal; draws the SeeU toast, proxy cursor, status badge and screen-edge glow; moves the pointer / raises the target window while SeeU borrows the mouse through the system Remote Desktop permission. It never takes screenshots inside GNOME Shell.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50"
+  ],
+  "url": "https://github.com/Mr-Bingoo/seeu-computeruse",
+  "version": 11
+}

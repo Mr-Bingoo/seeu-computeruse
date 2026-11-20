@@ -119,6 +119,14 @@ TEXT = {
     "upd.check_win": ("顺便检查一下:", "Checking the setup:"),
     "upd.no_git_win": ("没找到 git 命令:先到 git-scm.com 装 Git for Windows,再运行一次。",
                        "git was not found: install Git for Windows from git-scm.com, then run this again."),
+    # 11-18 C-3.0:Linux 预览版
+    "upd.no_git_linux": ("没找到 git 命令:先装(Ubuntu:sudo apt install git),再运行一次。",
+                         "git was not found: install it first (Ubuntu: sudo apt install git), then run this again."),
+    "upd.linux_ext": ("SeeU 的 GNOME 小插件有新版,已经装好。🔴 要注销重新登录一次才生效(在那之前悬浮标、代理光标、借鼠标还是旧版)。",
+                      "SeeU's GNOME helper has a new version and it's installed. 🔴 Log out and back in once for it to take effect "
+                      "(until then the badge, proxy cursor and mouse borrowing stay on the old version)."),
+    "upd.linux_ext_fail": ("SeeU 的 GNOME 小插件有新版,但没装上(原因:{err})。可以手动运行:python3 -m seeu 检查 --fix",
+                           "SeeU's GNOME helper has a new version but installing it failed ({err}). You can run: python3 -m seeu check --fix"),
 }
 
 _C = {"t": 0.0, "lang": "zh"}

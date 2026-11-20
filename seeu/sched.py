@@ -155,6 +155,8 @@ def island_wait(app, on, info=None):
     try:
         if WIN:
             from seeu.win import floatwin as ww
+        elif LINUX:
+            from seeu.linux import floatwin as ww
         else:
             from seeu_lib import watch_window as ww
         f = getattr(ww, "queue", None)
@@ -170,7 +172,12 @@ def cursor_hex(default=None):
     """光标颜色的 "#RRGGBB"(灵动岛圆点用,跟光标一致;0 号走设置里的后台模式颜色)。"""
     if default is None:
         try:
-            default = _act()._cursor_style("bg")[1]
+            if LINUX:                # 11-18 C-3.0:Linux 读设置里的后台模式颜色(别去导入 Mac 的 act)
+                from seeu.linux import real as _lr
+                h = _lr.color("bg").lstrip("#")
+                default = tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+            else:
+                default = _act()._cursor_style("bg")[1]
         except Exception:
             default = None
     r, g, b = cursor_color(default)
@@ -182,6 +189,10 @@ def cursor_wait(on):
     if os.environ.get("SEEU_NO_CURSOR"):
         return
     try:
+        if LINUX:                    # 11-18 C-3.0:Linux 的光标画在 GNOME 小插件里
+            from seeu.linux import shell as _sh
+            _sh.cursor_wait(cursor_key(), on)
+            return
         if WIN:
             from seeu.win import cursor as co
         else:
@@ -194,6 +205,7 @@ def cursor_wait(on):
 
 
 WIN = sys.platform == "win32"
+LINUX = sys.platform.startswith("linux")    # 11-18:Linux 预览版;11-19 C-3.1 起普通程序也排队,按窗口分(同 Windows,见 _linux_key)
 
 
 def _alive(pid):
@@ -408,13 +420,36 @@ def _win_key(app):
     return k
 
 
+def _linux_key(app):
+    """Linux 按窗口分(11-19 C-3.1,照 Windows):按控件点、往控件里写字都直投那个窗口的控件,不同窗口互不干扰;同一个窗口才排队。
+    键 = 「程序名#窗口号」,gnome-text-editor / 文本编辑器 / #窗口号 都对得上。找不到窗口(小插件不在、没开)就按写法本身。"""
+    a = str(app or "").strip()
+    if a.startswith(WEB_KEY):
+        return a
+    now = time.time()
+    hit = _WKEY.get(a)
+    if hit and now - hit[0] < WKEY_TTL:
+        return hit[1]
+    try:
+        from seeu.linux import window as LW
+        w = LW.find(a)
+        exe = os.path.basename(str(w.get("exe") or ""))      # 程序文件名(comm 会被截到 15 个字:gnome-text-edit)
+        k = f"{exe or w.get('comm') or (w.get('names') or [a])[0]}#{int(w['id'])}"
+    except Exception:
+        k = a
+    if len(_WKEY) > 64:
+        _WKEY.clear()
+    _WKEY[a] = (now, k)
+    return k
+
+
 def label_of(key):
     """占用键 → 给人看的 App 名(灵动岛「等 记事本」、排队提示用):Windows 的「notepad#1234」只留程序名。"""
     k = str(key or "")
     if k.startswith(WEB_KEY):
         k = k[len(WEB_KEY):]
         return k[:1].upper() + k[1:]
-    if WIN and "#" in k and k.rsplit("#", 1)[1].isdigit():
+    if (WIN or LINUX) and "#" in k and k.rsplit("#", 1)[1].isdigit():
         k = k.rsplit("#", 1)[0]
         if k.islower():
             k = k[:1].upper() + k[1:]
@@ -425,6 +460,10 @@ def _key(app):
     """按 App 分(不分窗口):「文本编辑「A」」和「文本编辑「B」」是同一个 App、同一个焦点。Windows 按窗口分,见 _win_key。"""
     if WIN:
         return _win_key(app)
+    if LINUX:
+        return _linux_key(app)
+    if str(app or "").startswith(WEB_KEY):
+        return str(app or "").strip()
     from seeu import bgclick as bg
     try:
         from seeu import web
@@ -714,8 +753,8 @@ DEVICE_APPS = ("iPhone Mirroring", "BlueStacks")      # 状态全局、会留下
 
 def device_busy(app):
     """外部评审 11-17 第 4 条:镜像 / 模拟器正被别的项目(用户自己的自动化程序)按桌面锁占着 → 返回给 AI 的原因;没占着返回 None。
-    只读查锁(seeu_lib.desktop_lock.status),不改协议;SeeU 自己借鼠标拿的锁不算。只在 Mac 上查(Windows 上没有这些项目)。"""
-    if WIN:
+    只读查锁(seeu_lib.desktop_lock.status),不改协议;SeeU 自己借鼠标拿的锁不算。只在 Mac 上查(Windows / Linux 上没有这些项目)。"""
+    if WIN or LINUX:
         return None
     k = label_of(_key(app))
     if not any(k == d or k.startswith(d) for d in DEVICE_APPS):
@@ -1006,13 +1045,18 @@ def _win_rect(app):
         from seeu.win import window as W
         r = W.find(app).get("rect")
         return tuple(int(v) for v in r[:4]) if r else None
+    if LINUX:
+        from seeu.linux import window as LW
+        w = LW.find(app)
+        return tuple(int(round(float(w[k]))) for k in ("x", "y", "w", "h"))
     g = _act()._geo(app)
     return tuple(round(float(g[k])) for k in ("x", "y", "w", "h")) if g else None
 
 
 def _stale_why(app, snap, pt, info):
     """排队超过 STALE_AFTER_S 才轮到的按位置点:窗口挪过 / 改过大小,或点击处附近画面变了 → 返回原因(不点);否则 None。"""
-    if not (snap.get("before") and info and info.get("waited", 0) >= STALE_AFTER_S):
+    # Linux 没有单窗口截图(被挡着截不到它本身)→ 只比窗口位置(11-19 C-3.1)
+    if not ((snap.get("before") or snap.get("geo")) and info and info.get("waited", 0) >= STALE_AFTER_S):
         return None
     g0 = snap.get("geo")
     if g0:
@@ -1023,7 +1067,7 @@ def _stale_why(app, snap, pt, info):
         if g1 and any(abs(a - b) > 2 for a, b in zip(g0, g1)):    # 复查 11-17(C-2.7):窗口挪了内容没变,原来比不出来、照旧位置点偏
             return (f"排队等了 {info['waited']:.0f} 秒,这期间窗口挪动或改了大小,"
                     "按位置点可能点错;先看一眼(see)再点")
-    changed = _changed(app, snap["before"], pt)
+    changed = _changed(app, snap["before"], pt) if snap.get("before") else None
     if changed is not None and changed >= STALE_CHANGE:
         return (f"排队等了 {info['waited']:.0f} 秒,这期间画面变了({changed:.0%}),"
                 "按位置点可能点错;先看一眼(see)再点")
@@ -1039,7 +1083,7 @@ def _safe_key(app):
 
 def _act():
     """act 模块:用 `python3 -m seeu.act` 跑时它是 __main__,别再导入一份(复查 11-17)。"""
-    name = "seeu.win.act" if WIN else "seeu.act"
+    name = "seeu.win.act" if WIN else ("seeu.linux.act" if LINUX else "seeu.act")
     m = sys.modules.get(name)
     if m is None:
         main = sys.modules.get("__main__")

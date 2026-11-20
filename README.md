@@ -4,21 +4,25 @@
 
 > *You see SeeU, I know you see. I See.*
 
-**让你的 AI 在 Mac 和 Windows 上可以后台看画面、点按钮、打字…和你并行使用互不打扰！**
+**让你的 AI 在 Mac、Windows 和 Linux 上可以后台看画面、点按钮、打字…和你并行使用互不打扰！**
 
 中文 | [English](README.en.md)
 
-支持 macOS，Windows 预览版(Linux 暂不支持)
+支持 macOS，Windows 和 Linux 预览版
 
 </div>
 
 Mac 演示 :
 
-https://github.com/user-attachments/assets/f186ae3d-c465-4b8b-90cd-5a00d109aec9
+https://github.com/user-attachments/assets/e754a8b9-577b-4f68-bebc-b42a90bb33c1
 
 Windows 演示 :
 
-https://github.com/user-attachments/assets/18916b9c-9654-4740-95dd-cc40c52b9ea8
+https://github.com/user-attachments/assets/4935c0db-eee5-4006-97e5-1e42d2427b42
+
+Linux 演示 :
+
+https://github.com/user-attachments/assets/522c4265-c3fb-4fa5-a469-89585fd1eb49
 
 SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思是「先看清，再动手」。
 
@@ -40,12 +44,12 @@ SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思�
 
 在了解它能做什么之前，先和你确认一件事 : 它做事的每一步都会检查画面有没有变化，动作没生效就尝试换个办法，或停下来告诉你目前卡在哪，不会闷头乱点。详细介绍见 [SeeU 是什么](docs/What-is-SeeU.zh-CN.md)。
 
-**Mac 和 Windows 都有的 :**
+**三个系统都有的 :**
 
 | 场景 | SeeU 怎么做 |
 |---|---|
-| 原生 App(Mac 的备忘录、访达，Windows 的记事本、资源管理器…) | 读界面上的按钮和文字，按编号点、后台打字 |
-| 模拟器、自绘界面的 App | 截图认字，后台点击 |
+| 原生 App(Mac 的备忘录、访达，Windows 的记事本、资源管理器，Linux 的文本编辑器…) | 读界面上的按钮和文字，按编号点、后台打字 |
+| 模拟器、自绘界面的 App | 截图认字，后台点击(Linux 上要借你的鼠标几秒) |
 | 不确定的 App | `python3 -m seeu 探一下 <App>` : 先看它是什么内核、能读到多少按钮、SeeU 会走哪条路 |
 
 屏幕上有悬浮标(点开能看 AI 正在做什么、被操作窗口的实时画面)和代理光标，要你留意的事会弹提示条。
@@ -58,15 +62,15 @@ SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思�
 | 用网页技术做的 App(VS Code 等) | SeeU 在后台另开一份，全程藏着读写，你开着的那份不碰 |
 | iPhone 镜像 | 截图认字，后台点手机屏幕、打开手机上的 App |
 
-**Windows 独有 :**
+**Windows 和 Linux 都有的 :**
 
 | 场景 | SeeU 怎么做 |
 |---|---|
-| Chrome / Edge 网页 | SeeU 另开一份不出窗口的后台浏览器(跟你平时用的互不影响)，在里面读网页、填表、点按钮。遇到需要登录的网站，可以让 AI 把窗口展示出来，让你自己操作！ |
+| 网页(Windows 是 Chrome / Edge，Linux 是 Chromium / Chrome) | SeeU 另开一份不出窗口的后台浏览器(跟你平时用的互不影响)，在里面读网页、填表、点按钮。遇到需要登录的网站，可以让 AI 把窗口展示出来，让你自己操作！ |
 
 ## 安装
 
-**系统要求** : Mac 要 Apple 芯片(在 macOS 27 上测过，更早的系统和 Intel 芯片没测过)；Windows 预览版要 Windows 10 或 11 以及 Python 3.10 以上(目前测试过 Windows 10 x64 和 Windows 11 ARM「虚拟机」)。
+**系统要求** : Mac 要 Apple 芯片(在 macOS 27 上测过，更早的系统和 Intel 芯片没测过)；Windows 预览版要 Windows 10 或 11 以及 Python 3.10 以上(目前测试过 Windows 10 x64 和 Windows 11 ARM「虚拟机」)；Linux 预览版要 GNOME 桌面(Wayland，Ubuntu 默认就是)以及 Python 3.10 以上(目前测试过 Ubuntu 26.04 x64 和 ARM「虚拟机」)。
 
 ### 最省事 : 把链接丢给 AI
 
@@ -74,15 +78,15 @@ SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思�
 帮我装上 SeeU:https://github.com/Mr-Bingoo/seeu-computeruse
 ```
 
-AI 会自己下载、装好依赖、接好(认出是哪家 AI 就接哪家)。Mac、Windows 都行。
+AI 会自己下载、装好依赖、接好(认出是哪家 AI 就接哪家)。Mac、Windows、Linux 都行。
 
 ### 自己动手
 
-以下命令主要按 Mac 写，Windows 则需要把 `python3` 写成 `python`。
+以下命令文档主要按 Mac/Linux 编写，Windows 则需要把 `python3` 写成 `python`。
 
 **1. 装依赖**
 
-Mac(直接用系统自带的 `python3`，第一次运行时会提示安装「命令行开发者工具」，点安装就行) :
+Mac(系统自带 `python3`，第一次运行时会提示安装「命令行开发者工具」，点安装就行) :
 
 ```bash
 /usr/bin/python3 -m pip install --user pyobjc-framework-Cocoa pyobjc-framework-Quartz pyobjc-framework-ScreenCaptureKit pyobjc-framework-CoreMedia opencv-python-headless numpy
@@ -92,6 +96,12 @@ Windows :
 
 ```bash
 python -m pip install comtypes
+```
+
+Linux(Ubuntu 桌面版一般都已自带，缺了再装) :
+
+```bash
+sudo apt install git python3-gi gir1.2-atspi-2.0 python3-pil
 ```
 
 **2. 下载并接入到 AI 里**
@@ -110,7 +120,9 @@ python3 -m seeu install auto      # 或指定:claude | codex | cursor | trae | v
 python3 -m seeu check             # 看这台电脑上还缺什么，缺的会写怎么办
 ```
 
-仅 Mac 要打开相关授权(Windows 无需单独设置) : 在 Mac 里跟 AI 说「检查一下 SeeU 还缺什么授权」(或自己运行 `python3 -m seeu check`)，它会告诉你该给谁开(可能是你的 AI 客户端，也可能是 SeeU 小程序)，照着在系统设置 → 隐私与安全性里打开**辅助功能**(新版 macOS 英文界面里叫 Device Control and Data Access)和**屏幕与系统录音**就行。开完授权要完全退出 AI 客户端再打开，才会生效。
+Mac 需要打开相关授权(Windows 无需单独设置) : 在 Mac 里跟 AI 说「检查一下 SeeU 还缺什么授权」(或自己运行 `python3 -m seeu check`)，它会告诉你该给谁开(可能是你的 AI 客户端，也可能是 SeeU 小程序)，照着在系统设置 → 隐私与安全性里打开**辅助功能**(新版 macOS 英文界面里叫 Device Control and Data Access)和**屏幕与系统录音**就行。开完授权要完全退出 AI 客户端再打开，才会生效。
+
+Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME 小插件(画悬浮标、代理光标用)、打开系统的辅助功能总开关，运行时系统会当场弹两个框:截图那个点「允许」；远程桌面那个先打开「允许远程操作」，再点「共享」(SeeU 只在后台做不到时才借一下鼠标键盘)。装完要**注销重新登录一次**。
 
 ## 接入 AI 客户端
 
@@ -119,6 +131,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 - Claude、Codex、Cursor、Trae、VS Code : 上面的 `install` 一条命令接好。
 - WorkBuddy、豆包 : 在它们自己的界面里新建一个自定义连接器(本机 / STDIO)，把 `python3 -m seeu mcp` 填进去；其他支持 MCP 的客户端也是这个办法。
 - 仅 Windows : Claude 能一键接入，这块还没实测；豆包现阶段(2026 年 11 月)请装 x64 版，ARM 版暂时接不了。
+- 仅 Linux : 能一键接入 Claude Code、Codex、Cursor、VS Code，目前实测过的是 ChatGPT 桌面版里的 Codex。Codex 第一次用 SeeU 看窗口时，可能会说「被 SeeU 拦了」，其实多半是 Codex 自己的「Approve for me」自动审核拦的，在对话里回一句「同意」就行。
 - 仅 Mac : 习惯用技能市场的，也可以 `npx skills add Mr-Bingoo/seeu-computeruse`。它装的只是给 AI 看的使用说明，第一次用时 AI 会照着说明把 SeeU 装好、接上。
 
 **千问** : 千问只认用 `npx` 启动的工具，要先装 [Node.js](https://nodejs.org)。
@@ -133,7 +146,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 
 ## 更新和移除
 
-- **更新** : 跟 AI 说「更新 SeeU」就行；自己动手就运行 `python3 -m seeu update`(Windows 上要先装 [Git for Windows](https://git-scm.com))，用 `npx skills` 装的运行 `npx skills update seeu`。每版改了什么见[更新说明](CHANGELOG.md)。
+- **更新** : 跟 AI 说「更新 SeeU」就行；自己动手就运行 `python3 -m seeu update`(Windows 上要先装 [Git for Windows](https://git-scm.com))，用 `npx skills` 装的运行 `npx skills update seeu`。Linux 上新版要是改了 GNOME 小插件，会自动装上并提醒你注销重新登录一次。每版改了什么见[更新说明](CHANGELOG.md)。
 - **看版本** : 问 AI，或运行 `python3 -m seeu version`。
 - **移除** : `python3 -m seeu uninstall <客户端>`。
 
@@ -146,6 +159,7 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 - 不按危险快捷键(清空废纸篓、锁屏、注销、强制退出…)，不打危险命令(sudo、删整个磁盘…)。
 - 不往密码框、验证码框里打字，光标在里面时也不按字符键、回车、删除，不粘贴(⌘V、菜单里的粘贴、界面上叫「粘贴」的按钮都算；Tab、Esc、方向键这类用来离开的键照常)；网页里的银行卡框也不填。(iPhone 镜像、模拟器这类只有画面的场景，和你自己装的 Electron App 里，SeeU 认不出是什么框，这一条在那里靠 AI 遵守；SeeU 的后台浏览器和它另开的 Electron App 里，只认得出标准写法的密码框；别的网站嵌进网页的小框(支付、第三方登录常这样做)里面看不到，只能按框的名字和地址判断，名字看不出来的认不出。)
 - 浏览器里不长按 : 长按是按屏幕位置点，会绕开网页的允许名单；点网页上的东西只按编号。
+- 仅 Linux : 锁屏时什么都不做；系统弹框(输密码、授权)开着时不借你的鼠标键盘；编辑器里会把文件当程序跑的「运行」菜单不点。
 - 浏览器里，键盘焦点不在网页上时不按回车、空格 : 焦点落在工具栏按钮、插件的弹出页、浏览器设置页或浏览器自己弹出的对话框上时，这两个键等于替你点了按钮(比如「允许这个网站」)。Esc、Tab 照常，网页里和地址栏里不受影响。
 
 **写给 AI 的规矩，靠 AI 遵守，代码不拦 :**
@@ -191,9 +205,17 @@ python3 -m seeu check             # 看这台电脑上还缺什么，缺的会�
 - 窗口在别的虚拟桌面上时，SeeU 不会借你的鼠标、也不会把你切过去。
 - 你自己正在用的 Chrome 被别的窗口挡着时，网页里点不进去，这时请用后台浏览器；多块显示器还没测过。
 
+**Linux 独有 :**
+
+- 只支持 GNOME 桌面(Wayland)，KDE 等别的桌面暂不支持。SeeU 的 GNOME 小插件装上或更新后，要注销重新登录一次才生效。
+- 被别的窗口挡住、最小化或在别的工作区的窗口，截不到它本身的画面(按编号点照常)。
+- VS Code 这类用网页技术做的程序，输入框后台写不进，SeeU 会借你的键盘几秒；VS Code 要用 `ACCESSIBILITY_ENABLED=1 code` 启动，SeeU 才读得到它的界面。
+- 你自己开着的浏览器(Firefox、Chrome、Chromium…)SeeU 只看不动 : 不在里面点、打字、按键、滚动，免得绕开网页的允许名单、动到你登录着的网站；网页一律走 SeeU 另开的后台浏览器。
+- 模拟器、自绘界面的 App 要靠截图认字，需要装 Tesseract : `sudo apt install tesseract-ocr tesseract-ocr-chi-sim`；`python3 -m seeu check` 会告诉你装没装。
+
 ## 出问题怎么办
 
-1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`。)
+1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`；Linux 运行 `python3 -m seeu check --fix` 能自动补上大部分。)
 2. 开完或改完授权，要完全退出 AI 客户端再打开，才会生效。
 3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有涉及个人隐私。
 <!-- /sync:notes -->

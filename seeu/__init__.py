@@ -10,7 +10,9 @@ MAC_ONLY = ("SeeU 目前只支持 macOS，其能力主要来自macOS自带的辅
             "text recognition, so it can't run on this device ({os}) yet. Versions for other systems are being researched, stay tuned!")
 # 11-11 起:Windows 预览版,实现在 seeu/win/(Mac 版代码不动)。包里没有 win/ 时(11-14 前的开源导出)Windows 上照旧给「只支持 macOS」的话
 WINDOWS = sys.platform == "win32" and os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "win"))
-if sys.platform != "darwin" and not WINDOWS:
+# 11-18 起:Linux 预览版(第 1 段,只支持 GNOME + Wayland),实现在 seeu/linux/。包里没有 linux/ 时照旧给「只支持 macOS」的话
+LINUX = sys.platform.startswith("linux") and os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "linux"))
+if sys.platform != "darwin" and not WINDOWS and not LINUX:
     import platform as _pf
     _msg = MAC_ONLY.format(os=_pf.system() or sys.platform)
     if sys.argv[:1] == ["-m"]:
@@ -40,7 +42,19 @@ SUBMODULES = ("web", "stealth", "cdp", "isee", "safety", "act")   # 10-30:Skill 
 WIN_ACTIONS = ("see", "tap", "type", "scroll", "press", "describe")
 
 
+LINUX_ACTIONS = ("see", "tap", "type", "scroll", "press", "describe")
+
+
 def __getattr__(name):
+    if LINUX:
+        if name in LINUX_ACTIONS:
+            from seeu.linux import act as _lact
+            return getattr(_lact, name)
+        mods = {"linux": "seeu.linux", "act": "seeu.linux.act", "safety": "seeu.linux.safety"}
+        if name in mods:
+            import importlib
+            return importlib.import_module(mods[name])
+        raise AttributeError(f"module 'seeu' has no attribute {name!r}(Linux 预览版还没有这一项)")
     if WINDOWS:
         if name in WIN_ACTIONS:
             from seeu.win import act as _wact

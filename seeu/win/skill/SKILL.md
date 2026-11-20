@@ -18,7 +18,7 @@ description: Use SeeU to see and operate apps on the user's Windows PC in the ba
 
 ## 1. Basic loop: look, act, look again
 1. `seeu_check` once per conversation; `seeu_windows` to see what's open and what to call it (program name like `Notepad`, `chrome`,
-   `Code`, or part of the title; one of several windows: `App「part of title」` or `#window number`).
+   `Code`, or part of the title; one of several windows: program name + part of the title, e.g. `Notepad「long.txt」`, or `#window number`).
 2. `seeu_see` before every step: numbered list + screenshot. Tap by number; if the target isn't listed, use px/py on the screenshot.
 3. Act, then `seeu_see` again to confirm.
 4. **Chrome / Edge / VS Code (Chromium / Electron)**: pass `target` (the field's number) to `seeu_type` / `seeu_press` so SeeU clicks into the field first.

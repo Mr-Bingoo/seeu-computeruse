@@ -7,7 +7,7 @@
 > ④ state diagrams (which states it can be in and how it switches) ⑤ mind map (all features at a glance).
 > The diagrams only show SeeU's general approach; where a step was added because the author hit a problem in a real scenario, a short "Example:" paragraph under the diagram explains it.
 
-> 💡 Diagrams marked "Windows preview" are for Windows (one overview, one capability matrix, swimlanes 3.6 and 3.7); all the others show the Mac version. For how Windows differs, see the [README](../README.en.md).
+> 💡 Diagrams marked "Windows preview" or "Linux preview" are for those systems (one overview and one capability matrix each; swimlanes 3.6 and 3.7 are Windows, 3.8 and 3.9 are Linux); all the others show the Mac version. For how Windows and Linux differ, see the [README](../README.en.md).
 
 ## ① Overview
 
@@ -63,6 +63,32 @@ block-beta
   class H1,H2,H3,H4 head
 ```
 
+**Linux preview**
+
+```mermaid
+block-beta
+  columns 6
+  H1["① Who calls it"]:6
+  U1["Your Python programs<br/>scheduled tasks, automation"]:2
+  U2["AI (Claude Code, Codex, Cursor…)<br/>MCP tools + Skill instructions<br/>one-step setup"]:2
+  U3["Command line<br/>check (can fix things itself), settings, update"]:2
+  D1<["&nbsp;"]>(down):6
+  H2["② SeeU"]:6
+  J["Decisions<br/>entry: pick route · switch · verify · report<br/>safety rules (incl. lock screen, system dialogs) · step aside · queue<br/>I See"]:2
+  R["Routes<br/>background browser (debugging port)<br/>act on controls · menu bars<br/>borrow the real mouse and keyboard"]:2
+  FB["Seeing and feedback<br/>screenshot + OCR<br/>floating badge · island · agent cursor<br/>glow · toast · check"]:2
+  D2<["&nbsp;"]>(down):6
+  H3["③ System abilities it relies on"]:6
+  P1["Accessibility interface (AT-SPI)<br/>accessibility master switch"]:2
+  P3["System screenshot permission<br/>system remote-control permission"]:2
+  P4["SeeU's GNOME extension<br/>debugging port (Chromium / Chrome)"]:2
+  D3<["&nbsp;"]>(down):6
+  H4["④ Three kinds of scenario"]:6
+  A1["Native apps (GTK / Qt)"]:2 A2["Chromium / Chrome pages"]:2 A3["Emulators · custom-drawn apps"]:2
+  classDef head fill:none,stroke:none,font-weight:bold
+  class H1,H2,H3,H4 head
+```
+
 ## ② Capability matrix
 
 Legend: ✅ background, no disturbance · ⚡ briefly borrows the front window or your mouse · ⚠️ with conditions · ❌ not possible
@@ -96,6 +122,19 @@ For emulators we suggest ADB first (Android's official debugging tool, a public 
 | Dragging (any scenario) | — | ✅ background first; ⚡ borrows the real mouse if that fails | — | — | — | — |
 
 Three more things on Windows: windows running as administrator can't be touched (a Windows rule); when a window is on another virtual desktop, SeeU won't borrow your mouse or switch you over; when the picture can't be trusted (window covered, machine busy, another desktop), it won't click by a position on the screenshot, but clicks the control instead or asks the AI to look again.
+
+**Linux preview**
+
+| Scenario | Read content | Click | Type | Scroll | Works while hidden | Permissions needed |
+|---|---|---|---|---|---|---|
+| Native apps (Text Editor, FeatherPad…) | ✅ reads controls | ✅ acts on the control; ⚡ clicking by screen position borrows the real mouse | ✅ | ✅ where there's a scroll bar; ⚡ otherwise borrows the mouse | ⚠️ covered, minimized or on another workspace: clicking by number still works, but its picture can't be captured | Accessibility master switch, screenshot permission |
+| Chromium / Chrome pages (background browser) | ✅ | ✅ | ✅ | ✅ | ✅ never shows a window; shown only when you need to sign in yourself | None; only sites on the allow list |
+| VS Code and other web-technology apps | ✅ reads controls (start VS Code with the accessibility flag) | ✅ acts on the control | ⚡ borrows the keyboard for a few seconds | ⚡ borrows the mouse | ❌ to borrow the keyboard or mouse the window must be on the current workspace, not minimized | Remote-control permission |
+| Your own browser (Firefox, Chrome…) | ✅ look only | ❌ | ❌ | ❌ | — | Not touched: it would bypass the allow list and carries your logins; web pages go through the background browser |
+| Emulators, custom-drawn apps | ✅ text recognition (needs Tesseract) | ⚡ borrows the real mouse | ⚡ borrows the keyboard | ⚡ borrows the mouse | ❌ (window must be visible) | Screenshot and remote-control permissions |
+| Long-press, dragging (any scenario) | — | ⚡ borrows the real mouse | — | — | — | Remote-control permission |
+
+More things on Linux: only the GNOME desktop (Wayland) is supported, and after SeeU's GNOME extension is installed or updated you need to log out and back in once; nothing happens while the screen is locked, and SeeU won't borrow your mouse or keyboard while a system dialog (password, authorization) is open; when clicking by screen position, it won't click if that point is covered by another window.
 
 ## ③ Swimlane diagrams
 
@@ -468,6 +507,120 @@ sequenceDiagram
 ```
 
 No long-press or dragging in browsers (both act by screen position and would bypass the allow list); things on a page are clicked by number only.
+
+### 3.8 Linux preview: click a button, type into a field
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant AI as AI / project
+  participant E as SeeU entry
+  participant S as Safety · step aside
+  participant R as Routes
+  participant A as Target window
+  participant F as Desktop feedback
+  AI->>E: Click a button / type into a field<br/>(number / name / screen position)
+  E->>F: "SeeU" badge breathes,<br/>card says "Clicking 'OK'"
+  E->>S: Safety rules check
+  alt Hit (terminal, password field, dangerous menu such as "Run",<br/>the AI client running SeeU, screen locked…)
+    S-->>E: Refuse
+    E-->>AI: refused "please do this step yourself"
+    AI-->>U: Passes it on
+  else Passed
+    E->>E: Find the target: back to the window it last looked at<br/>(several same-named windows don't get mixed up),<br/>a number is checked first
+    alt By number / name, the control can act or the field accepts text
+      F-->>U: Purple agent cursor glides to the target
+      E->>R: Step 1: act on the control
+      R->>A: The control's own action / insert text into the field<br/>(mouse and keyboard untouched, no front switch, works when covered)
+      E->>E: Verify (control or window title changed,<br/>or the text read back matches)
+      E-->>AI: delivered
+    else Only a screen position, or the background can't do it<br/>(VS Code input fields, emulators)
+      opt Only a screen position
+        E->>E: Is that point covered by another window?
+        alt Covered
+          E-->>AI: Don't click, use a number or look again
+        end
+      end
+      E->>S: May it borrow?
+      alt Screen locked, a system dialog open,<br/>window minimized or on another workspace
+        S-->>E: No borrowing
+        E-->>AI: refused (with the reason)
+      else Borrow mouse = off
+        E-->>AI: Stops and says where it's stuck
+      else Borrow mouse = ask
+        F-->>U: Orange toast: needs to borrow
+        E-->>AI: ask_user (the AI retries once you agree)
+      else Borrow mouse = on (default)
+        E->>S: Queue with other SeeU tasks, one at a time
+        R->>S: System remote-control permission<br/>(asks you the first time, not after that)
+        loop Mouse or keyboard used in the last second (waits up to 6 s)
+          S->>S: Wait until you stop
+        end
+        alt Still in use
+          E-->>AI: refused "you're using the computer, not borrowing now"
+        else You stopped
+          F-->>U: Orange named cursor + orange glow around the screen,<br/>badge says "Using your mouse"
+          R->>A: Bring to front, move the pointer, click / press / type<br/>(Chinese is pasted via the clipboard, then restored)
+          R->>A: Pointer back where it was, front back to the previous app
+          E->>E: Verify
+          E-->>AI: delivered, or failed (where · why · what to do)
+        end
+      end
+    end
+  end
+```
+
+Main differences from Windows (3.6): on Linux the background has only one step, "act on the control" (no mouse messages to windows), so when that can't do it SeeU borrows the real mouse and keyboard; borrowing needs the system's remote-control permission; nothing is borrowed while the screen is locked or a system dialog is open.
+
+### 3.9 Linux preview: web pages through the background browser
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant AI as AI / project
+  participant E as SeeU entry
+  participant N as Allow list
+  participant B as Background browser
+  participant F as Desktop feedback
+  AI->>E: Open a page
+  E->>N: Is this site on the list?<br/>(no limit while I See is on)
+  alt Not on it
+    E-->>AI: refused "not on the allow list"
+    AI-->>U: Asks whether to add it
+    opt You agree
+      AI->>N: Add it, open again
+    end
+  else On it
+    alt Background browser already running
+      E->>B: Attach
+    else Not started
+      E->>B: Start SeeU's own Chromium or Chrome<br/>(windowless, separate profile, random port,<br/>local only, your own browser untouched)
+    end
+    loop Work
+      AI->>E: Read the page / click by number / fill in
+      E->>B: Through the debugging port
+      alt Cursor in a password, verification-code or bank-card field
+        B-->>E: No typing, no keys that change the contents
+        E-->>AI: refused "please do this step yourself"
+      else Normal
+        B-->>E: Read back and verify
+        E-->>AI: delivered
+      end
+      F-->>U: Floating window says it's working on a page,<br/>live view greyed out (no window to show)
+    end
+    opt The site needs a login
+      AI-->>U: Please sign in yourself
+      U->>E: Agree to show it
+      E->>B: Close, reopen as a normal window
+      U->>B: Sign in yourself
+      E->>B: Close the window, reopen windowless<br/>(the login stays in this profile)
+    end
+  end
+```
+
+Same as Windows (3.7); only the browser differs: Linux uses Chromium or Chrome (the snap Chromium on Ubuntu works too). Your own browser is look-only for SeeU (tapping, typing, pressing keys and scrolling are refused), so web pages always go to this background browser.
 
 ## ④ State diagrams
 

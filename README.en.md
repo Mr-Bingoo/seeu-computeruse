@@ -4,15 +4,15 @@
 
 > *You see SeeU, I know you see. I See.*
 
-**Let your AI see the screen, click and type on your Mac or Windows PC in the background... working side by side with you, without getting in each other's way!**
+**Let your AI see the screen, click and type on your Mac, Windows PC or Linux machine in the background... working side by side with you, without getting in each other's way!**
 
 [中文](README.md) | English
 
-For macOS, plus a Windows preview (Linux not supported yet)
+For macOS, plus Windows and Linux previews
 
 </div>
 
-https://github.com/user-attachments/assets/d82fd10b-7a0b-4e7c-a189-331824ca04ad
+https://github.com/user-attachments/assets/1ee86433-e46b-4711-96fd-4e398d972ca5
 
 The name comes from CU (Computer Use — letting AI operate a computer), pronounced the same: *see first, then act*.
 
@@ -34,12 +34,12 @@ Once installed, just ask your AI (Claude, Codex, Cursor…):
 
 Before we get to what SeeU can do, one thing to know: every step is checked against the screen; if an action didn't take effect, SeeU tries another way, or stops and tells you where it's stuck, instead of clicking blindly. More in [What is SeeU](docs/What-is-SeeU.md).
 
-**On both Mac and Windows:**
+**On all three systems:**
 
 | Scenario | How SeeU does it |
 |---|---|
-| Native apps (Notes and Finder on the Mac, Notepad and File Explorer on Windows…) | Reads buttons and text on screen, clicks by number, types in the background |
-| Emulators and custom-drawn apps | Reads the screen with OCR, clicks in the background |
+| Native apps (Notes and Finder on the Mac, Notepad and File Explorer on Windows, Text Editor on Linux…) | Reads buttons and text on screen, clicks by number, types in the background |
+| Emulators and custom-drawn apps | Reads the screen with OCR, clicks in the background (on Linux it borrows your mouse for a few seconds) |
 | Apps you're not sure about | `python3 -m seeu probe <App>`: its engine, how many controls are readable, and which route SeeU will take |
 
 A floating badge on screen (open it to see what the AI is doing, or a live view of the window it is working in) and a proxy cursor; a small banner pops up when there's something you should notice.
@@ -52,15 +52,15 @@ A floating badge on screen (open it to see what the AI is doing, or a live view 
 | Apps built with web technology (VS Code, etc.) | Starts SeeU's own instance in the background and works on it fully hidden; your own instance is left alone |
 | iPhone Mirroring | Reads the phone screen with OCR, taps it in the background, opens apps on the phone |
 
-**Windows only:**
+**On both Windows and Linux:**
 
 | Scenario | How SeeU does it |
 |---|---|
-| Chrome / Edge pages | SeeU opens its own windowless background browser (kept apart from the one you use) and reads pages, fills forms and clicks there; for sites that need a login, the AI can bring that window up so you handle it yourself! |
+| Web pages (Chrome / Edge on Windows, Chromium / Chrome on Linux) | SeeU opens its own windowless background browser (kept apart from the one you use) and reads pages, fills forms and clicks there; for sites that need a login, the AI can bring that window up so you handle it yourself! |
 
 ## Install
 
-**Requirements**: on the Mac, Apple silicon (tested on macOS 27; earlier versions and Intel Macs are untested); the Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM, both in virtual machines).
+**Requirements**: on the Mac, Apple silicon (tested on macOS 27; earlier versions and Intel Macs are untested); the Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM, both in virtual machines); the Linux preview needs the GNOME desktop (Wayland, Ubuntu's default) and Python 3.10 or later (tested so far on Ubuntu 26.04 x64 and ARM in a virtual machine).
 
 ### Easiest: give the link to your AI
 
@@ -68,15 +68,15 @@ A floating badge on screen (open it to see what the AI is doing, or a live view 
 Install SeeU for me: https://github.com/Mr-Bingoo/seeu-computeruse
 ```
 
-The AI downloads it, installs the dependencies and connects it (to whichever AI client is running it). Works on both Mac and Windows.
+The AI downloads it, installs the dependencies and connects it (to whichever AI client is running it). Works on Mac, Windows and Linux.
 
 ### By hand
 
-The commands below are written mainly for the Mac; on Windows, write `python` instead of `python3`.
+The commands below are written mainly for Mac/Linux; on Windows, write `python` instead of `python3`.
 
 **1. Install the dependencies**
 
-Mac (use the system `python3` directly; the first run asks to install the Command Line Developer Tools, just click Install):
+Mac (comes with `python3`; the first run asks to install the Command Line Developer Tools, just click Install):
 
 ```bash
 /usr/bin/python3 -m pip install --user pyobjc-framework-Cocoa pyobjc-framework-Quartz pyobjc-framework-ScreenCaptureKit pyobjc-framework-CoreMedia opencv-python-headless numpy
@@ -86,6 +86,12 @@ Windows:
 
 ```bash
 python -m pip install comtypes
+```
+
+Linux (Ubuntu desktop usually has these already; install only what's missing):
+
+```bash
+sudo apt install git python3-gi gir1.2-atspi-2.0 python3-pil
 ```
 
 **2. Download and connect it to your AI**
@@ -104,7 +110,9 @@ python3 -m seeu install auto      # or name one: claude | codex | cursor | trae 
 python3 -m seeu check             # shows what this computer is still missing and how to fix it
 ```
 
-Permissions are needed on the Mac only (nothing to set up on Windows): on the Mac, ask the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant (your AI client, or the SeeU helper app); turn on **Accessibility** (called **Device Control and Data Access** in newer macOS) and **Screen & System Audio Recording** for it in System Settings → Privacy & Security. Quit the AI client completely and reopen it afterwards, or the new permissions won't take effect.
+The Mac needs some permissions turned on (nothing to set up on Windows): on the Mac, ask the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant (your AI client, or the SeeU helper app); turn on **Accessibility** (called **Device Control and Data Access** in newer macOS) and **Screen & System Audio Recording** for it in System Settings → Privacy & Security. Quit the AI client completely and reopen it afterwards, or the new permissions won't take effect.
+
+Linux needs you to run `python3 -m seeu check --fix`. It installs SeeU's GNOME extension (it draws the floating badge and proxy cursor) and turns on the system's accessibility switch; while it runs, the system pops up two dialogs right away: click "Allow" for the screenshot one; for the remote desktop one, first turn on "Allow Remote Interaction", then click "Share" (SeeU only borrows the mouse and keyboard when the background can't do it). Afterwards, **log out and back in once**.
 
 ## Connect your AI client
 
@@ -113,6 +121,7 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 - Claude, Codex, Cursor, Trae, VS Code: connected by the `install` command above.
 - WorkBuddy, Doubao: create a custom connector (local / STDIO) in their own settings and enter `python3 -m seeu mcp`; the same works for any other MCP client.
 - Windows only: Claude can be connected with one command, but this hasn't been tested yet; for Doubao, install the x64 build for now (as of November 2026), the ARM build can't connect yet.
+- Linux only: Claude Code, Codex, Cursor and VS Code can be connected with one command; tested so far is Codex inside the ChatGPT desktop app. The first time Codex uses SeeU to look at a window, it may say "SeeU blocked it"; that's usually Codex's own "Approve for me" auto-review, so just reply "I approve" in the chat.
 - Mac only: if you prefer skill marketplaces, `npx skills add Mr-Bingoo/seeu-computeruse` also works. It only installs the instructions for the AI; the first time you use it, the AI follows them to install and connect SeeU.
 
 **Qwen (千问)**: Qwen only accepts tools started with `npx`, so install [Node.js](https://nodejs.org) first.
@@ -127,7 +136,7 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 
 ## Update and remove
 
-- **Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (on Windows, install [Git for Windows](https://git-scm.com) first); if you installed with `npx skills`, run `npx skills update seeu`. See the [changelog](CHANGELOG.en.md) for what changed in each release.
+- **Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (on Windows, install [Git for Windows](https://git-scm.com) first); if you installed with `npx skills`, run `npx skills update seeu`. On Linux, if a new version changes the GNOME extension, it is installed for you and you're reminded to log out and back in once. See the [changelog](CHANGELOG.en.md) for what changed in each release.
 - **Version**: ask the AI, or run `python3 -m seeu version`.
 - **Remove**: `python3 -m seeu uninstall <client>`.
 
@@ -140,6 +149,7 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
 - Never types into password or verification-code fields; while the cursor is in one it also won't press character keys, Return or Delete, or paste (⌘V, Paste in a menu and on-screen buttons named "Paste" all count; keys for leaving the field — Tab, Esc, arrows — still work). It never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in Electron apps you installed yourself, SeeU can't tell what kind of field it is, so there this rule relies on the AI; in SeeU's background browser and the Electron apps it opens separately, only standard password inputs are recognised; a frame embedded from another site (common for payments and third-party sign-in) can't be looked into, so it is judged by the frame's own name and address, and one with a plain name is not recognised.)
 - No long-press in browsers: a long-press clicks by screen position, which would bypass the web allow list; things on a page are clicked by number only.
+- Linux only: nothing at all while the screen is locked; no borrowing your mouse or keyboard while a system dialog (password, authorization) is open; no clicking an editor's "Run" menu that would run the file as a program.
 - In browsers, no Return or Space while the keyboard focus is outside the web page: on a toolbar button, an extension's popup, a browser settings page or a dialog the browser itself shows, those two keys would click the button for you (for example "Allow this site"). Esc and Tab still work; inside pages and in the address bar nothing changes.
 
 **Rules written for the AI, which it is expected to follow (the code doesn't block these):**
@@ -185,9 +195,17 @@ Almost every model maker is building stronger "AI operates the computer" abiliti
 - When a window is on another virtual desktop, SeeU won't borrow your mouse or switch you over to it.
 - When your own Chrome is covered by another window, clicks don't reach the page; use the background browser instead. Multiple monitors are untested.
 
+**Linux only:**
+
+- Only the GNOME desktop (Wayland) is supported; KDE and other desktops aren't yet. After SeeU's GNOME extension is installed or updated, log out and back in once for it to take effect.
+- A window that's covered by another window, minimized or on another workspace can't be seen in screenshots (clicking by number still works).
+- In VS Code and other apps built on web technology, text boxes can't be written to in the background, so SeeU borrows your keyboard for a few seconds; start VS Code with `ACCESSIBILITY_ENABLED=1 code` so SeeU can read its interface.
+- Your own browser windows (Firefox, Chrome, Chromium…) are look-only for SeeU: it won't click, type, press keys or scroll in them, so it can't bypass the web allow list or touch sites you're signed in to; web pages always go through SeeU's own background browser.
+- Emulators and custom-drawn apps rely on reading text from screenshots, which needs Tesseract: `sudo apt install tesseract-ocr tesseract-ocr-chi-sim`; `python3 -m seeu check` tells you whether it's installed.
+
 ## Troubleshooting
 
-1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands.)
+1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands; on Linux, `python3 -m seeu check --fix` fixes most of it for you.)
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
 3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
 <!-- /sync:notes -->

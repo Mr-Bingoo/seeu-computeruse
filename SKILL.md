@@ -1,11 +1,12 @@
 ---
 name: seeu
-description: Use SeeU to see and operate apps on the user's Mac in the background — look at the screen, click, type, scroll — without taking the mouse or switching the frontmost app. Use it when the user asks you to operate a Mac app (TextEdit, Notes, VS Code…), a Safari/Chrome page, iPhone Mirroring or the BlueStacks emulator, or says "use SeeU" / "click / fill in / check something in X for me". Don't use SeeU for things that have their own tools, like writing files or running commands. On Windows there is a SeeU Windows preview with its own instructions (seeu/win/skill/SKILL.md).
+description: Use SeeU to see and operate apps on the user's Mac in the background — look at the screen, click, type, scroll — without taking the mouse or switching the frontmost app. Use it when the user asks you to operate a Mac app (TextEdit, Notes, VS Code…), a Safari/Chrome page, iPhone Mirroring or the BlueStacks emulator, or says "use SeeU" / "click / fill in / check something in X for me". Don't use SeeU for things that have their own tools, like writing files or running commands. On Windows and Linux there are SeeU previews with their own instructions (seeu/win/skill/SKILL.md, seeu/linux/skill/SKILL.md).
 ---
 
 # SeeU: operate this Mac in the background
 
 > **On Windows?** This file is for the Mac. Windows has a SeeU Windows preview: install it as the README says (write `python` instead of `python3`), connect it with `python -m seeu install auto`, then follow `seeu/win/skill/SKILL.md` instead of this file.
+> **On Linux?** This file is for the Mac. Linux has a SeeU Linux preview (GNOME on Wayland only): install it as the README says, run `python3 -m seeu check --fix` (then the user logs out and back in once), connect it with `python3 -m seeu install auto`, then follow `seeu/linux/skill/SKILL.md` instead of this file.
 > Run every command from the folder that contains the `seeu` folder. SeeU works in the background: the user keeps using the mouse and keyboard, neither disturbs the other.
 > Reply to the user in the user's language; this file is in English only because it is written for you.
 
@@ -37,7 +38,7 @@ python3 -m seeu menu <App> Menu Submenu …
   `osascript -e 'tell application "System Events" to set visible of process "<App>" to true'`.
 - **Unfamiliar app**: `python3 -m seeu probe <App>` first (read-only) — it tells you the engine, how many controls are readable, whether background screenshots work, and which route SeeU will take.
 - **Always `see` before each step** and pick the target from the list; never act from memory or guessed coordinates. After acting, `see` again (or look at the returned screenshot) to confirm you reached the screen you wanted.
-- Use the process name as the app name (`TextEdit`, `Notes`, `Safari`, `Google Chrome`, `iPhone Mirroring`). For one of several windows write `"App「window title」"`, e.g. `"BlueStacks「Helper」"` or a separate Settings window like `"Gemini「General」"`; `see` lists the open windows when there are several. Titles can change with the page, so check the list again after acting.
+- Use the process name as the app name (`TextEdit`, `Notes`, `Safari`, `Google Chrome`, `iPhone Mirroring`). For one of several windows write the app name + the window title, e.g. `"BlueStacks「Helper」"` or a separate Settings window like `"Gemini「General」"`; `see` lists the open windows when there are several. Titles can change with the page, so check the list again after acting.
 - Open screenshot paths with your Read tool; when the text list isn't enough to decide, always look at the image.
 - Key names: letters, digits, symbols, `return` `tab` `space` `delete` `forwarddelete` `escape`, arrows `left/right/up/down`, `home` `end` `pageup` `pagedown`, `f1`–`f12`.
   **To append after existing text**: first `press <App> down cmd` (or `end cmd`) to move to the end, then `type`. 🔴 Never select all and retype the original (long or formatted documents lose content).

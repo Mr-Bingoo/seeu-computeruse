@@ -123,7 +123,7 @@ How to work (look → act → look again):
    Sites that need a login: ask the user, then seeu_manage action="show_browser" opens SeeU's Chrome as a normal window
    so the user can sign in themselves; after they say they're done, action="hide_browser".
 7. App names: the program name (Notepad, chrome, Code, msedge…) or part of the window title. For one of several
-   windows write "App「part of the title」", or "#window number" from seeu_windows.
+   windows write the program name + part of the title (e.g. "Notepad「long.txt」"), or "#window number" from seeu_windows.
 
 Off limits (SeeU blocks these, don't try): command prompts / PowerShell / terminals, Registry Editor, Task Manager,
 password managers, Windows Security, credential prompts, the privacy / security / account pages of Settings,
@@ -139,7 +139,7 @@ Fill in the why parameter of every action with one sentence explaining the step.
 Report to the user in plain language (e.g. "Typed 3 lines into Notepad, verified."), not with outcome codes."""
 
 APP = {"type": "string", "description": "Program name (Notepad, chrome, Code…) or part of the window title; "
-                                         "for one of several windows \"App「part of title」\" or \"#window number\""}
+                                         "for one of several windows program name + part of the title like \"Notepad「long.txt」\", or \"#window number\""}
 WHY = {"type": "string", "description": "One sentence: why you are doing this step (logged)"}
 TARGET = {"type": "string", "description": "A number from the seeu_see list (recommended), or text exactly as it appears in the list"}
 PX = {"type": "number", "description": "Horizontal pixel on the latest seeu_see screenshot (top-left is 0)"}
@@ -202,6 +202,8 @@ TOOLS = [
 
 # 给 AI 的原因转英文:Windows 版新写的原因(长的先换);没收录的原样留中文,再过一遍 Mac 版的 to_en
 WIN_PHRASES = [
+    ("」对得上好几个程序的窗口:", "\" matches windows of several programs: "),
+    (";请写成「程序名「标题里的几个字」」或「#窗口号」", "; write it as \"program name「part of the title」\" or \"#window number\""),
     # —— 11-15 C-2.1 后台打开 App(win/openapp.py)
     (" 是虚拟机共享过来的 Mac 上的 App,打开它会在 Mac 上运行,SeeU 不从 Windows 里替你打开", " is a Mac app shared into this virtual machine — opening it would run it on the Mac; SeeU won't open it from Windows"),
     (" 是命令行程序,能直接运行任何命令,SeeU 不替你打开", " is a command-line program that can run any command; SeeU won't open it for you"),

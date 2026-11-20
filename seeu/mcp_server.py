@@ -108,7 +108,7 @@ How to work (look → act → look again):
    Scrolling down on the home screen opens Spotlight. If the screen shows "iPhone in Use / Lock your iPhone",
    the user is using their phone — ask them to lock it.
 7. Unfamiliar app: call seeu_probe first (read-only) to see which route SeeU will take.
-8. Apps with several windows (e.g. a separate Settings window): write the app as "App「window title」".
+8. Apps with several windows (e.g. a separate Settings window): write the app name + the window title, e.g. "TextEdit「Notes.txt」".
    seeu_see lists the open windows when there is more than one.
 
 Off limits (SeeU blocks these, don't try): terminal apps, password apps (Keychain, Passwords, 1Password…), the Privacy & Security pages of System Settings,
@@ -122,7 +122,7 @@ Fill in the why parameter of every action with one sentence explaining the step.
 Report to the user in plain language (e.g. "Added a new note with 3 lines in Notes, verified."), not with outcome codes."""
 
 APP = {"type": "string", "description": "App name (process name): TextEdit, Notes, Safari, Google Chrome, iPhone Mirroring, BlueStacks… "
-                                         "For one of several windows write \"App「window title」\", e.g. \"Gemini「General」\""}
+                                         "For one of several windows write the app name + the window title, e.g. \"Gemini「General」\""}
 WHY = {"type": "string", "description": "One sentence: why you are doing this step (logged and shown on the SeeU overlay)"}
 TAB = {"type": "string", "description": "Browser only: tab id (from seeu_web_open / seeu_web_tabs). Omit = current tab"}
 TARGET = {"type": "string", "description": "A number from the seeu_see list (recommended), or text exactly as it appears in the list"}

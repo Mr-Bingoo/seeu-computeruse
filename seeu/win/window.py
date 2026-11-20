@@ -10,6 +10,7 @@ App 的写法(跟 Mac 版对齐):
 """
 import ctypes
 import ctypes.wintypes as wt
+import os
 import re
 import struct
 import zlib
@@ -251,6 +252,14 @@ def find(app):
         return info(h)
     name, title = split_target(a)
     wins = list_windows()
+    if title is not None and name.lower() in ("", "app"):     # 11-20:AI 照抄占位「App「标题」」→ 只按标题找
+        hits = [w for w in wins if title.lower() in w["title"].lower()]
+        progs = {_exe_key(w["exe"]) for w in hits}
+        if len(progs) > 1:                                     # 11-20 复查:几个程序的窗口都对得上,别挑最上面那个(可能是别的程序),请 AI 写清楚
+            cands = "、".join(f"{os.path.basename(w['exe']).removesuffix('.exe').removesuffix('.EXE')}「{w['title'][:40]}」" for w in hits[:6])
+            raise RuntimeError(f"「{a}」对得上好几个程序的窗口:{cands};请写成「程序名「标题里的几个字」」或「#窗口号」")
+        if hits:
+            return hits[0]                                     # 只有一个程序:list_windows 按上下顺序,最上面的先
     key = _exe_key(name)
     hits = [w for w in wins if _exe_key(w["exe"]) == key]
     if title is not None:

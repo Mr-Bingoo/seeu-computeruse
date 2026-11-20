@@ -156,6 +156,46 @@ def _win_gate_log(what, said):
 if __name__ == "__main__":
     args = sys.argv[1:]
     cmd = args[0] if args else ""
+    if sys.platform.startswith("linux"):   # 11-18:Linux 预览版(第 1 段),命令都在 seeu/linux/
+        import seeu as _seeu                 # 包里没有 linux/ 时,这一行会给「只支持 macOS」的话
+        if cmd == "mcp":                     # 11-18 第 2 段
+            from seeu.linux import mcp_server as _lmcp
+            _lmcp.main()
+            sys.exit(0)
+        if cmd in ("设置", "settings", "set"):
+            args, ok = _ai_gate(args, lambda a: "改设置:" + " ".join(a[1:])) if len(args) > 1 else (args, True)
+            if not ok:
+                sys.exit(3)
+            from seeu.linux import real as _lreal
+            sys.exit(_lreal.settings_cmd(args[1:]))
+        if cmd in ("接入", "install", "移除", "uninstall", "remove"):
+            from seeu.linux import install as _linst
+            sys.exit(_linst.main(cmd, args[1:]))
+        if cmd in ("allow", "disallow", "allowed"):
+            from seeu.web import aejs as _aejs
+            if cmd == "allowed":
+                print("\n".join(_aejs.allowed_list()) or "(允许名单是空的)")
+                sys.exit(0)
+            args, ok = _ai_gate(args, lambda a: ("把 " if cmd == "allow" else "从允许名单拿掉 ") + " ".join(a[1:])
+                                + (" 加进允许名单" if cmd == "allow" else ""))
+            if not ok:
+                sys.exit(3)
+            for u in args[1:]:
+                _aejs.allow(u, on=(cmd == "allow"))
+                print(("已加进允许名单:" if cmd == "allow" else "已从允许名单拿掉:") + u)
+            sys.exit(0)
+        if cmd in ("更新", "update"):            # 11-18 C-3.0
+            from seeu import update as _upd
+            sys.exit(_upd.main(args[1:]))
+        if cmd in ("检查", "check", "doctor"):
+            from seeu.linux import doctor as _ldoc
+            sys.exit(_ldoc.main(args[1:]))
+        if cmd in ("版本", "version", "--version", "-v"):
+            from seeu import version
+            print("SeeU v" + version.current() + " (Linux preview)")
+            sys.exit(0)
+        from seeu.linux import act as _lact
+        sys.exit(_lact.main(args))
     if sys.platform == "win32":          # 11-11:Windows 预览版,命令都在 seeu/win/
         if cmd == "mcp":
             from seeu.win import mcp_server as _wmcp

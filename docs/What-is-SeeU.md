@@ -5,7 +5,7 @@
 ## Overview
 SeeU is named after CU (Computer Use, letting AI operate a computer), which sounds the same. The idea: "look first, then act".
 
-SeeU lets the AI agent on your device **perform actions and operate apps in the foreground or background**: look at the screen, click, type, scroll... while you carry on with whatever you're doing, without getting in each other's way. It runs on the Mac, with a preview for Windows. Your data stays on your machine; SeeU itself doesn't go online and needs no sign-up or login.
+SeeU lets the AI agent on your device **perform actions and operate apps in the foreground or background**: look at the screen, click, type, scroll... while you carry on with whatever you're doing, without getting in each other's way. It runs on the Mac, with previews for Windows and Linux. Your data stays on your machine; SeeU itself doesn't go online and needs no sign-up or login.
 
 **What "background control" means**: SeeU puts an "agent cursor" on your screen that is separate from the mouse in your hand. The clicks, typing and scrolling the AI hands to SeeU are all done by this agent cursor, while you keep using your own mouse and keyboard. Only the few actions that must use the system mouse (such as dragging) borrow your mouse for a few seconds, and it's handed straight back. In some cases SeeU can even work "stealthily" inside an app or web page you choose without showing a single window, so it doesn't disturb you at all. To see what it's doing, just look at the SeeU floating badge on screen.
 
@@ -23,11 +23,15 @@ SeeU lets the AI agent on your device **perform actions and operate apps in the 
   - **What it can do**: the everyday things work: look at windows, click, type, press keys, scroll, long-press and drag (background first, borrowing your mouse for a few seconds if that doesn't work); web pages go through SeeU's background browser (Chrome or Edge); a floating badge, a proxy cursor and small banners show what's going on. It has a few things fewer than the Mac version (for example, no iPhone Mirroring, and apps built with web technology can't be run as a hidden separate instance).
   - **System permissions**: nothing to turn on, unlike Accessibility and Screen Recording on the Mac.
   - **AI clients**: tested so far with Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao and Qwen (WorkBuddy, Doubao and Qwen are connected by hand; for Doubao install the x64 build, and Qwen needs updating to a newer build with the "Work" page); Claude can be connected with one command but hasn't been tried in real use yet.
-- **SeeU for Linux**: stay tuned!
+- **SeeU for Linux** (preview)
+  - **Requirements**: the GNOME desktop (Wayland, Ubuntu's default), with Python 3.10 or later. Tested so far in virtual machines running Ubuntu 26.04 x64 and ARM; KDE and other desktops aren't supported yet.
+  - **What it can do**: the everyday things work: look at windows, click by number, type into text boxes, scroll, pick menu items (where the interface can't be read, it borrows your mouse and keyboard for a few seconds; long-press and drag borrow them too); web pages go through SeeU's background browser (Chromium or Chrome); a floating badge, a proxy cursor and small banners show what's going on. It has a few things fewer than the Mac version (for example, no iPhone Mirroring, a covered window can't be seen in screenshots, text boxes in apps like VS Code need your keyboard, and your own browser is look-only).
+  - **System permissions**: running `python3 -m seeu check --fix` pops up two system dialogs: click "Allow" for the screenshot one; for the remote desktop one, first turn on "Allow Remote Interaction", then click "Share"; after SeeU's GNOME extension is installed, log out and back in once.
+  - **AI clients**: Claude Code, Codex, Cursor and VS Code can be connected with one command; tested so far is Codex inside the ChatGPT desktop app.
 
-In Qwen, SeeU on both platforms can open apps for Qwen in the background; other MCP clients should work in theory too.
+In Qwen, SeeU on Mac and Windows can open apps for Qwen in the background; other MCP clients should work in theory too.
 
-> 💡 The sections below are written around the Mac version's general abilities; for the differences between Mac and Windows, see the [README](../README.en.md).
+> 💡 The sections below are written around the Mac version's general abilities; for the differences between Mac, Windows and Linux, see the [README](../README.en.md).
 
 ## General abilities · point and it does
 It isn't picky about apps and needs no per-app setup. Tell it which app to open, which button to click, where to type, and it does it:
@@ -46,10 +50,20 @@ It isn't picky about apps and needs no per-app setup. Tell it which app to open,
 
 **You decide whether it borrows**: "on" by default (with a notice on screen before it borrows); you can switch to "ask" (asks every time) or "off" (never borrows, so steps that need the system mouse will get stuck). To change it, just tell the AI (e.g. "set borrow-mouse to ask"), or run `python3 -m seeu set borrow-mouse on|ask|off` yourself.
 
-**Several conversations in parallel**: several conversations in the same AI client, or different clients such as Claude and Codex open together, can all use SeeU at the same time. Only one of them acts on the same app at a time (on Windows, the same window), and after a step it keeps the app for a few seconds for its next step. The others queue for up to 30 seconds; if their turn doesn't come, the AI is told "busy, try again shortly" — nobody barges in. Slow work such as typing a long passage can't be cut into, and a step that was stopped because another conversation had just touched the app, so nothing was done, gives the app up right away. Each conversation gets its own cursor, labeled with its name (Claude, Claude2…) in its own color; one waiting in the queue dozes off (Zz) and fades. Borrowing your mouse is also one conversation at a time. To turn queuing off, set the environment variable `SEEU_NO_SCHED=1`.
+## Splits itself · several tasks in parallel
+Several conversations in the same AI client, or different clients such as Claude, Codex and Cursor open together, can all use SeeU at the same time.
+- **Different apps, at the same time**: one conversation looks things up in the browser while another writes in Notes; neither waits for the other.
+- **The same app, taking turns**: only one conversation acts on an app at a time (on Windows and Linux this is per window, so different windows of the same app can be worked on at once); after a step it keeps the app for a few seconds for its next step. The others queue for up to 30 seconds; if their turn doesn't come, the AI is told "busy, try again shortly" — nobody barges in.
+- **Slow work isn't cut into**: while typing a long passage, no other task can jump the queue and interrupt it.
+- **Doesn't click in the wrong place**: if another conversation has just touched the app and moved the cursor away, the step is skipped and the app is handed back right away, and the AI is told to redo it with the field's number; if a window moved or changed while waiting in the queue, a tap by position is checked first, and the AI is asked to look again if it changed; when an app has several windows open, SeeU won't type into a window the AI didn't look at.
+- **Each with its own cursor**: each conversation gets its own cursor, labeled with its name (Claude, Claude2…) in its own color; the cursor of one waiting in the queue shows a dozing effect (Zz) and fades.
+- **Borrowing the mouse queues too**: the real system mouse in your hand is lent to only one conversation at a time (taking over the system mouse is always one at a time).
+- **Every task in view**: tap the floating badge to open the "island" — one row per task, showing who is working and who is waiting (see "Visible · the floating badge" below).
+- **One thing to note**: several sub-agents sent out at once from the same conversation count as one task and don't queue against each other; have them pass the field's number when typing.
+- **Turning off the queuing policy**: queuing is how SeeU sensibly schedules sharing and taking over between its virtual cursors running in parallel. If you don't want it, set the environment variable `SEEU_NO_SCHED=1` (not recommended: with it off, if several conversations work on the same app at once, typing may land in the wrong place, and in some cases they can fall into a "take-over loop").
 
 ## Visible · the floating badge
-When SeeU is acting, a floating window appears at the top right of the screen so you always know what it's doing:
+When SeeU is acting, a floating badge appears at the top right of the screen so you always know what it's doing:
 - **Collapsed**: a small badge reading "SeeU" ("I See" while I See is on) that only shows status, no steps. The dot's color shows the current mode and it "breathes" while active. Click it to see what's happening.
 - **Opened**:
   - **Live view**: plays the window being operated in real time and marks where it clicks. A stealth browser has nothing to show, so this button is greyed out.
@@ -218,6 +232,7 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
 - Never types into password or verification-code fields; while the cursor is in one it also won't press character keys, Return or Delete, or paste (⌘V, Paste in a menu and on-screen buttons named "Paste" all count; keys for leaving the field — Tab, Esc, arrows — still work). It never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in Electron apps you installed yourself, SeeU can't tell what kind of field it is, so there this rule relies on the AI; in SeeU's background browser and the Electron apps it opens separately, only standard password inputs are recognised; a frame embedded from another site (common for payments and third-party sign-in) can't be looked into, so it is judged by the frame's own name and address, and one with a plain name is not recognised.)
 - No long-press in browsers: a long-press clicks by screen position, which would bypass the web allow list; things on a page are clicked by number only.
+- Linux only: nothing at all while the screen is locked; no borrowing your mouse or keyboard while a system dialog (password, authorization) is open; no clicking an editor's "Run" menu that would run the file as a program.
 - In browsers, no Return or Space while the keyboard focus is outside the web page: on a toolbar button, an extension's popup, a browser settings page or a dialog the browser itself shows, those two keys would click the button for you (for example "Allow this site"). Esc and Tab still work; inside pages and in the address bar nothing changes.
 
 **Rules written for the AI, which it is expected to follow (the code doesn't block these):**
@@ -247,9 +262,17 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 - When a window is on another virtual desktop, SeeU won't borrow your mouse or switch you over to it.
 - When your own Chrome is covered by another window, clicks don't reach the page; use the background browser instead. Multiple monitors are untested.
 
+**Linux only:**
+
+- Only the GNOME desktop (Wayland) is supported; KDE and other desktops aren't yet. After SeeU's GNOME extension is installed or updated, log out and back in once for it to take effect.
+- A window that's covered by another window, minimized or on another workspace can't be seen in screenshots (clicking by number still works).
+- In VS Code and other apps built on web technology, text boxes can't be written to in the background, so SeeU borrows your keyboard for a few seconds; start VS Code with `ACCESSIBILITY_ENABLED=1 code` so SeeU can read its interface.
+- Your own browser windows (Firefox, Chrome, Chromium…) are look-only for SeeU: it won't click, type, press keys or scroll in them, so it can't bypass the web allow list or touch sites you're signed in to; web pages always go through SeeU's own background browser.
+- Emulators and custom-drawn apps rely on reading text from screenshots, which needs Tesseract: `sudo apt install tesseract-ocr tesseract-ocr-chi-sim`; `python3 -m seeu check` tells you whether it's installed.
+
 ### Troubleshooting
 
-1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands.)
+1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands; on Linux, `python3 -m seeu check --fix` fixes most of it for you.)
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
 3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
 <!-- /sync:notes -->

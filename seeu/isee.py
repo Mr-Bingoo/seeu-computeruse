@@ -327,6 +327,16 @@ def _win_overlay_ok():
     return any(fw is not None and getattr(fw, "SERVING", False) and 0 <= now - getattr(fw, "HAND_T", 0) < 5 for fw in cands)
 
 
+def _linux_overlay_ok():
+    """Linux 悬浮标那条(11-18 C-3.0):本进程就是浮标显示进程,而且小插件刚报过一次来自硬件(/dev/input)的按下。"""
+    cands = [sys.modules.get("seeu.linux.floatwin")]
+    m = sys.modules.get("__main__")
+    if m is not None and getattr(getattr(m, "__spec__", None), "name", "") == "seeu.linux.floatwin":
+        cands.append(m)
+    now = time.time()
+    return any(fw is not None and getattr(fw, "SERVING", False) and 0 <= now - getattr(fw, "HAND_T", 0) < 5 for fw in cands)
+
+
 def person_ok(by=None):
     """这次「开」是不是用户亲手(11-16 复查后:都在这里自己查,不信调用方的话)。
     Mac:悬浮窗亲自拉起的(from_overlay),或父进程链里没有 AI 客户端 + 终端里现场按对字母;
@@ -337,6 +347,8 @@ def person_ok(by=None):
         if by == "overlay":
             return _win_overlay_ok()
         return False
+    if sys.platform.startswith("linux") and by == "overlay":
+        return _linux_overlay_ok()
     if from_overlay():
         return True
     return not from_ai() and _tty_confirm()

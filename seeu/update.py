@@ -163,10 +163,21 @@ def _rebuild_launcher():
         print(T("upd.launcher_fail", err=e, path=build))
 
 
+def _linux_ext():
+    """Linux:GNOME 小插件文件变了 → 拷进用户自己的扩展目录(不要管理员密码);GNOME 只在登录时读扩展,要注销重登。"""
+    try:
+        from seeu.linux import shell
+        if shell.is_gnome():
+            shell.install()
+            print(T("upd.linux_ext"))
+    except Exception as e:   # noqa: BLE001
+        print(T("upd.linux_ext_fail", err=e))
+
+
 def main(args=()):
     check_only = "--check" in args
     if not shutil.which("git"):
-        print(T("upd.no_git_win" if sys.platform == "win32" else "upd.no_git"))
+        print(T("upd.no_git_win" if sys.platform == "win32" else "upd.no_git_linux" if sys.platform.startswith("linux") else "upd.no_git"))
         return 1
     if not _is_clone():
         # 11-01 实测:npx skills add 把整个仓库(不带 .git)拷进 ~/.claude/skills/seeu 这类技能目录,更新要走 npx skills update
@@ -254,10 +265,14 @@ def main(args=()):
         return 1
     if sys.platform == "darwin" and any(p.startswith("seeu/launcher/") for p in changed) and os.path.isdir(os.path.join(HERE, "launcher", "SeeU.app")):
         _rebuild_launcher()
+    if sys.platform.startswith("linux") and any(p.startswith("seeu/linux/ext/seeu@seeu-computeruse/") for p in changed):
+        _linux_ext()                                        # 11-18 C-3.0:小插件变了 → 装上新版,提醒注销重登
     print(T("upd.restart"))
-    print("\n" + T("upd.check_win" if sys.platform == "win32" else "upd.check"))
+    print("\n" + T("upd.check_win" if sys.platform in ("win32",) or sys.platform.startswith("linux") else "upd.check"))
     if sys.platform == "win32":                             # 11-14:Windows 预览版有自己的检查
         from seeu.win import doctor
+    elif sys.platform.startswith("linux"):                  # 11-18:Linux 预览版也有自己的检查
+        from seeu.linux import doctor
     else:
         from seeu import doctor
     try:
