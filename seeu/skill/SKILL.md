@@ -6,7 +6,7 @@ description: Use SeeU to see and operate apps on the user's Mac in the backgroun
 # SeeU: operate this Mac in the background
 
 > **On Windows?** This file is for the Mac. Windows has a SeeU Windows preview: install it as the README says (write `python` instead of `python3`), connect it with `python -m seeu install auto`, then follow `seeu/win/skill/SKILL.md` instead of this file.
-> **On Linux?** This file is for the Mac. Linux has a SeeU Linux preview (GNOME on Wayland only): install it as the README says, run `python3 -m seeu check --fix` (then the user logs out and back in once), connect it with `python3 -m seeu install auto`, then follow `seeu/linux/skill/SKILL.md` instead of this file.
+> **On Linux?** This file is for the Mac. Linux has a SeeU Linux preview (GNOME 45 or later, Wayland recommended): first the system packages from the README (apt on Ubuntu / Debian, dnf on Fedora; they need sudo, so give the user the command to run themselves), then `python3 -m seeu install auto`, then `python3 -m seeu check --fix`, and only at the end ask the user to log out and back in once (that ends this conversation). After that, follow `seeu/linux/skill/SKILL.md` instead of this file.
 > Run every command from the folder that contains the `seeu` folder. SeeU works in the background: the user keeps using the mouse and keyboard, neither disturbs the other.
 > Reply to the user in the user's language; this file is in English only because it is written for you.
 

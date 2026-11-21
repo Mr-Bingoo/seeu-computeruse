@@ -24,10 +24,11 @@ SeeU lets the AI agent on your device **perform actions and operate apps in the 
   - **System permissions**: nothing to turn on, unlike Accessibility and Screen Recording on the Mac.
   - **AI clients**: tested so far with Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao and Qwen (WorkBuddy, Doubao and Qwen are connected by hand; for Doubao install the x64 build, and Qwen needs updating to a newer build with the "Work" page); Claude can be connected with one command but hasn't been tried in real use yet.
 - **SeeU for Linux** (preview)
-  - **Requirements**: the GNOME desktop (Wayland, Ubuntu's default), with Python 3.10 or later. Tested so far in virtual machines running Ubuntu 26.04 x64 and ARM; KDE and other desktops aren't supported yet.
-  - **What it can do**: the everyday things work: look at windows, click by number, type into text boxes, scroll, pick menu items (where the interface can't be read, it borrows your mouse and keyboard for a few seconds; long-press and drag borrow them too); web pages go through SeeU's background browser (Chromium or Chrome); a floating badge, a proxy cursor and small banners show what's going on. It has a few things fewer than the Mac version (for example, no iPhone Mirroring, a covered window can't be seen in screenshots, text boxes in apps like VS Code need your keyboard, and your own browser is look-only).
+  - **Requirements**: GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended), with Python 3.10 or later. Tested so far in virtual machines running Ubuntu 26.04 x64 and ARM, Fedora 40, 43 and 45 ARM, and Debian 13 ARM; on KDE and other desktops it can't see windows or click buttons, so it doesn't work.
+  - **What it can do**: the everyday things work: look at windows, click by number, type into text boxes, scroll, pick menu items (where the interface can't be read, it borrows your mouse and keyboard for a few seconds; long-press and drag borrow them too); web pages go through SeeU's background browser (Chromium or Chrome); a floating badge, a proxy cursor and small banners show what's going on. It has a few things fewer than the Mac version (for example, no iPhone Mirroring, a covered window can't be seen in screenshots, text boxes in apps like VS Code need your keyboard, your own browser is look-only, and the AI doesn't open apps for you, so open them first).
   - **System permissions**: running `python3 -m seeu check --fix` pops up two system dialogs: click "Allow" for the screenshot one; for the remote desktop one, first turn on "Allow Remote Interaction", then click "Share"; after SeeU's GNOME extension is installed, log out and back in once.
-  - **AI clients**: Claude Code, Codex, Cursor and VS Code can be connected with one command; tested so far is Codex inside the ChatGPT desktop app.
+  - **System packages**: git, the accessibility interface and the Pillow image library, installed with apt on Ubuntu / Debian or dnf on Fedora (commands in the README's "Install" section); for web pages you also need Chromium or Chrome.
+  - **AI clients**: one command connects Claude Code (the terminal version; the Claude desktop app has no Linux version), Codex (the ChatGPT desktop app or the `codex` command), Cursor and VS Code + Copilot; Trae, WorkBuddy, Doubao and Qwen have no Linux version. Tested so far is Codex inside the ChatGPT desktop app.
 
 In Qwen, SeeU on Mac and Windows can open apps for Qwen in the background; other MCP clients should work in theory too.
 
@@ -43,9 +44,11 @@ It isn't picky about apps and needs no per-app setup. Tell it which app to open,
 | | Background mode (most of the time) | Step-aside mode (when borrowing your mouse) |
 |---|---|---|
 | When | Clicking, typing and scrolling all done in the background | Things like dragging that can't be done in the background, or when the background method stops working |
-| On screen | Purple agent cursor with a "SeeU" name tag | Bright orange agent cursor with the name you set (by default this Mac's account name, such as "@UserName"); an orange glow around the screen edges reminds you "the computer is being controlled" |
+| On screen | Purple agent cursor with a "SeeU" name tag | Bright orange agent cursor with the name you set (by default this computer's account name, such as "@UserName"); an orange glow around the screen edges reminds you "the computer is being controlled" |
 | While you're using the computer | No effect on each other | If you keep moving the mouse or typing for more than about 1.5 seconds, it pauses; it resumes about 3 seconds after you stop. If you're typing, it waits until you finish |
 | Afterwards | — | Restores your previous front app and mouse position |
+
+On Linux, it waits until you've stopped for about 1 second before borrowing, for 6 seconds at most; if you keep using the computer, it doesn't borrow and tells the AI to try again shortly.
 | Other | — | Doesn't click when the target app shows a dialog; never types into password fields |
 
 **You decide whether it borrows**: "on" by default (with a notice on screen before it borrows); you can switch to "ask" (asks every time) or "off" (never borrows, so steps that need the system mouse will get stuck). To change it, just tell the AI (e.g. "set borrow-mouse to ask"), or run `python3 -m seeu set borrow-mouse on|ask|off` yourself.
@@ -230,9 +233,9 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 
 - Never touches terminals, apps that run scripts directly (Script Editor, Automator, Shortcuts), the Privacy & Security pages of System Settings, system password / authorization dialogs, Keychain and password managers, or the AI client running SeeU itself (so the AI can't approve itself).
 - No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
-- Never types into password or verification-code fields; while the cursor is in one it also won't press character keys, Return or Delete, or paste (⌘V, Paste in a menu and on-screen buttons named "Paste" all count; keys for leaving the field — Tab, Esc, arrows — still work). It never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in Electron apps you installed yourself, SeeU can't tell what kind of field it is, so there this rule relies on the AI; in SeeU's background browser and the Electron apps it opens separately, only standard password inputs are recognised; a frame embedded from another site (common for payments and third-party sign-in) can't be looked into, so it is judged by the frame's own name and address, and one with a plain name is not recognised.)
+- Never types into password or verification-code fields; while the cursor is in one it also won't press character keys, Return or Delete, or paste (⌘V / Ctrl+V, Paste in a menu and on-screen buttons named "Paste" all count; keys for leaving the field — Tab, Esc, arrows — still work). It never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in Electron apps you installed yourself, SeeU can't tell what kind of field it is, so there this rule relies on the AI; in SeeU's background browser and the Electron apps it opens separately, only standard password inputs are recognised; a frame embedded from another site (common for payments and third-party sign-in) can't be looked into, so it is judged by the frame's own name and address, and one with a plain name is not recognised.)
 - No long-press in browsers: a long-press clicks by screen position, which would bypass the web allow list; things on a page are clicked by number only.
-- Linux only: nothing at all while the screen is locked; no borrowing your mouse or keyboard while a system dialog (password, authorization) is open; no clicking an editor's "Run" menu that would run the file as a program.
+- Linux only: never touches the Settings app at all or GNOME Shell itself (the Alt+F2 run box, the system menu); nothing at all while the screen is locked; no borrowing your mouse or keyboard while a system dialog (password, authorization) is open; no clicking an editor's "Run" menu that would run the file as a program.
 - In browsers, no Return or Space while the keyboard focus is outside the web page: on a toolbar button, an extension's popup, a browser settings page or a dialog the browser itself shows, those two keys would click the button for you (for example "Allow this site"). Esc and Tab still work; inside pages and in the address bar nothing changes.
 
 **Rules written for the AI, which it is expected to follow (the code doesn't block these):**
@@ -248,7 +251,7 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 <!-- sync:notes -->
 ### Good to know
 
-- SeeU keeps its state and logs in `~/.seeu` (on Windows, `C:\Users\<your user name>\.seeu`); set the `SEEU_HOME` environment variable to move them (the website allowlist and the extension relay don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the allowlist they share with Safari).
+- SeeU keeps its state and logs in `~/.seeu` (on Windows, `C:\Users\<your user name>\.seeu`); set the `SEEU_HOME` environment variable to move them (the website allowlist and the extension relay don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allowlist, which on the Mac is also shared with Safari).
 - SeeU may take screenshots and read on-screen text while judging and deciding, and these are sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
 
 **Mac only:**
@@ -264,16 +267,17 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 
 **Linux only:**
 
-- Only the GNOME desktop (Wayland) is supported; KDE and other desktops aren't yet. After SeeU's GNOME extension is installed or updated, log out and back in once for it to take effect.
+- Only GNOME 45 or later is supported (Wayland recommended, X11 untested); on KDE and other desktops SeeU can't see windows or click buttons, so it doesn't work. After SeeU's GNOME extension is installed or updated, log out and back in once for it to take effect.
 - A window that's covered by another window, minimized or on another workspace can't be seen in screenshots (clicking by number still works).
 - In VS Code and other apps built on web technology, text boxes can't be written to in the background, so SeeU borrows your keyboard for a few seconds; start VS Code with `ACCESSIBILITY_ENABLED=1 code` so SeeU can read its interface.
 - Your own browser windows (Firefox, Chrome, Chromium…) are look-only for SeeU: it won't click, type, press keys or scroll in them, so it can't bypass the web allow list or touch sites you're signed in to; web pages always go through SeeU's own background browser.
-- Emulators and custom-drawn apps rely on reading text from screenshots, which needs Tesseract: `sudo apt install tesseract-ocr tesseract-ocr-chi-sim`; `python3 -m seeu check` tells you whether it's installed.
+- With automatic login, the system keyring isn't unlocked when you log in: the first time SeeU opens a web page, an "Authentication required" dialog asks for your login password. SeeU pauses while it's open (so nothing gets typed into the password box); enter your login password once to unlock it, and it won't ask again until you restart.
+- Emulators and custom-drawn apps rely on reading text from screenshots, which needs Tesseract: `sudo apt install tesseract-ocr tesseract-ocr-chi-sim` on Ubuntu / Debian, `sudo dnf install tesseract tesseract-langpack-chi_sim` on Fedora; `python3 -m seeu check` tells you whether it's installed.
 
 ### Troubleshooting
 
-1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands; on Linux, `python3 -m seeu check --fix` fixes most of it for you.)
-2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect.
+1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands; on Linux, `python3 -m seeu check --fix` fixes most permissions and settings for you, and for missing system packages it tells you which sudo command to run.)
+2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect. (Linux: after the extension is installed or updated, log out and back in; after turning on the accessibility switch, reopen Qt apps, VS Code, Chrome and the like.)
 3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
 <!-- /sync:notes -->
 

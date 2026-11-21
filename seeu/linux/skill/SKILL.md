@@ -7,7 +7,7 @@ description: Use SeeU to see and operate apps on the user's Linux desktop (GNOME
 
 > The user keeps using the mouse and keyboard while SeeU works; neither disturbs the other.
 > Reply to the user in the user's language; this file is in English only because it is written for you.
-> First version: GNOME on Wayland (Ubuntu's default desktop) only.
+> Preview: GNOME 45 or later only (Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended). KDE and other desktops don't work.
 
 ## 0. Tools or command line
 - **If you have tools starting with `seeu_` (MCP is connected), use only the tools**: `seeu_check`, `seeu_windows`, `seeu_see`,
@@ -15,8 +15,9 @@ description: Use SeeU to see and operate apps on the user's Linux desktop (GNOME
   `seeu_allow_site`, `seeu_manage`. Give every action a one-sentence `why` (it shows on SeeU's status badge).
 - **Only without those tools** use the command line (run from the folder that contains the `seeu` folder):
   `python3 -m seeu windows | see <App> | tap <App> <number> | type <App> "text" [--enter] [--at <number>] | press <App> return | scroll <App> -300 | long_press <App> <number> [--ms 1500] | drag <App> x1 y1 x2 y2`.
-  To connect the tools: `python3 -m seeu 检查 --fix` (then log out and back in once), then `python3 -m seeu install claude`
-  (or `codex` / `cursor` / `vscode`), then start a new conversation.
+  To connect the tools: `python3 -m seeu install claude` (or `codex` / `cursor` / `vscode`), then `python3 -m seeu 检查 --fix`;
+  missing system packages need sudo, so give the user the apt / dnf command it prints to run themselves. Last, the user logs out and back in once
+  (that ends this conversation), then starts a new one.
 
 ## 1. Basic loop: look, act, look again
 1. `seeu_check` once per conversation; `seeu_windows` to see what's open and what to call it (program name like `gnome-text-editor`,

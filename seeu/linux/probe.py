@@ -73,6 +73,10 @@ def version_of(path, pid=0):
     if pkg and " " not in pkg:
         v = _run(["dpkg-query", "-W", "-f=${Version}", pkg])
         return f"{v} ({pkg})" if v else None
+    out = _run(["rpm", "-qf", "--qf", "%{NAME} %{VERSION}-%{RELEASE}", path])   # Fedora 一家(11-21 C-3.4)
+    if out and "not owned" not in out and len(out.split()) == 2:
+        n, v = out.split()
+        return f"{v} ({n})"
     return None
 
 

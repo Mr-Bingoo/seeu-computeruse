@@ -38,6 +38,13 @@ def _codex_app():
                            timeout=10).stdout.strip()
     except Exception:   # noqa: BLE001
         v = ""
+    if not v:   # Fedora 一家(11-21 C-3.4):rpm 包
+        try:
+            v = subprocess.run(["rpm", "-q", "--qf", "%{VERSION}", "chatgpt"], capture_output=True, text=True,
+                               timeout=10).stdout.strip()
+            v = "" if "not installed" in v or " " in v else v
+        except Exception:   # noqa: BLE001
+            v = ""
     if v:
         return v
     return "?" if os.path.exists("/usr/lib/chatgpt/codex-launcher") else None
@@ -193,4 +200,35 @@ def main(cmd, args):
                 say("   - " + x)
             say("   接入照常做;运行 python3 -m seeu 检查 能看全哪些没齐。")
             builtins.print()
-    return _w.main(cmd, args)
+    removing = cmd in ("移除", "uninstall", "remove")
+    before = _read_state() if removing else None
+    rc = _w.main(cmd, args)
+    # 11-21 C-3.5(两轮复查):这次之前记录读得出、里面有接过的,这次移除成功后记录空了,才删小插件。
+    # 记录读坏(_w.main 会把它改写成 {})、没有记录(只手动接过)、打错名字 / 没带参数(rc=2)都不删。
+    if removing and rc == 0 and before and _read_state() == {}:
+        _drop_extension()
+    return rc
+
+
+def _read_state():
+    """读接入记录:读得出且是 dict 才返回,没有文件 / 读坏 / 格式不对都返回 None。"""
+    import json
+    try:
+        with open(_w.STATE, encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return st if isinstance(st, dict) else None
+
+
+def _drop_extension():
+    """11-21 C-3.4:哪家都不接了 → 把 GNOME 小插件也删掉(以前 shell.uninstall() 写了没人调,移除完小插件还留在系统里)。"""
+    from seeu.linux import shell
+    from seeu.linux.lang import say
+    try:
+        if shell.installed():
+            shell.uninstall()
+            say("一键接入的 AI 客户端都移除了,同时删掉了 SeeU 的 GNOME 小插件(注销重新登录一次后彻底停下)。"
+                "要是你还手动接了别的 AI 客户端,运行 python3 -m seeu 检查 --fix 再注销重新登录一次就能装回。")
+    except Exception as ex:   # noqa: BLE001
+        say(f"SeeU 的 GNOME 小插件没删掉({ex}),可以到「扩展」App 里手动删")

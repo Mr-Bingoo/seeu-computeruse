@@ -20,7 +20,8 @@ def available():
 def recognize(png):
     """返回 [{text, x, y, w, h}](相对图片左上角)。按行合并。"""
     if not available():
-        raise RuntimeError("没装认字程序 Tesseract(装法:sudo apt install tesseract-ocr tesseract-ocr-chi-sim)")
+        from seeu.linux import distro
+        raise RuntimeError(f"没装认字程序 Tesseract(装法:{distro.install_cmd('ocr')})")
     have = langs()
     lang = "+".join(x for x in ("chi_sim", "eng") if x in have) or "eng"
     out = subprocess.run(["tesseract", png, "-", "-l", lang, "--psm", "11", "tsv"], capture_output=True, text=True, timeout=60)

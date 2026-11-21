@@ -4,6 +4,22 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac and Linux, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.5.1 (2026-11-22)
+
+The Linux preview has now been tested on Fedora and Debian, the floating badge works on the newest GNOME again, and the docs spell out what Linux needs and which AI clients it supports.
+
+- **Tested on Fedora and Debian**: a fresh install and the full test run on Fedora 40, 43 and 45 and Debian 13 (GNOME 46, 49, 51 and 48). The minimum is now stated: GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+).
+- **Works on the newest GNOME (51, used by Fedora 45)**: SeeU's GNOME extension didn't work there — no floating badge or glow, and after borrowing the mouse the pointer wasn't put back. It now works on both older and newer GNOME.
+- **The screenshot permission sticks on the first check**: the check used to wait only 6 seconds, so if you didn't click "Allow" in time the dialog stayed open, the click didn't count, and it popped up again next time; now the first check tells you first and waits for you (up to 2 minutes).
+- **The light icon matches the Mac** (Windows, Linux): the four corners of the light icon on the floating badge used to be square; they're now rounded, as on the Mac.
+- **The floating badge follows light / dark mode on older GNOME (45, 46)**: on these versions it was always dark, even with the system in light mode; it now matches the system setting.
+- **Install hints match your system**: the install commands shown by the check, text recognition and the "no browser found" message used to be Ubuntu's; Fedora now gets dnf and Debian gets apt.
+- **The check also looks for the Pillow image library**: Debian doesn't install it by default, and without it the AI gets no screenshot when it looks at a window; the check now tells you it's missing and how to install it.
+- **App names in your system's language**: some app names used to show up in another language (on Fedora, Text Editor appeared in Kabyle).
+- **Clean removal on Linux**: once every AI client connected with the one-step install is removed, the GNOME extension is removed too (if you connected another client by hand, run check --fix to put it back).
+- **Docs**: they now say which AI clients Linux supports (Claude Code, Codex, Cursor, VS Code; the others have no Linux version), which system packages to install (apt on Ubuntu / Debian, dnf on Fedora), and that web pages need Chromium or Chrome first.
+- **What you need to do**: on the Mac and Windows, as before, quit the AI client completely and reopen it after updating. On Linux the new extension is installed for you during the update; log out and back in once. On Debian without Pillow, install it with the command the check gives you.
+
 ## v1.5.0 (2026-11-21)
 
 The Linux preview is here: on GNOME desktops such as Ubuntu, the AI can now look at windows, press buttons and type into fields in the background, without getting in your way.

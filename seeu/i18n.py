@@ -120,8 +120,8 @@ TEXT = {
     "upd.no_git_win": ("没找到 git 命令:先到 git-scm.com 装 Git for Windows,再运行一次。",
                        "git was not found: install Git for Windows from git-scm.com, then run this again."),
     # 11-18 C-3.0:Linux 预览版
-    "upd.no_git_linux": ("没找到 git 命令:先装(Ubuntu:sudo apt install git),再运行一次。",
-                         "git was not found: install it first (Ubuntu: sudo apt install git), then run this again."),
+    "upd.no_git_linux": ("没找到 git 命令:先装(Ubuntu / Debian:sudo apt install git;Fedora:sudo dnf install git),再运行一次。",
+                         "git was not found: install it first (Ubuntu / Debian: sudo apt install git; Fedora: sudo dnf install git), then run this again."),
     "upd.linux_ext": ("SeeU 的 GNOME 小插件有新版,已经装好。🔴 要注销重新登录一次才生效(在那之前悬浮标、代理光标、借鼠标还是旧版)。",
                       "SeeU's GNOME helper has a new version and it's installed. 🔴 Log out and back in once for it to take effect "
                       "(until then the badge, proxy cursor and mouse borrowing stay on the old version)."),

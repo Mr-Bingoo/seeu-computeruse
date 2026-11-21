@@ -269,8 +269,7 @@ LINUX_PHRASES = [
     ("这个控件没有能按的动作", "this control has no action to press"), ("(它只有 ", " (it only has "),
     ("输入框没接受插入", "the field didn't accept the text"), ("窗口不在屏幕范围里", "the window is off screen"),
     ("截图出错:", "screenshot failed: "), ("控件很少,本想认字补上,但", "few controls, and recognizing text didn't work: "),
-    ("没找到 Chrome / Chromium(装一个:sudo snap install chromium,或装 Google Chrome)",
-     "Chrome / Chromium not found (the user can install one: sudo snap install chromium, or Google Chrome)"),
+    ("没找到 Chrome / Chromium(装一个:", "Chrome / Chromium not found (the user can install one: "), (",或装 Google Chrome)", ", or Google Chrome)"),
     # 安全底线(linux/safety.py)
     ("这是注销 / 锁屏 / 开终端一类的系统快捷键,SeeU 不按", "this is a system shortcut (log out / lock screen / open a terminal); SeeU won't press it"),
     ("带 Super(Windows / ⌘)键的组合是系统快捷键,SeeU 不按", "combinations with the Super (Windows / ⌘) key are system shortcuts; SeeU won't press them"),

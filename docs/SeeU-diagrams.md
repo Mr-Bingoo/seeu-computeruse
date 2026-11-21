@@ -127,14 +127,14 @@ Three more things on Windows: windows running as administrator can't be touched 
 
 | Scenario | Read content | Click | Type | Scroll | Works while hidden | Permissions needed |
 |---|---|---|---|---|---|---|
-| Native apps (Text Editor, FeatherPad…) | ✅ reads controls | ✅ acts on the control; ⚡ clicking by screen position borrows the real mouse | ✅ | ✅ where there's a scroll bar; ⚡ otherwise borrows the mouse | ⚠️ covered, minimized or on another workspace: clicking by number still works, but its picture can't be captured | Accessibility master switch, screenshot permission |
-| Chromium / Chrome pages (background browser) | ✅ | ✅ | ✅ | ✅ | ✅ never shows a window; shown only when you need to sign in yourself | None; only sites on the allow list |
-| VS Code and other web-technology apps | ✅ reads controls (start VS Code with the accessibility flag) | ✅ acts on the control | ⚡ borrows the keyboard for a few seconds | ⚡ borrows the mouse | ❌ to borrow the keyboard or mouse the window must be on the current workspace, not minimized | Remote-control permission |
+| Native apps (Text Editor, FeatherPad…) | ✅ reads controls | ✅ acts on the control; ⚡ clicking by screen position borrows the real mouse | ✅ | ✅ where there's a scroll bar; ⚡ otherwise borrows the mouse | ⚠️ covered, minimized or on another workspace: clicking by number still works, but its picture can't be captured | Screenshot permission; Qt apps also need the accessibility master switch; clicking by screen position needs remote-control permission |
+| Chromium / Chrome pages (background browser) | ✅ | ✅ | ✅ | ✅ | ✅ never shows a window; shown only when you need to sign in yourself | No permission, but install Chromium or Chrome first; only sites on the allow list |
+| VS Code and other web-technology apps | ✅ reads controls (start VS Code with the accessibility flag) | ✅ acts on the control | ⚡ borrows the keyboard for a few seconds | ⚡ borrows the mouse | ❌ to borrow the keyboard or mouse the window must be on the current workspace, not minimized | Accessibility master switch, started with ACCESSIBILITY_ENABLED=1, remote-control permission |
 | Your own browser (Firefox, Chrome…) | ✅ look only | ❌ | ❌ | ❌ | — | Not touched: it would bypass the allow list and carries your logins; web pages go through the background browser |
 | Emulators, custom-drawn apps | ✅ text recognition (needs Tesseract) | ⚡ borrows the real mouse | ⚡ borrows the keyboard | ⚡ borrows the mouse | ❌ (window must be visible) | Screenshot and remote-control permissions |
 | Long-press, dragging (any scenario) | — | ⚡ borrows the real mouse | — | — | — | Remote-control permission |
 
-More things on Linux: only the GNOME desktop (Wayland) is supported, and after SeeU's GNOME extension is installed or updated you need to log out and back in once; nothing happens while the screen is locked, and SeeU won't borrow your mouse or keyboard while a system dialog (password, authorization) is open; when clicking by screen position, it won't click if that point is covered by another window.
+More things on Linux: only GNOME 45 or later is supported (Wayland recommended), and after SeeU's GNOME extension is installed or updated you need to log out and back in once; nothing happens while the screen is locked, and SeeU won't borrow your mouse or keyboard while a system dialog (password, authorization) is open; when clicking by screen position, it won't click if that point is covered by another window.
 
 ## ③ Swimlane diagrams
 

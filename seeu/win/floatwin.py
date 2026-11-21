@@ -457,11 +457,13 @@ def _icon_light(P, cx, cy, lvl, ink, a=1.0):
         P.append(("dot", cx, cy, ICON_R + 0.75, _a(ORANGE if lvl == "real" else (127, 119, 221), 255 * a)))
         mark = (255, 255, 255, int(255 * a))
     P.append(("circ", cx, cy, ICON_R, _a(ink, 255 * 0.88 * a), 1.5))
-    d, L = 2.8, 1.6
+    # 四个角照 Mac(seeu_lib/watch_island.py light_icon):竖一小段 → 半径 1.1 的圆角 → 横一小段(11-22 用户:拐弯要圆的,跟 Mac 一致)
+    d, L, R = 2.8, 1.6, 1.1
     for sx in (-1, 1):
         for sy in (-1, 1):
-            P.append(("line", cx + sx * d, cy + sy * (d - L), cx + sx * d, cy + sy * d, mark, 1.1))
-            P.append(("line", cx + sx * d, cy + sy * d, cx + sx * (d - L), cy + sy * d, mark, 1.1))
+            P.append(("line", cx + sx * d, cy + sy * (d - L), cx + sx * d, cy + sy * (d - R), mark, 1.1))
+            P.append(("arc", cx + sx * (d - R), cy + sy * (d - R), R, 0 if sx > 0 else 180, 90 * sx * sy, mark, 1.1))
+            P.append(("line", cx + sx * (d - R), cy + sy * d, cx + sx * (d - L), cy + sy * d, mark, 1.1))
 
 
 def _icon_isee(P, cx, cy, on, ink, inv, a=1.0):

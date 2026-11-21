@@ -117,7 +117,8 @@ def start(browser="chrome", visible=False):
         stop(browser)
     exe = _exe(browser)
     if not exe:
-        raise WebError("没找到 Chrome / Chromium(装一个:sudo snap install chromium,或装 Google Chrome)", "no_app")
+        from seeu.linux import distro
+        raise WebError(f"没找到 Chrome / Chromium(装一个:{distro.browser_cmd()},或装 Google Chrome)", "no_app")
     _kill_profile(browser)
     port = _free_port()
     args = [exe, f"--remote-debugging-port={port}", f"--user-data-dir={_profile(browser)}",

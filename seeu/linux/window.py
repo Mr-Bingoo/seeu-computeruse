@@ -11,6 +11,7 @@ import re
 from seeu.linux import shell
 
 _DESKTOP_NAMES = {}             # 窗口类型(Meta.WindowType):0 普通、1 桌面(图标层,不列)、3 对话框、4 模态对话框
+_DESKTOP_LABEL = {}             # {同上的键: 按当前语言挑的给人看的名字}(11-21 C-3.4)
 
 
 def _comm(pid):
@@ -45,7 +46,7 @@ def _desktop_names():
     for d in dirs:
         for p in glob.glob(os.path.join(d, "*.desktop")):
             key = os.path.basename(p)[:-8].lower()
-            names = []
+            names, loc = [], {}
             try:
                 with open(p, encoding="utf-8", errors="replace") as f:
                     sec = None
@@ -63,10 +64,27 @@ def _desktop_names():
                                 v = os.path.basename(v.split()[0]) if v.split() else ""
                             if v:
                                 names.append(v)
+                                if m.group(1).startswith("Name"):
+                                    loc.setdefault(m.group(1), v)
             except OSError:
                 continue
             _DESKTOP_NAMES.setdefault(key, []).extend(names)
+            pick = _pick_name(loc)
+            if pick:
+                _DESKTOP_LABEL.setdefault(key, pick)
     return _DESKTOP_NAMES
+
+
+def _pick_name(loc):
+    """按当前语言挑一个给人看的名字:Name[zh_CN] → Name[zh] → Name(11-21 C-3.4:Fedora 上按字母排第一的是
+    卡拜尔语「Amaẓrag n Weḍris」,被当成文本编辑器的程序名显示了)。"""
+    lang = (os.environ.get("LANGUAGE") or os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES")
+            or os.environ.get("LANG") or "").split(":")[0].split(".")[0]
+    for k in (f"Name[{lang}]", f"Name[{lang.split('_')[0]}]", "Name"):
+        if lang or k == "Name":
+            if loc.get(k):
+                return loc[k]
+    return None
 
 
 def info(w):
@@ -76,14 +94,17 @@ def info(w):
     w["comm"], w["exe"] = _comm(pid), _exe(pid)
     names = {w["comm"], w["exe"], w.get("wm_class") or "", w.get("app_id") or ""}
     dn = _desktop_names()
+    label = None
     for key in {(w.get("app_id") or "").lower(), (w.get("wm_class") or "").lower(), w["comm"].lower()}:
         if key and key in dn:
             names.update(dn[key])
+            label = label or _DESKTOP_LABEL.get(key)
     # snap 的程序:firefox_firefox 这种
     for k in list(names):
         if "_" in k:
             names.add(k.split("_")[0])
-    w["names"] = sorted(n for n in names if n)
+    rest = sorted(n for n in names if n and n != label)
+    w["names"] = ([label] if label else []) + rest      # 第一个是给人看的名字(按当前语言),其余照旧按字母排
     return w
 
 

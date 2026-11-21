@@ -620,7 +620,8 @@ def _prepare(app_name, sx, sy, prime=None):
 
 
 def drag(app_name, pts, hold_ms=0, step_ms=280, prime=None):
-    """🔴 10-13 实测镜像里不生效(macOS 没有后台拖动的路,Cua 也拒绝),拖动请走真鼠标;留着做对照。
+    """iPhone 镜像里能用(11-21 真机:hold_ms=550, step_ms=280 后台画 7 点手势,一次画对、不切前台;翻面板也一直在用)。
+    10-13 那次「镜像里不生效」的结论已过时。
     后台沿路径拖(屏幕点坐标)。hold_ms=0 快速划(翻页/上划);>0 先长按再拖(拖图标、手势解锁)。
     事件节奏照 seeu_lib.mac_input.qdrag(真鼠标版已在镜像里验证过)。"""
     x0, y0 = pts[0]

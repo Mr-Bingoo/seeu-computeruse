@@ -167,7 +167,7 @@ def _linux_ext():
     """Linux:GNOME 小插件文件变了 → 拷进用户自己的扩展目录(不要管理员密码);GNOME 只在登录时读扩展,要注销重登。"""
     try:
         from seeu.linux import shell
-        if shell.is_gnome():
+        if shell.is_gnome() and shell.installed():   # 11-21 C-3.5(复查):用户已全部移除、小插件删了的,更新不再装回
             shell.install()
             print(T("upd.linux_ext"))
     except Exception as e:   # noqa: BLE001

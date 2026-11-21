@@ -79,7 +79,10 @@ export default class SeeUHelper extends Extension {
     this._cursor = new CursorSet();     // 第 4 版:一个任务一只光标
 
     // 悬浮标:右上角一条小胶囊,写「哪个程序 · 这一步 · 为什么」
-    this._badge = add(new St.BoxLayout({reactive: false, vertical: true}));
+    // 竖排:GNOME 48 起用 orientation,51 起 vertical 没了(建不出来整个小插件就停在这;11-21 C-3.4 Fedora 45 实测)
+    const vbox = St.BoxLayout.find_property('orientation')
+      ? {reactive: false, orientation: Clutter.Orientation.VERTICAL} : {reactive: false, vertical: true};
+    this._badge = add(new St.BoxLayout(vbox));
     this._bTitle = new St.Label({reactive: false, style: 'font-weight: bold; font-size: 13px; color: #fff;'});
     this._bText = new St.Label({reactive: false, style: 'font-size: 12px; color: rgba(255,255,255,0.85);'});
     this._badge.add_child(this._bTitle);
@@ -162,7 +165,9 @@ export default class SeeUHelper extends Extension {
 
   // 借真鼠标时把指针挪到 (x, y)。只挪位置,不点(点击走系统远程操作授权)
   Warp(x, y) {
-    Clutter.get_default_backend().get_default_seat().warp_pointer(x, y);
+    // GNOME 51 去掉了 Clutter.get_default_backend(),改用 stage 的 context 拿(GNOME 自己的代码就这么写;11-21 C-3.4)
+    const backend = Clutter.get_default_backend ? Clutter.get_default_backend() : global.stage.context.get_backend();
+    backend.get_default_seat().warp_pointer(x, y);
   }
 
   GetFocus() {
@@ -262,8 +267,15 @@ export default class SeeUHelper extends Extension {
   FloatGeo() {
     const i = Main.layoutManager.primaryIndex;
     const wa = Main.layoutManager.getWorkAreaForMonitor(i);
+    // 深浅色:GNOME 47 起有 St.SystemColorScheme;45、46 没有 → 读系统设置 color-scheme(11-22 C-3.5,以前在 45/46 上一律按深色)
     let dark = true;
-    try { dark = St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK; } catch (e) { /* 老版本 */ }
+    try {
+      dark = St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
+    } catch (e) {
+      try {
+        dark = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'}).get_string('color-scheme') === 'prefer-dark';
+      } catch (e2) { /* 都读不到就按深色 */ }
+    }
     return JSON.stringify({x: wa.x, y: wa.y, w: wa.width, h: wa.height, dark});
   }
 }
