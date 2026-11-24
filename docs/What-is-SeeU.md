@@ -15,7 +15,7 @@ SeeU lets the AI agent on your device **perform actions and operate apps in the 
 
 ## Supported platforms
 - **SeeU for macOS**
-  - **Requirements**: tested only on Macs with Apple M-series chips running macOS 27. There's no test data yet for Intel Macs or earlier macOS versions, so full functionality isn't guaranteed (but all the code and logic are open source, so feel free to try and tinker).
+  - **Requirements**: macOS 12.3 or later (some Apple system APIs SeeU relies on start there; most AI clients require about macOS 12 too); **macOS 14 or later recommended** (the ChatGPT / Codex desktop app needs 14; tested on 14 and 27, 12.3–13 untested). Both Apple silicon and Intel work: macOS 27 was tested on an Apple silicon Mac, macOS 14 in a virtual machine on an Intel chip; a physical Intel Mac running SeeU directly hasn't been tested yet. Full functionality isn't guaranteed on anything untested (but all the code and logic are open source, so feel free to try and tinker).
   - **iPhone Mirroring**: macOS 15 or later (it's a built-in system feature, only available from that version on).
   - **AI clients**: connected via MCP and Skill; installing or removing takes one command each. Tested so far with Claude (Code and the desktop chat), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao and Qwen (WorkBuddy, Doubao and Qwen are connected by hand).
 - **SeeU for Windows** (preview)

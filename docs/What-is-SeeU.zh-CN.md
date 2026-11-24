@@ -15,7 +15,7 @@ SeeU 让你设备上的 AI Agent 在**前台或后台执行各种动作、操作
 
 ## 支持平台
 - **SeeU For macOS**
-  - **设备要求**：目前只在 Apple M 系列芯片的 Mac、macOS 27 上测试过。Intel 芯片的 Mac 和更早的 macOS 版本暂无更多测试数据，不保证能完整使用（但代码和相关逻辑全部开源，欢迎尝试和折腾）。
+  - **设备要求**：最低 macOS 12.3（SeeU 用到的部分苹果官方接口从这一版起才有，多数 AI 客户端最低也在 12 左右）；**建议 macOS 14 以上**（ChatGPT / Codex 桌面版要 14，我们在 14 和 27 上实测过，12.3~13 没实测）。Apple 芯片和 Intel 芯片都能用 : macOS 27 是在 Apple 芯片的 Mac 上测的，macOS 14 是在 Intel 芯片的虚拟机里测的，Intel 真机还没测。没测过的不保证能完整使用（但代码和相关逻辑全部开源，欢迎尝试和折腾）。
   - **iPhone 镜像**：macOS 15 及以上（功能为系统自带，只有系统达到该版本及以上时才有）。
   - **能接入的 AI 客户端**：通过 MCP 和 Skill 接入，安装、移除各只要一条命令。目前实测通过的有 Claude（Code 和桌面版聊天页）、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问（WorkBuddy、豆包和千问要手动接）。
 - **SeeU For Windows**（预览版）

@@ -60,9 +60,21 @@ A floating badge on screen (open it to see what the AI is doing, or a live view 
 
 ## Install
 
-**Requirements**: on the Mac, Apple silicon (tested on macOS 27; earlier versions and Intel Macs are untested); the Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM, both in virtual machines); the Linux preview needs GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended) and Python 3.10 or later (tested so far on Ubuntu 26.04 x64 and ARM, Fedora 40, 43 and 45 ARM, and Debian 13 ARM, in virtual machines); KDE and other desktops don't work.
+**Requirements**:
 
-### Easiest: install the plugin (Claude Code / Codex)
+- Mac: macOS 12.3 or later (some Apple system APIs SeeU relies on start there; most AI clients require about macOS 12 too); **macOS 14 or later recommended** (the ChatGPT / Codex desktop app needs 14; tested on 14 and 27, 12.3–13 untested). Both Apple silicon and Intel work: macOS 27 was tested on an Apple silicon Mac, macOS 14 in a virtual machine on an Intel chip; a physical Intel Mac running SeeU directly hasn't been tested yet.
+- The Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM, both in virtual machines).
+- The Linux preview needs GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended) and Python 3.10 or later (tested so far on Ubuntu 26.04 x64 and ARM, Fedora 40, 43 and 45 ARM, and Debian 13 ARM, in virtual machines); KDE and other desktops don't work.
+
+### Easiest: give the link to your AI
+
+```
+Install SeeU for me: https://github.com/Mr-Bingoo/seeu-computeruse
+```
+
+The AI downloads it, installs the dependencies and connects it (to whichever AI client is running it). Works on Mac, Windows and Linux; on Linux, missing system packages need sudo, so the AI gives you the command to run yourself, and at the end you log out and back in once.
+
+### Also easy: install the plugin (Claude Code / Codex)
 
 In Claude Code, type:
 
@@ -85,14 +97,6 @@ codex plugin add seeu@seeu-computeruse
 ```
 
 Then start a new session and it's ready: no separate download or connecting. The first time you use it, SeeU installs the Python libraries it needs in the background (Mac / Windows, usually a minute or two). On a Mac you still turn on the permissions as in "3. Check and grant permissions" below; on Linux the AI walks you through the system packages and the GNOME extension as described under "By hand". Tested so far: Claude Code and Codex on Mac, Claude Code and Codex on Windows, Codex on Linux; Claude Code on Linux hasn't been tested yet.
-
-### Also easy: give the link to your AI
-
-```
-Install SeeU for me: https://github.com/Mr-Bingoo/seeu-computeruse
-```
-
-The AI downloads it, installs the dependencies and connects it (to whichever AI client is running it). Works on Mac, Windows and Linux; on Linux, missing system packages need sudo, so the AI gives you the command to run yourself, and at the end you log out and back in once.
 
 ### By hand
 
