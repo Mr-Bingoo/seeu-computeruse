@@ -296,6 +296,37 @@ WIN_PHRASES = [
      "background has no effect SeeU won't borrow the mouse (Windows would switch the user over). If what you need isn't in "
      "the list, ask the user to switch to that desktop or move the window here."),
     ("窗口里没找到", "not found in the window: "), ("没有编号", "no item number "), (",先 see 一次", ", call seeu_see first"),
+    # —— 11-23 C-3.9 整体复查
+    ("选中 / 勾选状态变了", "the selected / checked state changed"),
+    ("资源管理器地址栏里只打已有文件夹的路径(打程序名、命令回车会直接运行),SeeU 不打(这一步请你自己来)",
+     "in the File Explorer address bar SeeU only types the path of an existing folder (a program name or command would run "
+     "when Enter is pressed); it won't type this (please do this step yourself)"),
+    ("资源管理器地址栏里现在不是已有文件夹的路径,回车会直接运行里面的东西,SeeU 不按(这一步请你自己来)",
+     "the File Explorer address bar doesn't hold an existing folder path now; Enter would run what's in it, so SeeU won't "
+     "press it (please do this step yourself)"),
+    # —— 11-23 C-4.0 Fable 复查
+    ("资源管理器地址栏里 SeeU 不一个个按字符键(拼出来的命令会被运行);要跳到某个文件夹,用打字工具打完整的文件夹路径",
+     "in the File Explorer address bar SeeU doesn't press character keys one by one (a command spelled out that way would run); "
+     "to go to a folder, type its full path with the type tool"),
+    ("」里打程序名回车就能直接启动程序", "\" can start any program when you type its name and press Enter"),
+    ("Windows 搜索", "Windows Search"), ("开始菜单", "Start menu"),
+    ("」是危险操作,SeeU 不点(这一步请你自己来)", "\" is a dangerous action; SeeU won't click it (please do this step yourself)"),
+    ("屏幕锁着(或屏保开着),SeeU 什么都不做;等你解锁后再说",
+     "the screen is locked (or the screen saver is on); SeeU does nothing until the user unlocks it"),
+    ("这次找到的窗口(#", "the window found this time (#"), (")不是上次 see 的那个(#", ") is not the one seeu_see looked at (#"),
+    ("):这个程序开着好几个窗口,最上面的换了。先 see 一次再操作;要固定操作某一个窗口,App 写成「#窗口号」",
+     "): this program has several windows and a different one is on top now. Call seeu_see again before acting; "
+     "to stick to one window, write app as \"#window number\""),
+    ("动作已经发出去了,但核实时出了错;先 see 看一眼有没有生效,别直接重做",
+     "the action was sent, but checking it failed; look with seeu_see to see whether it worked — don't just repeat it"),
+    ("按下了,但前台没还回去(目标窗口留在了最前面)", "pressed, but the foreground wasn't given back (the target window stayed in front)"),
+    ("目标窗口自己跑到了前台,没还回去", "the window jumped to the front by itself; the foreground wasn't given back"),
+    ("参数不全:--at 后面要写输入框的编号或名字", "missing argument: --at needs the field's number or name"),
+    ("参数不全:tap 要写点哪里(编号、名字,或屏幕点 x y)", "missing argument: tap needs a target (number, name, or screen point x y)"),
+    ("参数不全:type 要写打什么字", "missing argument: type needs the text"),
+    ("参数不全:press 要写按哪个键", "missing argument: press needs a key"),
+    ("参数不全:longpress 要写按哪里(编号、名字,或屏幕点 x y)", "missing argument: longpress needs a target (number, name, or screen point x y)"),
+    ("参数不对:scroll 后面要写数字(负数 = 往下翻)", "bad argument: scroll needs numbers (negative = scroll down)"),
 ]
 
 
@@ -307,7 +338,7 @@ def en(s):
 
 
 # ---------------------------------------------------------------- 工具实现
-_shots = {}          # App → (截图宽, 高, 窗口 rect),px/py 按它换算
+_shots = {}          # App → (截图宽, 高, 窗口 rect, 窗口号),px/py 按它换算。窗口号 11-23 C-3.9 整体复查加的:同程序两个窗口时核对是不是 see 的那个
 _asked = {}          # App → 上次这个 App 的动作返回 ask_user 的时间
 ASKED_TTL = 1800
 
@@ -335,11 +366,16 @@ def _target(a, need=True):
         if app not in _shots:
             raise ValueError(f"no screenshot of {app} yet: call seeu_see first, then tap by pixel")
         from seeu.win import window as W
-        w, h, _ = _shots[app]
+        w, h, _, seen = (tuple(_shots[app]) + (None,))[:4]
         px, py = float(a["px"]), float(a["py"])
         if not (0 <= px <= w and 0 <= py <= h):
             raise ValueError(f"px/py is outside the screenshot ({w}×{h})")
-        x, y, ww, wh = W.find(app)["rect"]          # 按这一刻窗口的位置换算(see 之后窗口被挪了也准)
+        now = W.find(app)
+        if seen is not None and int(now["hwnd"]) != int(seen):
+            # 11-23 C-3.9 整体复查:这个程序开着好几个窗口,这次找到的不是截图的那个 → 照截图位置会点进另一个窗口,不点
+            from seeu.win import act
+            raise act.Stale(act.WRONG_WINDOW.format(a=int(seen), b=int(now["hwnd"])))
+        x, y, ww, wh = now["rect"]                  # 按这一刻窗口的位置换算(see 之后窗口被挪了也准)
         return (x + px * ww / w, y + py * wh / h)
     t = a.get("target")
     if t in (None, ""):
@@ -467,7 +503,7 @@ def do_see(a):
     cap = v.get("cap")
     if cap:
         w2, h2, data = W.shrink(*cap, max_side=IMG_MAX)
-        _shots[app] = (w2, h2, win["rect"])
+        _shots[app] = (w2, h2, win["rect"], win["hwnd"])
         out[0] += (f"\n\nScreenshot {w2}×{h2} px. For targets not in the list, tap by pixel: seeu_tap with px, py "
                    "(top-left is 0,0); SeeU converts it.")
         if a.get("screenshot", True):
@@ -538,7 +574,11 @@ def do_web_open(a):
 
 
 def do_web_tabs(a):
-    return [json.dumps(_w().tabs(), ensure_ascii=False, indent=1)], False
+    v = _w().tabs_view()         # 11-23 C-3.9 整体复查:名单外的标签页只给个数(照 Mac)
+    out = json.dumps(v["tabs"], ensure_ascii=False, indent=1)
+    if v["hidden"]:
+        out += f"\n(+{v['hidden']} tab(s) on sites that are not on SeeU's allow list — not shown)"
+    return [out], False
 
 
 def do_web_read(a):
@@ -732,6 +772,13 @@ def call_tool(name, a):
     bad = _missing_args(name, a)
     if bad:
         return bad
+    try:                                    # 11-22 C-3.7:插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
+        from seeu import deps
+        wait = deps.gate()
+    except Exception:   # noqa: BLE001
+        wait = None
+    if wait:
+        return {"content": [{"type": "text", "text": wait}], "isError": False}
     t0 = time.time()
     _show_float(name, a)
     try:
@@ -742,7 +789,8 @@ def call_tool(name, a):
         out = "refused" if isinstance(ex, safety.Refused) or getattr(ex, "code", None) in ("refused", "not_allowed") else "failed"
         why = (f"a value SeeU needed was missing ({ex}) — check this call's parameters, then call seeu_see and try again"
                if isinstance(ex, KeyError) else str(ex))
-        parts, err = [f"outcome: {out}\nreason: {en(why)}"], True
+        code = "\ncode: stale" if type(ex).__name__ == "Stale" else ""      # 11-23 C-3.9 整体复查:画面 / 窗口变了,给 AI 明确的代码(说明里写了 stale = 先 see)
+        parts, err = [f"outcome: {out}{code}\nreason: {en(why)}"], True
         note = f"{type(ex).__name__}: {why}"
     else:
         # 11-12:结果(delivered / ineffective / …)也记下来;以前只记 ok,Codex 点错标签页那次事后分不清是谁错
@@ -792,6 +840,11 @@ def _wire(out):
 
 
 def main():
+    try:                                # 11-22 C-3.7:插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
+        from seeu.where import settings_file
+        settings_file()
+    except Exception:   # noqa: BLE001
+        pass
     os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 11-17:同一个 AI 会话的几步算同一个任务
     # Windows 的标准输入输出默认不是 UTF-8:协议一律按 UTF-8 收发
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1, newline="\n")

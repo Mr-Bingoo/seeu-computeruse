@@ -94,17 +94,24 @@ def _frame(w):
 
 def _shot(w, wins=None):
     """截这个窗口(整屏截了再裁)。返回 (png, 盖住的比例, 说明)。截不了返回 (None, 比例, 原因)。"""
+    return _shot_rect(w, wins)[:3]
+
+
+def _shot_rect(w, wins=None):
+    """同 _shot,多返回第 4 项:截图实际对应屏幕上哪一块 (x, y, w, h)(截不了是 None)。
+    11-23 C-3.9 整体复查:窗口有一部分在屏幕外时,裁出来的图比窗口小、左上角也不是窗口左上角;原来把这个范围丢了,
+    按截图位置点 / 认字清单都按整窗换算 → 点偏。"""
     cov = W.covered(w, wins)
     try:
         full = shot.full()
     except shot.NeedGrant as ex:
-        return None, cov, str(ex)
+        return None, cov, str(ex), None
     except Exception as ex:   # noqa: BLE001
-        return None, cov, f"截图出错:{ex}"
+        return None, cov, f"截图出错:{ex}", None
     try:
-        png, _ = shot.crop(full, w["x"], w["y"], w["w"], w["h"], mask=W.sensitive_above(w, wins) if cov > 0 else ())
+        png, box = shot.crop(full, w["x"], w["y"], w["w"], w["h"], mask=W.sensitive_above(w, wins) if cov > 0 else ())
     except Exception as ex:   # noqa: BLE001
-        return None, cov, str(ex)
+        return None, cov, str(ex), None
     finally:
         try:
             os.remove(full)          # 11-20 复查:整屏原图裁完就删(原来最多攒 200 张)
@@ -117,7 +124,7 @@ def _shot(w, wins=None):
         note = "窗口在另一个工作区,截图里不是它"
     elif cov > 0.02:
         note = f"窗口有 {cov * 100:.0f}% 被别的窗口挡着,截图里那部分是盖在上面的窗口"
-    return png, cov, note
+    return png, cov, note, tuple(box)
 
 
 def _item_text(e):
@@ -139,10 +146,11 @@ EARLY_NOTE = "一个控件都没读到:程序刚打开的头几秒常常还没�
 
 
 def see(app):
-    """返回 {png, items, window, windows, note, stale}。items 每项:id、kind(ax / ocr)、text、role、x/y(屏幕中心)、actions…"""
+    """返回 {png, items, window, windows, note, stale, shot}。items 每项:id、kind(ax / ocr)、text、role、x/y(屏幕中心)、actions…
+    shot = 截图实际对应屏幕上哪一块 (x, y, w, h)(窗口有一部分在屏幕外时比窗口小;没截图是 None)。"""
     w = _win(app, sticky=False)
     wins = W.list_windows()
-    png, cov, note = _shot(w, wins)
+    png, cov, note, box = _shot_rect(w, wins)
     fr = _frame(w)
     elems, truncated = atspi.elements(fr, _origin(w, fr))
     items = []
@@ -156,10 +164,18 @@ def see(app):
     if png and cov < 0.02 and len(real) < 3:       # 读不到控件(游戏、模拟器、自绘界面):截图认字补清单
         try:
             from seeu.linux import ocr
+            # 11-23 C-3.9 整体复查:认出来的字的位置是截图里的 → 加截图实际的左上角(不是窗口左上角,窗口部分在屏幕外时两者不同);
+            # win_xy 记下当时窗口在哪,之后按编号点时窗口挪了就跟着挪(见 _resolve)
+            ox, oy = (box[0], box[1]) if box else (w["x"], w["y"])
+            kx = ky = 1.0
+            if box:                       # 11-23 C-3.9:显示缩放时截图是实际像素(比逻辑大),认字坐标按「范围 ↔ 图尺寸」换回逻辑
+                from PIL import Image
+                with Image.open(png) as _im:
+                    kx, ky = box[2] / float(_im.width), box[3] / float(_im.height)
             for ln in ocr.recognize(png):
-                items.append(dict(kind="ocr", text=ln["text"], role="认字", x=w["x"] + ln["x"] + ln["w"] / 2,
-                                  y=w["y"] + ln["y"] + ln["h"] / 2, actions=[], password=False, editable=False,
-                                  focused=False, el=None))
+                items.append(dict(kind="ocr", text=ln["text"], role="认字", x=ox + (ln["x"] + ln["w"] / 2) * kx,
+                                  y=oy + (ln["y"] + ln["h"] / 2) * ky, actions=[], password=False, editable=False,
+                                  focused=False, el=None, win_xy=(w["x"], w["y"])))
         except Exception as ex:   # noqa: BLE001
             note = (note + ";" if note else "") + f"控件很少,本想认字补上,但{ex}"
     if not real and fr is not None:
@@ -174,7 +190,7 @@ def see(app):
     return {"png": png, "items": items, "windows": [x["title"] for x in same] if len(same) > 1 else [],
             "window": {k: w.get(k) for k in ("id", "title", "comm", "wm_class", "x", "y", "w", "h")},
             "note": note, "stale": note if (cov >= 0.02 or w.get("minimized") or not w.get("active_ws", True)) else None,
-            "covered": cov}
+            "covered": cov, "shot": box if png else None}
 
 
 def describe(items, en=None):
@@ -214,7 +230,7 @@ def _resolve(app, target, w):
         it = items[n - 1]
         if it["kind"] == "ax" and not atspi.still_there(it["el"]["acc"]):
             raise Stale(f"第 {n} 项「{it['text']}」已经不在了(界面变了),请重新 see")
-        return it["x"], it["y"], it["el"]
+        return _relocate(it, w)
     # 按名字:现读一遍,完全相同优先,再找包含的;能按 / 能写的优先
     elems, _ = atspi.elements(_frame(w), _origin(w))
     low = s.lower()
@@ -232,6 +248,24 @@ def _resolve(app, target, w):
     e = cands[0]
     x, y, ww, hh = e["rect"]
     return x + ww / 2, y + hh / 2, e
+
+
+def _relocate(it, w):
+    """11-23 C-3.9 整体复查:按编号操作时重读控件现在的位置。原来用 see 时记下的坐标,窗口挪过 / 界面滚过以后
+    借真鼠标(点没有动作的控件、长按、在某一项上滚、先点进框再打字 / 按键)会点偏。读不到就用旧的(still_there 已经查过它还在)。
+    返回 (x, y, 控件 dict 或 None);控件 dict 是带新位置的副本,不改上次 see 的清单。"""
+    el = it.get("el")
+    if it.get("kind") == "ax" and el is not None:
+        try:
+            rc = atspi.rect(el["acc"], _origin(w), thin=bool(el.get("editable")))
+        except Exception:   # noqa: BLE001
+            rc = None
+        if rc is not None:
+            return rc[0] + rc[2] / 2, rc[1] + rc[3] / 2, dict(el, rect=rc)
+        return it["x"], it["y"], el
+    # 认字出来的项没有控件可重读:窗口整个挪了就跟着挪
+    wx, wy = it.get("win_xy") or (w["x"], w["y"])
+    return it["x"] + (w["x"] - wx), it["y"] + (w["y"] - wy), el
 
 
 # ─────────────────────────────── 核实 ───────────────────────────────
@@ -365,8 +399,7 @@ def tap(app, target, allow=None, real_ok=True, **kw):
         return dict(outcome="failed", route=None, tried=[], reason=str(ex))
     try:
         safety.check_control(e)                  # 11-20 复查:内嵌终端
-        if e is not None and e.get("role") in TAP_CHECK_ROLES and (e.get("name") or "").strip():
-            safety.check_menu([e["name"]], run=e.get("role") != "list item")
+        _check_name(e)
     except safety.Refused as ex:
         return _refused(ex)
     fr = _frame(w)
@@ -531,7 +564,7 @@ def menu(app, *path):
         used = atspi.press(cur)
     except Exception as ex:   # noqa: BLE001
         return dict(outcome="failed", route="菜单", tried=[("菜单", f"error:{ex}")], reason=str(ex))
-    note = _keep_front(f0)
+    note = _keep_front(f0, w, before.get("ids"))
     outcome, how = _verify(w, fr, before)
     r = dict(outcome=outcome, route="菜单", tried=[("菜单", outcome)], how=f"{used};{how}", path=got, png=None)
     if note:
@@ -539,15 +572,19 @@ def menu(app, *path):
     return r
 
 
-def _keep_front(f0):
-    """菜单点完盯一会儿:前台被换走(程序自己跳到了前面)就还给原来的窗口。用户本来就在用目标程序的不管。返回一句说明或 None。"""
+def _keep_front(f0, w=None, before_ids=None):
+    """菜单点完盯一会儿:前台被换走(程序自己跳到了前面)就还给原来的窗口。返回一句说明或 None。
+    11-23 C-3.9 整体复查:原来这 1.2 秒里前台换成谁都拽回去,用户自己切窗口也被拽。照 openapp.give_back 的判断:
+    新前台是目标程序的窗口、或点之前还没有的新窗口,才算「程序自己跳出来」;用户切到别的早就开着的窗口不管。
+    w = 目标窗口,before_ids = 点之前的窗口号清单(老调用不带 w = 照旧一律拽回)。"""
     if not f0:
         return None
     t0, moved = time.time(), False
     while time.time() - t0 < MENU_FRONT_WATCH_S:
         time.sleep(0.15)
         try:
-            if shell.focus() not in (f0, 0):
+            fg = shell.focus()
+            if fg not in (f0, 0) and _jumped(fg, w, before_ids):
                 moved = True
                 shell.activate(f0)
         except Exception:   # noqa: BLE001
@@ -559,6 +596,18 @@ def _keep_front(f0):
     except Exception:   # noqa: BLE001
         back = False
     return "程序自己跳到了最前面," + ("已切回原来的窗口" if back else "没能切回原来的窗口")
+
+
+def _jumped(fg, w, before_ids, wins=None):
+    """新前台 fg 是不是「目标程序自己跳出来的」(不是用户自己切过去的)。"""
+    if w is None:
+        return True
+    me = next((x for x in (W.list_windows() if wins is None else wins) if x["id"] == fg), None)
+    if me is None:
+        return False
+    if me["id"] == w["id"] or (me.get("pid") and me.get("pid") == w.get("pid")):
+        return True
+    return before_ids is not None and me["id"] not in before_ids
 
 
 # ─────────────────────────────── 长按、拖动(11-18 C-3.0) ───────────────────────────────
@@ -583,6 +632,12 @@ def _is_browser(w):
     return any(b in ns for b in BROWSERS)
 
 
+def _check_name(e):
+    """危险名字的按钮 / 菜单项不点(11-20 起 tap 查;11-23 C-4.0 Fable 复查:长按、带 target 的按键 / 打字会先点它,一样查)。"""
+    if e is not None and e.get("role") in TAP_CHECK_ROLES and (e.get("name") or "").strip():
+        safety.check_menu([e["name"]], run=e.get("role") != "list item")
+
+
 def long_press(app, target, ms=1000, allow=None):
     """长按:Linux 的辅助功能接口没有「按住」,直接借真鼠标(归「借用鼠标」设置管;同 Mac / Windows 后台不行再借)。浏览器里不做。"""
     try:
@@ -590,6 +645,8 @@ def long_press(app, target, ms=1000, allow=None):
         if _is_browser(w):
             return _refused(NO_BROWSER)
         x, y, e = _resolve(app, target, w)
+        safety.check_control(e)
+        _check_name(e)
     except safety.Refused as ex:
         return _refused(ex)
     except (Stale, RuntimeError) as ex:
@@ -649,7 +706,8 @@ def _field(app, w, at):
         return e
     e = _FIELD.get(w["id"])
     if e is not None and atspi.still_there(e["acc"]):
-        return e
+        cx, cy = _center(e)
+        return _relocate(dict(kind="ax", el=e, x=cx, y=cy), w)[2]      # 11-23 C-3.9 整体复查:上次写过的框也重读现在的位置
     elems, _ = atspi.elements(_frame(w), _origin(w))
     foc = [x for x in elems if x["editable"] and x["focused"]]
     if foc:
@@ -748,13 +806,25 @@ def type(app, text, enter=False, at=None, allow=None):   # noqa: A001   跟 Mac 
                 r["enter"] = res
             elif real.allowed(allow):
                 try:
-                    real.key(_fresh_win(w), "return")
+                    # 11-23 C-3.9 整体复查:原来直接按回车,不点框也不核焦点(排队 + 等用户停手这几秒焦点可能换了,回车按到别处)。
+                    # 照 press 带 at 的写法:先点进这个框、按之前核一遍焦点(在密码框 / 内嵌终端 / 别的框里就不按)。
+                    # 多行框不点(点中间会把光标挪走,回车换行换错地方),只核焦点
+                    real.key(_fresh_win(w), "return", click_at=None if _multiline(e) else (cx, cy),
+                             check=_focus_guard(w, e, "return"))
                     r["enter"] = "delivered(借键盘)"
                 except Exception as ex:   # noqa: BLE001
                     r["enter"] = f"failed:{ex}"
             else:
                 r["enter"] = "skipped:这个框没有「确认」动作,按设置没借键盘按回车"
     return r
+
+
+def _multiline(e):
+    try:
+        from gi.repository import Atspi
+        return bool(e["acc"].get_state_set().contains(Atspi.StateType.MULTI_LINE))
+    except Exception:   # noqa: BLE001
+        return False
 
 
 def _fresh_win(w):
@@ -849,6 +919,7 @@ def press(app, key, *mods, at=None, allow=None):
             return dict(outcome="failed", route=None, tried=[], reason=str(ex))
     try:
         safety.check_control(e if e is not None else _focused_terminal(w))     # 11-20 复查:内嵌终端不按键
+        _check_name(e)
     except safety.Refused as ex:
         return _refused(ex, route="按键")
     if (e is not None and e["password"] or e is None and _focused_password(w)) and safety.key_enters(key, list(m)):
@@ -867,8 +938,10 @@ def press(app, key, *mods, at=None, allow=None):
             fe = e or _field(app, w, None)
             from gi.repository import Atspi
             n = Atspi.Text.get_character_count(fe["acc"])
-            Atspi.Text.add_selection(fe["acc"], 0, n)
-            return dict(outcome="unverified", route="控件选中", tried=[("控件选中", "unverified")], how="用控件接口全选")
+            # 11-23 C-3.9 整体复查:add_selection 返回 False = 没选上(原来不看返回值照报成功)→ 往下走借键盘按 Ctrl+A
+            if Atspi.Text.add_selection(fe["acc"], 0, n):
+                return dict(outcome="unverified", route="控件选中", tried=[("控件选中", "unverified")], how="用控件接口全选")
+            r["tried"].append(("控件选中", "控件没接受"))
         except Exception as ex:   # noqa: BLE001
             r["tried"].append(("控件选中", f"error:{ex}"))
     try:
@@ -1007,14 +1080,21 @@ try:
         t = args[0] if args else kwargs.get("target")
         return tuple(t[:2]) if isinstance(t, (tuple, list)) and len(t) >= 2 else None
 
+    def _at_pos(at):
+        """11-23 C-3.9 整体复查(排队第二条):type / press 的 at 是屏幕点时,排队太久先核窗口挪没挪(同 tap 按位置点、同 Mac
+        带位置打字)。at 是编号 / 名字 → None:轮到时 _resolve 会重读控件现在的位置。"""
+        return tuple(at[:2]) if isinstance(at, (tuple, list)) and len(at) >= 2 else None
+
     see = _sched.scheduled("see", lease=False)(see)
     tap = _sched.scheduled("tap", positional=_by_pos, focus=True)(tap)
     menu = _sched.scheduled("menu", focus=True)(menu)
     long_press = _sched.scheduled("long_press", positional=_by_pos, focus=True)(long_press)
     drag = _sched.scheduled("drag", positional=lambda a, k: (lambda p: tuple(p[0][:2]) if p else True)(a[0] if a else k.get("pts")),
                             focus=True)(drag)
-    type = _sched.scheduled("type", focus=True, focus_check=lambda a, k: k.get("at", a[2] if len(a) > 2 else None) is None)(type)   # noqa: A001
-    press = _sched.scheduled("press", focus=True, focus_check=lambda a, k: k.get("at") is None)(press)
+    type = _sched.scheduled("type", positional=lambda a, k: _at_pos(k.get("at", a[2] if len(a) > 2 else None)), focus=True,   # noqa: A001
+                            focus_check=lambda a, k: k.get("at", a[2] if len(a) > 2 else None) is None)(type)
+    press = _sched.scheduled("press", positional=lambda a, k: _at_pos(k.get("at")), focus=True,
+                             focus_check=lambda a, k: k.get("at") is None)(press)
     scroll = _sched.scheduled("scroll")(scroll)
 except Exception:   # noqa: BLE001 —— 调度模块出问题不影响 SeeU 本身
     pass

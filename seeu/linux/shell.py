@@ -214,7 +214,9 @@ def locked():
             # 小插件装了、启用了却不在:多半是锁屏(GNOME 锁屏时自动停用它)
             return installed() and enabled()
         except Exception:   # noqa: BLE001
-            return False
+            # 11-23 C-3.9 整体复查:GNOME 没回话(超时等)时原来一律当没锁。logind 明说没锁(lg 是 False)才当没锁;
+            # logind 也读不到(lg 是 None)= 两头都问不到 → 当锁着,不动手
+            return lg is None
     return False
 
 
@@ -233,14 +235,25 @@ def installed():
     return os.path.isfile(os.path.join(dest_dir(), "extension.js"))
 
 
-def _enabled_list():
-    out = subprocess.run(["gsettings", "get", "org.gnome.shell", "enabled-extensions"],
-                         capture_output=True, text=True, timeout=10).stdout.strip()
+def _parse_list(out):
+    """gsettings 打出来的列表(['a', 'b'] 或 @as [])→ list;解析不出返回 None。"""
     import ast
     try:
-        return list(ast.literal_eval(out.replace("@as ", "")))
+        v = ast.literal_eval(str(out).strip().replace("@as ", ""))
     except Exception:   # noqa: BLE001
-        return []
+        return None
+    return [str(x) for x in v] if isinstance(v, (list, tuple)) else None
+
+
+def _enabled_list(strict=False):
+    """已启用的扩展。strict=True:读不出 / 解析不出返回 None(要往回写的地方用:不知道原来有哪些就不能写,
+    11-23 C-3.9 整体复查:原来解析失败当成空列表,装 / 卸时写回去会把用户别的扩展全抹掉)。"""
+    out = subprocess.run(["gsettings", "get", "org.gnome.shell", "enabled-extensions"],
+                         capture_output=True, text=True, timeout=10).stdout.strip()
+    v = _parse_list(out)
+    if v is None:
+        return None if strict else []
+    return v
 
 
 def enabled():
@@ -274,8 +287,8 @@ def install():
         os.makedirs(d, exist_ok=True)
         for n in _files():
             shutil.copyfile(os.path.join(SRC, n), os.path.join(d, n))
-    cur = _enabled_list()
-    if UUID not in cur:
+    cur = _enabled_list(strict=True)
+    if cur is not None and UUID not in cur:     # 读不出原来的列表就不写(免得抹掉用户别的扩展);用户可以在「扩展」App 里手动打开
         subprocess.run(["gsettings", "set", "org.gnome.shell", "enabled-extensions", str(cur + [UUID])],
                        capture_output=True, timeout=10, check=True)
     try:   # 用户在「扩展」App 里关过全部扩展的话,这个开关也要打开
@@ -283,12 +296,12 @@ def install():
                        capture_output=True, timeout=10)
     except Exception:   # noqa: BLE001
         pass
-    return {"copied": not same, "enabled": True, "relogin": (not same) or not available()}
+    return {"copied": not same, "enabled": cur is not None, "relogin": (not same) or not available()}
 
 
 def uninstall():
-    cur = _enabled_list()
-    if UUID in cur:
+    cur = _enabled_list(strict=True)
+    if cur is not None and UUID in cur:         # 读不出列表就不写回(同 install);文件照删,名字留在列表里不碍事
         cur.remove(UUID)
         subprocess.run(["gsettings", "set", "org.gnome.shell", "enabled-extensions", str(cur)], capture_output=True, timeout=10)
     if os.path.isdir(dest_dir()):

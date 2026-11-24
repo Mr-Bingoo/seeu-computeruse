@@ -3,8 +3,9 @@
 
 协议跟 Mac 版 seeu/mcp_server.py、Windows 版 seeu/win/mcp_server.py 同一套(stdio 一行一个 JSON-RPC,只要
 initialize / tools/list / tools/call / ping),工具和说明按 Linux 写。Linux 上 `python3 -m seeu mcp` 自动走这里。
-跟 Windows 版的差别:后台只有「按控件」一档(Wayland 不让普通程序发键鼠),按屏幕位置点 / 按键 / 滚动遇到会如实 refused;
-没有借真鼠标(第 3 段)、浮标、探一下、后台打开 App。
+跟 Windows 版的差别:后台只有「按控件」一档(Wayland 不让普通程序发键鼠);按屏幕位置点 / 按键 / 滚动 / 往 Electron 的框里打字
+要借真鼠标键盘(linux/real.py,归「借用鼠标」设置管)。悬浮标、长按、菜单、探一下、后台打开 App 都有了(11-18 C-3.0 起)。
+(11-23 C-3.9 整体复查:这两行原来还写着「没有借真鼠标、浮标、探一下、后台打开 App」,早过时了。)
 🔴 stdout 只能走协议:启动时把 fd 1 改道到 stderr。每次调用记一行日志(打的字只记长度)。
 """
 import base64
@@ -59,6 +60,9 @@ How to work (look → act → look again):
    is locked, or not possible on Linux yet — stop and pass the reason to the user, do not work around it;
    failed = an error, call seeu_see first; busy = another task is using the same window (or borrowing the mouse) right now:
    wait a few seconds and retry; refused with code user_busy = the user is using the computer: wait and try later;
+   failed with code focus_moved = another task changed the app's focus after your last step: for seeu_type redo it passing
+   target (the field's number) so SeeU types into that field; for seeu_press pass target too, or tap the spot first, then press;
+   failed with code stale = you waited in the queue and the window moved or changed meanwhile: seeu_see again before tapping;
    refused with code need_grant = the system remote-desktop permission isn't given: pass the reason to the user word for word;
    ask_user = this step needs to borrow the user's real mouse/keyboard for a moment and the setting says to ask: ask the
    user to choose "just this once" / "allow for this session" / "refuse", then repeat the same call with allow_real="once"
@@ -233,8 +237,9 @@ LINUX_PHRASES = [
     ("这个控件是灰的(现在按不了)", "this control is greyed out (can't be pressed right now)"),
     ("这个窗口没有能直接改的滚动条(GNOME 自带程序、Chrome、Electron 都不报滚动条)。",
      "this window has no scroll bar SeeU can move (GNOME's own apps, Chrome and Electron don't expose one). "),
+    # 11-23 C-3.9 整体复查:英文原来写「not in the preview yet」(借键盘早就有了)、「tell the user」(其实会借键盘),改对
     ("这个框没有「确认」动作,后台回车要借键盘(第 3 段)", "this field has no confirm action; pressing Return in the background "
-     "needs the real keyboard (not in the preview yet)"),
+     "needs to borrow the real keyboard"),
     ("已经到头了", "already at the end"),
     ("用控件接口全选", "selected all through the control"),
     ("窗口最小化了,截图里不是它", "the window is minimized, the screenshot doesn't show it"),
@@ -248,7 +253,7 @@ LINUX_PHRASES = [
     ("」不是能写字的框", "\" is not a field you can type into"),
     ("这个输入框不让辅助功能接口写字(Chrome、Electron 这一类在 Linux 上都这样)。网页请用 SeeU 专用浏览器(第 2 段);用户自己开着的这类程序要借键盘(第 3 段)",
      "this field doesn't accept text through the accessibility interface (Chrome and Electron apps are like that on Linux). "
-     "For web pages use SeeU's own browser (seeu_web_open); for the user's own app of this kind, tell the user"),
+     "For web pages use SeeU's own browser (seeu_web_open); in the user's own app of this kind SeeU has to borrow the real keyboard"),
     ("光标在密码框里,SeeU 不按会改内容的键", "the cursor is in a password field; SeeU won't press keys that change it"),
     ("用输入框自己的「确认」动作代替回车", "used the field's own confirm action instead of Return"),
     ("全选没做成(", "select-all didn't work ("),
@@ -270,6 +275,12 @@ LINUX_PHRASES = [
     ("输入框没接受插入", "the field didn't accept the text"), ("窗口不在屏幕范围里", "the window is off screen"),
     ("截图出错:", "screenshot failed: "), ("控件很少,本想认字补上,但", "few controls, and recognizing text didn't work: "),
     ("没找到 Chrome / Chromium(装一个:", "Chrome / Chromium not found (the user can install one: "), (",或装 Google Chrome)", ", or Google Chrome)"),
+    # 11-23 C-3.9 整体复查带出来的新句子
+    ("不认识的修饰键「", "unknown modifier key \""),
+    ("」(只认 ctrl / shift / alt),SeeU 不按", "\" (only ctrl / shift / alt are accepted); SeeU won't press it"),
+    ("问不到你是不是正在用电脑(GNOME 没回话),SeeU 先不借鼠标键盘(等几秒再试)",
+     "couldn't find out whether the user is using the computer (GNOME didn't answer), so SeeU won't borrow the mouse/keyboard now (retry in a few seconds)"),
+    ("控件没接受", "the control didn't accept it"),
     # 安全底线(linux/safety.py)
     ("这是注销 / 锁屏 / 开终端一类的系统快捷键,SeeU 不按", "this is a system shortcut (log out / lock screen / open a terminal); SeeU won't press it"),
     ("带 Super(Windows / ⌘)键的组合是系统快捷键,SeeU 不按", "combinations with the Super (Windows / ⌘) key are system shortcuts; SeeU won't press them"),
@@ -367,7 +378,7 @@ def en(s):
 
 
 # ---------------------------------------------------------------- 工具实现
-_shots = {}          # App → (截图宽, 高, 窗口 x, y, w, h),px/py 按它换算
+_shots = {}          # App → (截图宽, 高, 截图实际对应屏幕上那一块的 x, y, w, h),px/py 按它换算
 _asked = {}          # App → 上次这个 App 的动作返回 ask_user 的时间
 ASKED_TTL = 1800
 
@@ -396,17 +407,31 @@ def _target(a, need=True):
         app = a.get("app")
         if app not in _shots:
             raise ValueError(f"no screenshot of {app} yet: call seeu_see first")
-        w, h, x, y, ww, wh = _shots[app]
-        px, py = float(a["px"]), float(a["py"])
-        if not (0 <= px <= w and 0 <= py <= h):
-            raise ValueError(f"px/py is outside the screenshot ({w}×{h})")
-        return (x + px * ww / w, y + py * wh / h)
+        return _px_to_screen(_shots[app], float(a["px"]), float(a["py"]))
     t = a.get("target")
     if t in (None, ""):
         if need:
             raise ValueError("give a target (a number from the seeu_see list)")
         return None
     return int(t) if isinstance(t, (int, float)) or str(t).isdigit() else str(t)
+
+
+def _px_to_screen(shot, px, py):
+    """截图上的像素 → 屏幕点。shot = (截图宽, 高, 截图实际对应屏幕上那一块的 x, y, w, h)。"""
+    w, h, x, y, ww, wh = shot
+    if not (0 <= px <= w and 0 <= py <= h):
+        raise ValueError(f"px/py is outside the screenshot ({w}×{h})")
+    return (x + px * ww / w, y + py * wh / h)
+
+
+def _shot_box(v):
+    """11-23 C-3.9 整体复查:px/py 按截图实际截到的那一块换算(act.see 的 shot)。原来按整个窗口算,窗口有一部分在屏幕外时
+    截图比窗口小、左上角也不是窗口左上角 → 点偏。老结果没有 shot 就退回窗口范围。"""
+    win = v["window"]
+    box = v.get("shot")
+    if isinstance(box, (tuple, list)) and len(box) == 4 and box[2] > 0 and box[3] > 0:
+        return tuple(box)
+    return (win["x"], win["y"], win["w"], win["h"])
 
 
 def _result(r):
@@ -511,7 +536,7 @@ def do_see(a):
     png = v.get("png")
     if png:
         w2, h2, data = _shrink(png)
-        _shots[app] = (w2, h2, win["x"], win["y"], win["w"], win["h"])
+        _shots[app] = (w2, h2) + _shot_box(v)
         try:
             os.remove(png)
         except OSError:
@@ -623,7 +648,14 @@ def do_scroll(a):
 
 def do_web_open(a):
     tid = _w().open(a["url"])
-    return [f"opened in SeeU's invisible browser: tab={tid}\nNext: seeu_see with tab=\"{tid}\""], False
+    # 11-23 C-3.9 整体复查:专用浏览器正被用户叫出来登录时,open 就开在那个看得见的窗口里(不再把它关掉重启),话也照实说
+    try:
+        shown = bool((_w()._load("chrome") or {}).get("visible"))
+    except Exception:   # noqa: BLE001
+        shown = False
+    where = ("SeeU's browser (currently shown as a normal window for the user to sign in; call seeu_manage "
+             "action=hide_browser when they say they're done)") if shown else "SeeU's invisible browser"
+    return [f"opened in {where}: tab={tid}\nNext: seeu_see with tab=\"{tid}\""], False
 
 
 def do_web_tabs(a):
@@ -766,6 +798,13 @@ def call_tool(name, a):
     bad = _missing_args(name, a)
     if bad:
         return bad
+    try:                                    # 11-22 C-3.7:插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
+        from seeu import deps
+        wait = deps.gate()
+    except Exception:   # noqa: BLE001
+        wait = None
+    if wait:
+        return {"content": [{"type": "text", "text": wait}], "isError": False}
     t0 = time.time()
     _show_step(name, a)
     try:
@@ -825,6 +864,11 @@ def _wire(out):
 
 
 def main():
+    try:                                # 11-22 C-3.7:插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
+        from seeu.where import settings_file
+        settings_file()
+    except Exception:   # noqa: BLE001
+        pass
     os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1, newline="\n")
     os.dup2(2, 1)

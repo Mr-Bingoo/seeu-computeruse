@@ -24,9 +24,58 @@ BROWSER_DIRS = {
 }
 
 
+# 11-22 C-3.7:插件版的代码文件夹每次更新都会换位置 → 中转程序和插件文件抄一份到固定的地方再登记,
+# 不然更新后浏览器找不到中转程序、「加载已解压的扩展程序」选的那个文件夹也没了。host.py 只用标准库,单拿出来能跑。
+STABLE = os.path.expanduser("~/.seeu/seeu_web/app")     # 同 host.py 的 DIR,不跟 SEEU_HOME
+
+
+def _plugin():
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+        from seeu.where import as_plugin
+        return as_plugin(HERE)
+    except Exception:   # noqa: BLE001
+        return False
+
+
+def _sync(src, dst):
+    """把 src(文件或文件夹)抄到 dst,只抄内容不一样的;dst 里多出来的文件删掉。"""
+    import filecmp
+    import shutil
+    if os.path.isfile(src):
+        if not (os.path.isfile(dst) and filecmp.cmp(src, dst, shallow=False)):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(src, dst + ".tmp")
+            os.replace(dst + ".tmp", dst)
+        return
+    os.makedirs(dst, exist_ok=True)
+    names = set(os.listdir(src))
+    for n in names:
+        if not n.startswith("."):
+            _sync(os.path.join(src, n), os.path.join(dst, n))
+    for n in set(os.listdir(dst)) - names:
+        p = os.path.join(dst, n)
+        shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
+
+
+def base():
+    """中转程序和插件文件所在的文件夹:git 版 = 代码旁边;插件版 = 抄到 STABLE。"""
+    if not _plugin():
+        return HERE
+    _sync(os.path.join(HERE, "host.py"), os.path.join(STABLE, "host.py"))
+    _sync(os.path.join(HERE, "extension"), os.path.join(STABLE, "extension"))
+    return STABLE
+
+
+def refresh():
+    """插件版服务启动时调:登记过(STABLE 在)就把新版的中转程序、插件文件抄过去。没登记过不动。"""
+    if _plugin() and os.path.isdir(STABLE):
+        base()
+
+
 def _wrapper():
     """Chrome 要一个能直接执行的文件:写个小 sh 包一下(用系统 Python,-I 不读用户环境)。"""
-    p = os.path.join(HERE, "host.sh")
+    p = os.path.join(base(), "host.sh")
     with open(p, "w") as f:
         f.write('#!/bin/sh\nexec /usr/bin/python3 -I "$(dirname "$0")/host.py" "$@"\n')
     os.chmod(p, os.stat(p).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -56,7 +105,7 @@ def install():
     print("  1. 地址栏打开 chrome://extensions(Edge 是 edge://extensions)")
     print("  2. 右上角打开「开发者模式」")
     print("  3. 点「加载已解压的扩展程序」,选这个文件夹:")
-    print("     " + os.path.join(HERE, "extension"))
+    print("     " + os.path.join(base(), "extension"))
     print("  4. 插件编号应该是 " + EXT_ID + "(不是的话中转程序会拒绝连接,告诉 SeeU 维护者)")
     print("  5. 打开要让 SeeU 操作的网站,点右上角拼图图标里的 SeeU,选「允许这个网站」")
     return 0

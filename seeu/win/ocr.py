@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PS1 = os.path.join(HERE, "ocr.ps1")
@@ -17,22 +18,38 @@ HOWTO = ("Windows 没装文字识别语言包,认不了字。装法(要管理员
          "→ 语言选项 → 装「光学字符识别」;或管理员 PowerShell 运行 "
          "Add-WindowsCapability -Online -Name \"Language.OCR~~~zh-CN~0.0.1.0\"(英文用 en-US)")
 _LANGS = []
+_ASK_FAIL = [0.0]       # 上次问识别语言失败的时间
+ASK_RETRY_S = 60        # 问失败后隔这么久再问
+
+
+def _powershell():
+    """11-23 C-3.9 整体复查(照 openapp._powershell):用全路径,别被当前目录里同名程序顶替。"""
+    root = os.environ.get("SystemRoot") or r"C:\Windows"
+    p = os.path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+    return p if os.path.exists(p) else "powershell"
 
 
 def _run(args, timeout=30):
-    r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PS1] + args,
+    r = subprocess.run([_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PS1] + args,
                        capture_output=True, timeout=timeout, creationflags=0x08000000)
     out = r.stdout.decode("utf-8", "replace").strip().splitlines()
     return json.loads(out[-1]) if out else {}
 
 
 def langs():
-    """能用的识别语言(只问一次)。"""
+    """能用的识别语言(问成了才记住)。11-23 C-3.9 整体复查:原来第一次问失败(PowerShell 超时、机器忙)就永久记成没装,
+    这个进程此后一直认不了字;现在问失败返回空、下次再问。问成了但确实一个都没装,也记住(不用每次再等 PowerShell)。"""
     if not _LANGS:
+        if time.time() - _ASK_FAIL[0] < ASK_RETRY_S:         # 刚问失败过:先当没有,过一会儿再问(别每次 see 都白等一次 PowerShell)
+            return []
         try:
-            _LANGS.append(list(_run(["-List"]).get("langs") or []))
+            d = _run(["-List"])
         except Exception:
-            _LANGS.append([])
+            d = None
+        if not isinstance(d, dict) or "langs" not in d:      # 没给出结果(超时、PowerShell 没输出)= 没问成,不记
+            _ASK_FAIL[0] = time.time()
+            return []
+        _LANGS.append(list(d.get("langs") or []))
     return _LANGS[0]
 
 

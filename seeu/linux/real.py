@@ -84,7 +84,8 @@ def has_grant():
 
 # ─────────────────────────────── 设置(跟 Mac / Windows 同一个「借用鼠标」) ───────────────────────────────
 
-_SETTINGS = os.environ.get("SEEU_SETTINGS_FILE") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "设置.json")
+from seeu.where import settings_file as _sf
+_SETTINGS = _sf()   # SEEU_SETTINGS_FILE 优先(在 where 里);11-22 C-3.7:插件版存用户文件夹
 _SESSION_AUTO = [False]
 
 
@@ -277,8 +278,8 @@ def grant():
 
 # ─────────────────────────────── 让路、前台、对准 ───────────────────────────────
 
-def idle_seconds():
-    """用户多久没动鼠标键盘(问 GNOME)。问不到返回很大的数(不挡)。"""
+def _idle():
+    """用户多久没动鼠标键盘(问 GNOME),秒;问不到返回 None。"""
     try:
         import gi
         gi.require_version("Gio", "2.0")
@@ -288,16 +289,29 @@ def idle_seconds():
                           "GetIdletime", None, None, Gio.DBusCallFlags.NONE, 1000, None)
         return r.unpack()[0] / 1000.0
     except Exception:   # noqa: BLE001
-        return 1e9
+        return None
+
+
+def idle_seconds():
+    """用户多久没动鼠标键盘(问 GNOME)。
+    11-23 C-3.9 整体复查:问不到原来返回很大的数(= 当成用户没在用,直接借);改成返回 0(按「用户在用」处理,不借)。"""
+    v = _idle()
+    return 0.0 if v is None else v
+
+
+IDLE_UNKNOWN = "问不到你是不是正在用电脑(GNOME 没回话),SeeU 先不借鼠标键盘(等几秒再试)"
 
 
 def wait_idle():
-    t0 = time.time()
+    t0, asked = time.time(), False
     while time.time() - t0 < WAIT_MAX:
-        if idle_seconds() >= IDLE_NEED:
+        v = _idle()
+        asked = asked or v is not None
+        if v is not None and v >= IDLE_NEED:
             return
         time.sleep(0.1)
-    raise UserBusy("用户正在用电脑,SeeU 先不借鼠标键盘(等用户停手再试)")
+    # 11-23 C-3.9 整体复查:一次都没问到 = 不知道用户在不在用,按「在用」不借,原因照实说(别说成「用户正在用电脑」)
+    raise UserBusy("用户正在用电脑,SeeU 先不借鼠标键盘(等用户停手再试)" if asked else IDLE_UNKNOWN)
 
 
 def _fresh(w):
@@ -617,7 +631,13 @@ def _tap_key(sess, sym, mods=()):
 def key(w, name, mods=(), click_at=None, check=None):
     """按一个键(可带 ctrl / shift / alt)。click_at=(x, y):先点进那个框再按。
     check:真按之前再核对一次(11-20 复查:排队 + 等用户停手这几秒焦点可能换了),出问题抛 RuntimeError / Refused 就不按。"""
-    m = [x for x in safety.norm_mods(mods) if x in MODSYM]
+    # 11-23 C-3.9 整体复查:原来把不认识的修饰键悄悄丢掉(ctrl+alt+fn+delete 按出去是 Ctrl+Alt+Delete,绕过安全检查)→ 直接拒;
+    # 这里自己再查一遍危险组合(调用方没先查也拦得住)
+    safety.check_keys(name, mods)
+    m = safety.norm_mods(mods)
+    bad = [x for x in m if x not in MODSYM]
+    if bad:
+        raise safety.Refused(f"不认识的修饰键「{bad[0]}」(只认 ctrl / shift / alt),SeeU 不按(这一步请你自己来)")
     sym = keysym_of(name)
 
     def act(sess):
@@ -647,6 +667,9 @@ def _plain(ch):
 def type_text(w, text, click_at=None, check=None):
     """借真键盘打字。英文、数字、符号逐个按;别的字(中文等)借剪贴板贴,贴完把用户原来的剪贴板文字还回去。
     check:点进框以后、开打之前核对焦点(11-20 复查:点的是 see 时记下的位置,可能已经滚走了),出问题抛错就不打。"""
+    text = str(text).replace("\r\n", "\n").replace("\r", "\n")      # 11-23 C-3.9:同 Mac / Windows,换行只算一个
+    from seeu import newline
+    nl = newline.mods(w.get("comm"), w.get("wm_class"), w.get("app_id"), *(w.get("names") or []))   # 11-23 C-4.0:VS Code / 表格按单独回车
     if not all(_plain(c) for c in text):
         other, _ = shell.clipboard()
         if other:
@@ -660,7 +683,10 @@ def type_text(w, text, click_at=None, check=None):
             check()
         if all(_plain(c) for c in text):
             for ch in text:
-                _tap_key(sess, KEYSYM["return"] if ch == "\n" else ord(ch))
+                if ch == "\n":
+                    _tap_key(sess, KEYSYM["return"], nl)    # 11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
+                else:
+                    _tap_key(sess, ord(ch))
                 time.sleep(0.008)
             return
         other, old = shell.clipboard()

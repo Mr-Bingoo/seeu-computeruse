@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "seeu": {
+      "command": "./launch/seeu-mcp",
+      "args": [],
+      "cwd": ".",
+      "startup_timeout_sec": 60
+    }
+  }
+}

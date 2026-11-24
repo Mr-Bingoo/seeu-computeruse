@@ -24,6 +24,10 @@ Linux 演示 :
 
 https://github.com/user-attachments/assets/522c4265-c3fb-4fa5-a469-89585fd1eb49
 
+多任务演示 :
+
+https://github.com/user-attachments/assets/4dbd5ca0-802c-4189-a6b8-380877c74784
+
 SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思是「先看清，再动手」。
 
 它会在屏幕上再放一个紫色的代理鼠标替 AI 干活。看画面、点击、输入、滚动都在后台完成，不抢你的鼠标、不切你的前台窗口。你可以照常写文档、回消息，它会在旁边做它的事，点击 SeeU 悬浮标就可以知道或看到 AI 在干什么。
@@ -72,7 +76,31 @@ SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思�
 
 **系统要求** : Mac 要 Apple 芯片(在 macOS 27 上测过，更早的系统和 Intel 芯片没测过)；Windows 预览版要 Windows 10 或 11 以及 Python 3.10 以上(目前测试过 Windows 10 x64 和 Windows 11 ARM「虚拟机」)；Linux 预览版要 GNOME 45 以上的桌面(约 Ubuntu 24.04+、Fedora 39+、Debian 13+，推荐 Wayland)以及 Python 3.10 以上(目前测试过 Ubuntu 26.04 x64 和 ARM、Fedora 40、43、45 ARM、Debian 13 ARM「虚拟机」)，KDE 等别的桌面用不了。
 
-### 最省事 : 把链接丢给 AI
+### 最省事 : 用插件装(Claude Code / Codex)
+
+Claude Code 里输入 :
+
+```
+/plugin install seeu --marketplace Mr-Bingoo/seeu-computeruse
+```
+
+版本太旧时用不了，就分两步 :
+
+```
+/plugin marketplace add Mr-Bingoo/seeu-computeruse
+/plugin install seeu@seeu-computeruse
+```
+
+Codex 在终端里运行 :
+
+```bash
+codex plugin marketplace add Mr-Bingoo/seeu-computeruse
+codex plugin add seeu@seeu-computeruse
+```
+
+装好后新开一个会话就能用，不用再下载、接入。第一次用时 SeeU 会自己在后台装好它要的 Python 库(Mac / Windows，一般一两分钟)，Mac 还要照下面「3. 检查和授权」打开授权；Linux 上缺的系统软件和 GNOME 小插件，AI 会照「自己动手」里的办法带你装好。目前实测过 : Mac 上的 Claude Code 和 Codex，Windows 上的 Claude Code 和 Codex，Linux 上的 Codex；Linux 上的 Claude Code 还没测过。
+
+### 也很省事 : 把链接丢给 AI
 
 ```
 帮我装上 SeeU:https://github.com/Mr-Bingoo/seeu-computeruse
@@ -82,14 +110,14 @@ AI 会自己下载、装好依赖、接好(认出是哪家 AI 就接哪家)。Ma
 
 ### 自己动手
 
-以下命令文档主要按 Mac/Linux 编写，Windows 则需要把 `python3` 写成 `python`。
+以下命令文档主要按 Mac/Linux 编写，Windows 则需要把 `python3` 写成 `python`。Mac 上装了 Homebrew、pyenv、conda 这类别的 Python 的，把 `python3` 写成 `/usr/bin/python3`(SeeU 在 Mac 上用的是系统自带的那个，用错了检查时会提醒你)。
 
 **1. 装依赖**
 
-Mac(系统自带 `python3`，第一次运行时会提示安装「命令行开发者工具」，点安装就行) :
+Mac(系统自带 `python3`，第一次运行时会提示安装「命令行开发者工具」，点安装就行；`<12` 是因为系统自带的 Python 3.9 装不了新版 pyobjc) :
 
 ```bash
-/usr/bin/python3 -m pip install --user pyobjc-framework-Cocoa pyobjc-framework-Quartz pyobjc-framework-ScreenCaptureKit pyobjc-framework-CoreMedia opencv-python-headless numpy
+/usr/bin/python3 -m pip install --user --only-binary=:all: "pyobjc-core<12" "pyobjc-framework-Cocoa<12" "pyobjc-framework-Quartz<12" "pyobjc-framework-ScreenCaptureKit<12" "pyobjc-framework-CoreMedia<12" opencv-python-headless numpy
 ```
 
 Windows :
@@ -152,9 +180,9 @@ Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME �
 
 ## 更新和移除
 
-- **更新** : 跟 AI 说「更新 SeeU」就行；自己动手就运行 `python3 -m seeu update`(Windows 上要先装 [Git for Windows](https://git-scm.com))，用 `npx skills` 装的运行 `npx skills update seeu`。Linux 上新版要是改了 GNOME 小插件，会自动装上并提醒你注销重新登录一次。每版改了什么见[更新说明](CHANGELOG.md)。
+- **更新** : 跟 AI 说「更新 SeeU」就行；自己动手就运行 `python3 -m seeu update`(Windows 上要先装 [Git for Windows](https://git-scm.com))，用 `npx skills` 装的运行 `npx skills update seeu`。用插件装的 : Claude Code 运行 `claude plugin update seeu`，Codex 运行 `codex plugin marketplace upgrade seeu-computeruse`，再新开一个会话；你改过的设置会保留。Linux 上新版要是改了 GNOME 小插件，会自动装上并提醒你注销重新登录一次。每版改了什么见[更新说明](CHANGELOG.md)。
 - **看版本** : 问 AI，或运行 `python3 -m seeu version`。
-- **移除** : `python3 -m seeu uninstall <客户端>`。Linux 上已经没有客户端接入 SeeU 时，会同时删掉 GNOME 小插件。
+- **移除** : `python3 -m seeu uninstall <客户端>`；用插件装的，在 Claude Code 里运行 `claude plugin uninstall seeu`，Codex 运行 `codex plugin remove seeu@seeu-computeruse`。Linux 上已经没有客户端接入 SeeU 时，会同时删掉 GNOME 小插件。
 
 <!-- sync:safety -->
 ## 安全底线
@@ -162,9 +190,10 @@ Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME �
 **写死在代码里，AI 绕不过去 :**
 
 - 不碰终端和能直接运行脚本的 App(脚本编辑器、自动操作、快捷指令)、系统设置的「隐私与安全性」、系统密码和授权弹窗、钥匙串和密码类 App，也不碰正在运行 SeeU 的那个 AI 客户端本身(防止 AI 自己批准自己)。
-- 不按危险快捷键(清空废纸篓、锁屏、注销、强制退出…)，不打危险命令(sudo、删整个磁盘…)。
+- 不按危险快捷键(清空废纸篓、锁屏、注销、强制退出…)，也不点叫这些名字的按钮和菜单(清空废纸篓 / 回收站、关机、注销…)，不打危险命令(sudo、删整个磁盘…)。
 - 不往密码框、验证码框里打字，光标在里面时也不按字符键、回车、删除，不粘贴(⌘V / Ctrl+V、菜单里的粘贴、界面上叫「粘贴」的按钮都算；Tab、Esc、方向键这类用来离开的键照常)；网页里的银行卡框也不填。(iPhone 镜像、模拟器这类只有画面的场景，和你自己装的 Electron App 里，SeeU 认不出是什么框，这一条在那里靠 AI 遵守；SeeU 的后台浏览器和它另开的 Electron App 里，只认得出标准写法的密码框；别的网站嵌进网页的小框(支付、第三方登录常这样做)里面看不到，只能按框的名字和地址判断，名字看不出来的认不出。)
 - 浏览器里不长按 : 长按是按屏幕位置点，会绕开网页的允许名单；点网页上的东西只按编号。
+- 仅 Windows : 开始菜单和任务栏的搜索框不碰(在里面打程序名回车就会运行)；资源管理器地址栏里只打已有文件夹的路径；锁屏时什么都不做。
 - 仅 Linux : 整个「设置」App 和 GNOME Shell 自己(Alt+F2 运行框、系统菜单)都不碰；锁屏时什么都不做；系统弹框(输密码、授权)开着时不借你的鼠标键盘；编辑器里会把文件当程序跑的「运行」菜单不点。
 - 浏览器里，键盘焦点不在网页上时不按回车、空格 : 焦点落在工具栏按钮、插件的弹出页、浏览器设置页或浏览器自己弹出的对话框上时，这两个键等于替你点了按钮(比如「允许这个网站」)。Esc、Tab 照常，网页里和地址栏里不受影响。
 
@@ -224,7 +253,7 @@ Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME �
 
 1. 先让 AI 检查一下缺哪项授权(或自己运行 `python3 -m seeu check`)，照它说的去开。(Windows 不用开授权，命令里的 `python3` 写成 `python`；Linux 运行 `python3 -m seeu check --fix` 能自动补上大部分授权和设置，缺的系统软件会告诉你运行哪条 sudo 命令。)
 2. 开完或改完授权，要完全退出 AI 客户端再打开，才会生效。(Linux : 小插件装好或更新后要注销重新登录；打开辅助功能总开关后，要把 Qt、VS Code、Chrome 这类程序重开一次。)
-3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(或运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有涉及个人隐私。
+3. 还不行，到 [Issues](https://github.com/Mr-Bingoo/seeu-computeruse/issues) 反馈 : 写上版本(问 AI，或运行 `python3 -m seeu version`)、用的哪家 AI、在操作哪个 App、卡在哪一步。可以让 AI 帮你记下现场附上(Mac、Windows 上也可以自己运行 `python3 -m seeu evidence`)，里面可能有窗口标题、截图这类信息，发之前先看一眼有没有涉及个人隐私。
 <!-- /sync:notes -->
 
 ## 文档

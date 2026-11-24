@@ -319,13 +319,27 @@ def check_app(app):
 
 # ---------------------------------------------------------------- 菜单
 # 11-06 二次复查:简体中文访达里实际叫「清倒废纸篓」(原来只写了「清空」,拦不住);顺带补繁体和英式英文的叫法
-BLOCKED_MENU = re.compile(r"清[空倒]废纸篓|[清倒]空?垃圾桶|立即[删刪]除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|关机|關機|重新启动|重新開機|"
-                          r"强制退出|強制結束|Empty (the )?(Trash|Bin)|Delete Immediately|Log Out|Lock Screen|Shut Down|Restart|Force Quit", re.I)
+BLOCKED_MENU = re.compile(r"清[空倒]废纸篓|[清倒]空?垃圾桶|立即[删刪]除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|关机|關機|"
+                          r"强制退出|強制結束|\b(Empty (the )?(Trash|Bin)|Delete Immediately|Log Out|Lock Screen|Shut Down|Force Quit)\b", re.I)
+# 11-23 C-4.0 Fable 复查:「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
+# 「Restart Kernel」「Restart Language Server」「重启服务」这类程序自己的按钮不算;英文词加词边界(「Design Outline」里的 sign out 不算)
+BLOCKED_RESTART = re.compile(r"^\s*(重新启动|重新開機|重启|Restart|Reboot)(\s*(Now|Computer|电脑|计算机|系统))?\s*(\(&?[A-Za-z]\))?\s*(\.{3}|…)?\s*$|"
+                             r"\bUpdate and restart\b|更新并重启", re.I)
+
+
+# 11-23 C-4.0:访达废纸篓窗口右上角那个按钮只叫「清倒」/「Empty」(原来词表漏了)。别的 App 里「清空」常是清空输入框,只在访达里认整个名字
+FINDER_EMPTY = re.compile(r"^\s*(清倒|清空|Empty)\s*(\.{3}|…)?\s*$", re.I)
+
+
+def check_finder_button(names):
+    for p in names:
+        if FINDER_EMPTY.search(str(p)):
+            raise Refused(f"「{p}」会清掉废纸篓,SeeU 不点(这一步请你自己来)")
 
 
 def check_menu(path):
     for p in path:
-        if BLOCKED_MENU.search(str(p)):
+        if BLOCKED_MENU.search(str(p)) or BLOCKED_RESTART.search(str(p)):
             raise Refused(f"菜单「{p}」是危险操作,SeeU 不点(这一步请你自己来)")
 
 

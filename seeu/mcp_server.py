@@ -389,6 +389,7 @@ def _allow(a):
     if v != "auto":
         _asked.pop(a.get("app"), None)      # 「仅此一次」用完作废,下次要借还得再问
     if v == "auto":
+        _SAID[0] = ""                       # 这条不是 manage / allow_site 来的,别带上一次的原话
         _notice(("SeeU · 借用鼠标", "这一轮对话里 AI 可以直接借用鼠标了(你答应过)"),
                 ("SeeU · Borrow mouse", "The AI may borrow the mouse for this session (you agreed)"))
     return v
@@ -529,12 +530,20 @@ def aejs_origin(url):
     return aejs.origin(url if "://" in url else "https://" + url) or url
 
 
+_SAID = [""]     # 这次调用里 AI 填的 user_said(do_manage / do_allow_site 开头记下,_notice 带上)
+
+
 def _notice(zh, en):
-    """11-02:AI 代用户改了东西(加名单、改设置、重开…),屏幕上弹提示条留痕,AI 没问就做了用户也看得到。"""
+    """11-02:AI 代用户改了东西(加名单、改设置、重开…),屏幕上弹提示条留痕,AI 没问就做了用户也看得到。
+    11-23 C-3.9 整体复查:服务这边看不到对话,user_said 只能查「不是空的」→ 提示条带上 AI 填的原话前 40 字(Windows / Linux 早就带),
+    用户一眼看得出是不是自己说的。"""
     try:
         from seeu_lib import cursor_overlay as co
         from seeu.i18n import lang
         t, b = (en if lang() == "en" else zh)
+        said = " ".join(_SAID[0].split())[:40]
+        if said:
+            b += (f" (you said: {said})" if lang() == "en" else f"(你说的:{said})")
         co.toast(t, b, 8)
     except Exception:
         pass
@@ -545,6 +554,7 @@ NO_ASK = ("isee_off", "list_sites")      # 不改东西 / 只往更安全的方�
 
 def do_manage(a):
     act, val = a.get("action"), (a.get("value") or "").strip()
+    _SAID[0] = str(a.get("user_said") or "")
     if act == "list_sites":
         from seeu.web import aejs
         return ["allow list: " + (", ".join(aejs.allowed_list()) or "(empty)")], False
@@ -615,6 +625,7 @@ def do_allow_site(a):
     from seeu.web import aejs
     if not (a.get("user_said") or "").strip():
         return ["refused: ask the user first, and pass their reply as user_said"], True
+    _SAID[0] = str(a.get("user_said") or "")
     try:
         lst = aejs.allow(a["url"])
     except aejs.AEError as ex:
@@ -713,6 +724,13 @@ def call_tool(name, a):
     bad = _missing_args(name, a)
     if bad:
         return bad
+    try:                                    # 11-22 C-3.7:插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
+        from seeu import deps
+        wait = deps.gate()
+    except Exception:   # noqa: BLE001
+        wait = None
+    if wait:
+        return {"content": [{"type": "text", "text": wait}], "isError": False}
     if isinstance(a.get("app"), str):       # 11-06 二次复查:浏览器的别的写法(「标题」、包名、进程号)先归一,别绕开网页层
         try:                                # 11-15:别的语言的 App 名(「备忘录」→ Notes)先换成系统现在叫它的名字
             from seeu import ax
@@ -791,7 +809,37 @@ def _wire(out):
         return "".join("\ufffd" if 0xD800 <= ord(c) <= 0xDFFF else c for c in s)
 
 
+_CRASH_LOG = []
+
+
+def _crash_log():
+    """11-22 Intel Mac 第三轮:打字时整个服务进程没了(客户端只报 Transport closed),现场什么都没留下。
+    打开 faulthandler:进程被系统信号打死(段错误等)时把 Python 调用栈写进 seeu_crash.log(只追加,开头记时间和进程号)。"""
+    try:
+        import faulthandler
+        p = home("seeu_crash.log")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        f = open(p, "a", encoding="utf-8")
+        f.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} pid {os.getpid()} SeeU {_ver()} 启动\n")
+        f.flush()
+        faulthandler.enable(file=f, all_threads=True)
+        _CRASH_LOG.append(f)                # 文件对象留着,别被回收(faulthandler 只记文件号)
+    except Exception:   # noqa: BLE001
+        pass
+
+
 def main():
+    _crash_log()
+    try:                                # 11-22 C-3.7:插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
+        from seeu.where import settings_file
+        settings_file()
+    except Exception:   # noqa: BLE001
+        pass
+    try:                                # 11-22 C-3.7:插件版更新后,把新版浏览器中转程序 / 插件文件抄到固定位置(登记过才抄)
+        from seeu.web import install as _winst
+        _winst.refresh()
+    except Exception:   # noqa: BLE001
+        pass
     os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 11-17:同一个 AI 会话的几步算同一个任务
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
     os.dup2(2, 1)                       # 之后 fd 1(含子进程)都进 stderr

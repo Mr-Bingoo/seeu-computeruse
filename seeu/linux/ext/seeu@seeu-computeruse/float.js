@@ -82,6 +82,10 @@ function onRealBus(node) {
   return ok;
 }
 
+// 11-23 C-3.9 整体复查(小插件第 14 版):Python 那头的显示进程卡死 / 被强杀时,最后一帧会一直留在屏幕上。
+// 它正常时每秒至少发十几帧 → 这么久没收到新的一帧就自己藏起来(它恢复后下一帧照常画出来)。
+const STALE_S = 10;
+
 const EDGE_CURSOR = {l: 'WEST_RESIZE', r: 'EAST_RESIZE', t: 'NORTH_RESIZE', b: 'SOUTH_RESIZE',
   tl: 'NW_RESIZE', br: 'SE_RESIZE', tr: 'NE_RESIZE', bl: 'SW_RESIZE'};
 
@@ -104,6 +108,8 @@ export class FloatView {
     this.over.connect('repaint', a => this._paint(a, 1));
     this._grab = null;
     this._cursorSet = false;
+    this._watchId = 0;
+    this._lastFrame = 0;
     const pt = ev => { const [x, y] = ev.get_coords(); return [x, y]; };
     this.hit.connect('button-press-event', (a, ev) => {
       if (ev.get_button() !== 1) return Clutter.EVENT_PROPAGATE;
@@ -151,7 +157,25 @@ export class FloatView {
     } catch (e) { /* 光标样子换不了不要紧 */ }
   }
 
+  // 盯着「多久没新帧」:显示着才盯(2 秒看一次),藏了就停
+  _watch(on) {
+    if (on && !this._watchId) {
+      this._watchId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+        if (GLib.get_monotonic_time() - this._lastFrame > STALE_S * 1000000) {
+          this._watchId = 0;
+          this.update(null);
+          return GLib.SOURCE_REMOVE;
+        }
+        return GLib.SOURCE_CONTINUE;
+      });
+    } else if (!on && this._watchId) {
+      GLib.source_remove(this._watchId);
+      this._watchId = 0;
+    }
+  }
+
   destroy() {
+    this._watch(false);
     this._ungrab();
     this._setCursor('');
     this._dropClone();
@@ -163,6 +187,7 @@ export class FloatView {
   // m = {show, x, y, w, h(画布在屏幕上的位置和大小), shape:[x,y,w,h,r], prims:[...], through, cursor, wid, glass}
   update(m) {
     if (!m || !m.show) {
+      this._watch(false);
       this.m = null;
       this._ungrab();
       this._setCursor('');
@@ -170,6 +195,8 @@ export class FloatView {
       this.box.hide();
       return;
     }
+    this._lastFrame = GLib.get_monotonic_time();
+    this._watch(true);
     this.m = m;
     const [W, H] = [Math.max(1, Math.ceil(m.w)), Math.max(1, Math.ceil(m.h))];
     this.box.set_position(Math.round(m.x), Math.round(m.y));

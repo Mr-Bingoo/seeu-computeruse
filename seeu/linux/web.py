@@ -218,7 +218,7 @@ def _fn(d, tab, fn, args):
     if r is None:
         raise WebError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise WebError(r["__err"], r.get("code") or "page")
+        raise WebError(*aejs.page_err(r))      # 11-23 C-3.9 整体复查:网页说的话不当 SeeU 的提示(见 seeu/web/aejs.page_err)
     return r
 
 
@@ -242,13 +242,18 @@ def _wait_loaded(d, tab, timeout=10.0):
 # ---------------------------------------------------------------- 对外
 
 def open(url, browser="chrome"):
-    """在专用那份里开一个新标签页(无界面,不出窗口)。名单外的网站不开。返回标签页编号。"""
+    """在专用那份里开一个新标签页(无界面,不出窗口)。名单外的网站不开。返回标签页编号。
+    专用那份正被用户叫出来(show,登录用)时就在那个看得见的窗口里开,不重启它。"""
     u = str(url or "").strip()
     if not u.lower().startswith(("http://", "https://")) or aejs.origin(u) is None:
         raise WebError("只能打开 http / https 网址", "bad_url")
     if not _allowed(u):
         raise _not_allowed(u)
-    d = start(browser)
+    # 11-23 C-3.9 整体复查:原来固定 start(无界面)→ 用户正在叫出来的窗口里登录时,AI 一调 open 就把那个窗口关掉重启成无界面
+    # (登录到一半没了)。现在:专用那份正以「看得见」的样子开着就直接用它,等用户说登完(hide)再回无界面
+    d = _load(browser)
+    if not (d and d.get("visible")):
+        d = start(browser)
     with cdp.Session(cdp._http(d["port"], "/json/version")["webSocketDebuggerUrl"]) as s:
         tid = s.call("Target.createTarget", {"url": u})["targetId"]
     _wait_loaded(d, tid)

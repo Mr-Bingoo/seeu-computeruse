@@ -19,6 +19,7 @@
 import ctypes
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -45,25 +46,47 @@ DESK_TIP = "改用 see 列表里控件的编号操作(截图认字得来的编�
 FRAME_NAMES = {"最小化", "最大化", "还原", "关闭", "系统", "Minimize", "Maximize", "Restore", "Close", "System"}
 CANVAS_EXES = {"hd-player.exe", "mumuplayer.exe", "nemuplayer.exe", "dnplayer.exe", "nox.exe", "ldplayer.exe"}
 # 环境变量 SEEU_SETTINGS_FILE:开发测试时把设置换到别的文件(虚拟机里的代码是共享目录,不设会改到开发机上真的设置;同 isee.SETTINGS)
-_SETTINGS = os.environ.get("SEEU_SETTINGS_FILE") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "设置.json")
+from seeu.where import settings_file as _sf
+_SETTINGS = _sf()   # SEEU_SETTINGS_FILE 优先(在 where 里);11-22 C-3.7:插件版存用户文件夹
 
 
 # ─────────────────────────────── 小工具 ───────────────────────────────
 
+def _pid_alive(pid):
+    """进程还在不在(问不出来当还在,不删它的东西)。🔴 Windows 上不能用 os.kill(pid, 0),那会把对方杀掉;用 sched._alive。"""
+    try:
+        from seeu import sched as _sc
+        return bool(_sc._alive(pid))
+    except Exception:   # noqa: BLE001
+        return True
+
+
 def _tmp():
+    """截图临时目录。11-23 C-3.9 整体复查(照 Mac act._tmp):目录名带进程号,主人进程还活着的不删
+    (原来超一天就删、不看主人:长驻的 MCP 服务一天没截图,目录被别的 SeeU 进程删掉,此后 see 一直报错);
+    自己的目录万一被删了(系统清临时文件等)就重建。"""
     if _TMP[0] is None:
         root = tempfile.gettempdir()
         now = time.time()
-        for n in os.listdir(root):        # 顺手删一天前别的进程留下的(命令行打印的截图路径 AI 还要读,所以退出时不删)
+        try:
+            names = os.listdir(root)
+        except OSError:
+            names = []
+        for n in names:                   # 顺手删一天前别的进程留下的(命令行打印的截图路径 AI 还要读,所以退出时不删)
             p = os.path.join(root, n)
             if n.startswith("seeu_win_") and os.path.isdir(p):
                 try:
-                    if now - os.path.getmtime(p) > 86400:
-                        import shutil
-                        shutil.rmtree(p, ignore_errors=True)
+                    if now - os.path.getmtime(p) <= 86400:
+                        continue
+                    m = re.match(r"seeu_win_(\d+)_", n)
+                    if m and _pid_alive(int(m.group(1))):
+                        continue
+                    import shutil
+                    shutil.rmtree(p, ignore_errors=True)
                 except OSError:
                     pass
-        _TMP[0] = tempfile.mkdtemp(prefix="seeu_win_")
+    if _TMP[0] is None or not os.path.isdir(_TMP[0]):
+        _TMP[0] = tempfile.mkdtemp(prefix=f"seeu_win_{os.getpid()}_")
     return _TMP[0]
 
 
@@ -189,6 +212,7 @@ def real_allowed(allow=None):
 
 def _win(app):
     """找窗口 + 过安全底线 + 管理员窗口。返回 window.info。"""
+    safety.check_unlocked()          # 11-23 C-3.9 整体复查:锁屏时什么都不做(原来没查;判断出错当没锁)
     win = W.find(app)
     safety.check_window(win)
     if win.get("elevated") and not W.self_elevated():
@@ -387,6 +411,27 @@ def _verify(hwnd, act, near=None, read=None, timeout=2.5):
         act()
     finally:
         _rl.REBASE.f = None
+    # 11-23 C-3.9 整体复查(照 Mac act._try 的 done):动作已经发出去了,之后核实 / 存截图出错(临时目录被删、窗口没了…)
+    # 不能当成「这条路没走通」—— 那样 _ladder 会换下一档把同一个动作再做一遍(按钮最多被点 3 次)。一律按 unverified 返回。
+    try:
+        return _after(hwnd, before, near, read, timeout, txt0, title0, chrome, sig0, names0)
+    except Exception as ex:   # noqa: BLE001
+        return "unverified", None, f"{SENT_BUT}({ex})"
+
+
+SENT_BUT = "动作已经发出去了,但核实时出了错;先 see 看一眼有没有生效,别直接重做"
+
+
+def _safe_png(cap):
+    """存截图;存不了(临时目录出问题)返回 None,不影响已经核实出来的结果。"""
+    try:
+        return _save_png(*cap)
+    except Exception:   # noqa: BLE001
+        return None
+
+
+def _after(hwnd, before, near, read, timeout, txt0, title0, chrome, sig0, names0):
+    """_verify 的后半段:动作做完之后比画面、标题、控件内容。"""
     if before is None:
         return "unverified", None, "窗口截不到(最小化了?)"
     t0 = time.time()
@@ -403,23 +448,23 @@ def _verify(hwnd, act, near=None, read=None, timeout=2.5):
                 n1 = _names(hwnd)
                 if n1 is not None and _swapped(names0, n1) >= PAGE_SWAP:
                     _LAG[int(hwnd)] = (time.time(), _small(_shot(hwnd) or after))
-                    return "delivered", _save_png(*after), note + ";控件大半换了、画面只变了一点(画面可能没跟上)"
+                    return "delivered", _safe_png(after), note + ";控件大半换了、画面只变了一点(画面可能没跟上)"
             if pct >= LAG_CLEAR:             # 画面明显跟着变了(≥3%),说明跟得上;按钮高亮这种小变化不算(11-15 复查)
                 _LAG.pop(int(hwnd), None)
-            return "delivered", _save_png(*after), note
+            return "delivered", _safe_png(after), note
         if read:
             txt1 = read()
             if txt1 is not None and txt1 != txt0:
-                return "delivered", _save_png(*after), "读回的文字变了"
+                return "delivered", _safe_png(after), ("选中 / 勾选状态变了" if str(txt1).startswith("state:") else "读回的文字变了")
         if W.text(hwnd) != title0:
-            return "delivered", _save_png(*after), "窗口标题变了"
+            return "delivered", _safe_png(after), "窗口标题变了"
         if sig0 is not None and time.time() - t0 > 0.5:
             s1 = _sig(hwnd)
             if s1 is not None and s1 != sig0:
                 if chrome:      # 11-15:之后按截图位置点要先拦(见 stale_why);只对 Chrome / Electron(普通程序勾个框也是这样,不是没跟上)
                     _LAG[int(hwnd)] = (time.time(), _small(after))
-                return "delivered", _save_png(*after), "控件内容变了(画面可能没重画)"
-    return "ineffective", _save_png(*after), "画面、标题、控件内容都没变"
+                return "delivered", _safe_png(after), "控件内容变了(画面可能没重画)"
+    return "ineffective", _safe_png(after), "画面、标题、控件内容都没变"
 
 
 def _keep_front(hwnd, act, info):
@@ -430,13 +475,16 @@ def _keep_front(hwnd, act, info):
         act()
         if not fg0 or fg0 == hwnd:
             return
-        t0 = time.time()
-        while time.time() - t0 < 0.5:
-            if W.foreground() == hwnd:
-                ok, how = inputs.give_back(fg0)
-                info.update(front_taken=True, front_back=ok, front_how=how)
-                return
-            time.sleep(0.01)
+        try:        # 11-23 C-3.9 整体复查:动作已发出,盯前台这段出错不能让 _ladder 换下一档重做
+            t0 = time.time()
+            while time.time() - t0 < 0.5:
+                if W.foreground() == hwnd:
+                    ok, how = inputs.give_back(fg0)
+                    info.update(front_taken=True, front_back=ok, front_how=how)
+                    return
+                time.sleep(0.01)
+        except Exception:   # noqa: BLE001
+            pass
     return run
 
 
@@ -503,6 +551,7 @@ def see(app):
             ocr_note = r.get("note")
     for i, it in enumerate(items, 1):
         it["id"] = i
+        it["hwnd"] = int(h)          # 11-23 C-3.9 整体复查:记下这一项是哪个窗口的(同程序两个窗口时,动作那次找到的可能是另一个)
     _last[app] = items
     same = [w for w in W.list_windows() if w["exe"].lower() == win["exe"].lower()]
     wins = [w["title"] for w in same] if len(same) > 1 else []
@@ -529,7 +578,11 @@ def _still_there(it, hwnd=None):
     返回现在的中心点 (x, y);不在了抛 Stale(不退回去点老位置)。
       - 控件还在:用它现在的位置(滚动、挪窗口后也点得准),顺手更新清单里记的位置。
       - 控件对象失效:看原位置上现在是不是同一种、同名、还在这个窗口里的控件,是就照点(窗口被盖着时问不到,算不在)。
-    认字得来的项(模拟器、自绘界面)没有控件可问,不核对。"""
+    认字得来的项(模拟器、自绘界面)没有控件可问,不核对。
+    11-23 C-3.9 整体复查:先核对这一项是不是这次找到的这个窗口的(see 时记了窗口号)。同一个程序开着两个窗口、see 之后
+    另一个窗口到了上面,同一个 App 名这次找到的就是另一个 —— 原来「控件对象还有效」就照点,点进了 see 的那个窗口。"""
+    if hwnd is not None and it.get("hwnd") is not None and int(it["hwnd"]) != int(hwnd):
+        raise Stale(WRONG_WINDOW.format(a=int(it["hwnd"]), b=int(hwnd)))
     e = it.get("uia")
     if not e:
         return it["x"], it["y"]
@@ -544,6 +597,10 @@ def _still_there(it, hwnd=None):
         e["el"] = now[2]
         return it["x"], it["y"]
     raise Stale(f"画面变了:第 {it['id']} 项「{(it.get('text') or '')[:20]}」已经不在 see 时的位置,先 see 一次再操作")
+
+
+WRONG_WINDOW = ("这次找到的窗口(#{b})不是上次 see 的那个(#{a}):这个程序开着好几个窗口,最上面的换了。"
+                "先 see 一次再操作;要固定操作某一个窗口,App 写成「#窗口号」")
 
 
 def _in_window(el, hwnd):
@@ -635,6 +692,16 @@ def _busy(r, ex):
     return r
 
 
+# 11-23 C-3.9 整体复查:点这几种有名字的控件前查危险名字(清空回收站 / 关机 / 注销 / 重启…,safety.check_menu);
+# 按钮、菜单项、拆分按钮。列表项不查(资源管理器里的文件名会被误伤);按截图位置 / 认字得来的项没有控件名,查不了。
+TAP_CHECK_TYPES = {50000, 50011, 50031}
+
+
+def _check_name(e, win):
+    if e is not None and e.get("type") in TAP_CHECK_TYPES and (e.get("name") or "").strip():
+        safety.check_menu([e["name"]], win.get("exe") or "")
+
+
 def tap(app, target, allow=None, real=True, stale_check=True):
     """点:后台点击 → 借前台按下(控件能按时,约 0.03~0.2 秒)→ 真鼠标(让路后约 0.2 秒,点完还原)。后两档归「借用鼠标」设置管。"""
     try:
@@ -643,6 +710,10 @@ def tap(app, target, allow=None, real=True, stale_check=True):
         return _refused(ex)
     h = win["hwnd"]
     x, y, e = _resolve(app, target, h)
+    try:
+        _check_name(e, win)
+    except safety.Refused as ex:
+        return _refused(ex)
     if e is None and stale_check:    # 按截图位置(或截图认字)点:截图不可信就不点(11-15)
         bad = _stale_pixel(h)
         if bad:
@@ -655,7 +726,8 @@ def tap(app, target, allow=None, real=True, stale_check=True):
     except Exception:   # noqa: BLE001
         pass
     _cursor(h, "click", x, y)
-    r = _ladder(h, [("后台点击", lambda: inputs.click(h, round(x), round(y)))], near=near)
+    st_read = _state_reader(h, e, x, y)          # 11-23 C-3.9:单选 / 勾选框按「选没选中」核实(见 _state_reader)
+    r = _ladder(h, [("后台点击", lambda: inputs.click(h, round(x), round(y)))], near=near, read=st_read)
     r["xy"] = (round(x), round(y))
     if r["outcome"] not in ("ineffective", "failed") or not real:
         # real=False:只走后台(打字前点输入框用。点空输入框画面只多一个光标,常判「没变」,不能因此借用户的鼠标 —— 11-11 真机每次打字都借了一次)
@@ -665,6 +737,7 @@ def tap(app, target, allow=None, real=True, stale_check=True):
         return blocked
     info = {}
     steps = []
+    front_lost = []
     if e is not None and any(a in e["actions"] for a in ("invoke", "toggle", "select", "expand")):
         def borrow():
             if not W.other_desktop(h):
@@ -674,7 +747,9 @@ def tap(app, target, allow=None, real=True, stale_check=True):
                 _rl.rebase()                     # 11-17 C-2.8:排完队重拍「动作前」
                 info.update(inputs.borrow_front(h, lambda: uia.press(e)))
             if info.get("stolen") and not info.get("back"):
-                raise RuntimeError("按下了,但前台没还回去")
+                # 11-23 C-3.9 整体复查:原来在这抛错 → _ladder 当成这条路没走通,换真鼠标把同一个按钮再点一次。
+                # 按下已经做成了:照常核实,只在 note 里说前台没还回去
+                front_lost.append(1)
         steps.append(("借前台按下", borrow))
 
     def real_tap():
@@ -687,7 +762,7 @@ def tap(app, target, allow=None, real=True, stale_check=True):
     tried = list(r["tried"])
     for name, fn in steps:
         try:
-            r2 = _ladder(h, [(name, fn)], near=near)
+            r2 = _ladder(h, [(name, fn)], near=near, read=st_read)
         except real.UserBusy as ex:
             return _busy(r, ex)
         tried += r2["tried"]
@@ -700,7 +775,12 @@ def tap(app, target, allow=None, real=True, stale_check=True):
     r2.update(tried=tried, xy=r["xy"])
     if info:
         r2["borrow"] = info
+    if front_lost:
+        r2["note"] = (r2["note"] + ";" if r2.get("note") else "") + FRONT_LOST
     return r2
+
+
+FRONT_LOST = "按下了,但前台没还回去(目标窗口留在了最前面)"
 
 
 NO_BROWSER = ("浏览器里不长按 / 不拖动(这两样按屏幕位置操作,会绕开网页的允许名单);"
@@ -737,6 +817,10 @@ def long_press(app, target, ms=1000, allow=None):
         return _refused(NO_BROWSER)
     h = win["hwnd"]
     x, y, _e = _resolve(app, target, h)
+    try:
+        _check_name(_e, win)         # 11-23 C-3.9 整体复查:长按也是点,同样查危险名字
+    except safety.Refused as ex:
+        return _refused(ex)
     if _e is None:
         bad = _stale_pixel(h)
         if bad:
@@ -801,6 +885,36 @@ def _is_browser(win):
     return win["exe"].lower() in BROWSER_EXES
 
 
+def _address_el(win):
+    """资源管理器窗口里正拿着键盘焦点的地址栏(UIA 元素);不是 / 找不到 None。
+    11-23 C-3.9 虚拟机实测:Win11 资源管理器的地址栏在新式界面框架里,点进去后 focused_in 只读到一个没名字的容器,
+    但「地址栏」这个输入框自己标着有键盘焦点(30008)、值就是里面的路径 → 直接找它。"""
+    try:
+        for it in uia.elements(win["hwnd"]):
+            if it.get("type") == 50004 and safety.is_address(it.get("name")) and it["el"].GetCurrentPropertyValue(30008):
+                return it["el"]
+    except Exception:   # noqa: BLE001
+        pass
+    return None
+
+
+def _in_address(win, field):
+    """要打字 / 按回车的地方是不是资源管理器的地址栏(11-23 C-3.9)。at 点的那个框直接看名字;没给 at 就看地址栏有没有焦点;
+    资源管理器里焦点完全读不出来 = 按地址栏算(宁可多拦)。别的程序一律 False。"""
+    if (win.get("exe") or "").lower() != "explorer.exe":
+        return False
+    if field is not None and safety.is_address(field.get("name") or field.get("text")):
+        return True
+    # 11-23 C-4.0 Fable 复查:at 指的控件名字不像地址栏(面包屑、「上一个位置」按钮…)也可能把地址栏点进编辑状态 → 接着看焦点
+    if _address_el(win) is not None:
+        return True
+    try:
+        f = uia.focused_in(win["hwnd"])
+    except Exception:   # noqa: BLE001
+        f = None
+    return True if f is None else safety.is_address(f.get("name"))
+
+
 def _known_field(win, field):
     """浏览器里要改内容时,光标所在的框:这次 at 点的,或者上次 at 点的。都没有 → 认不出 → None。"""
     if field is not None:
@@ -822,6 +936,36 @@ def _secret_focus(h, target):
         return bool(f and f["password"])
     except Exception:
         return False
+
+
+# UIA 属性号:选中项是否选中、勾选状态,以及这两种能力有没有
+P_IS_SELECTED, P_TOGGLE_STATE, P_HAS_SEL, P_HAS_TOG = 30079, 30086, 30036, 30041
+
+
+def _state_reader(h, e, x, y):
+    """11-23 C-3.9 整体复查(虚拟机实测):单选按钮、勾选框点中了,画面只变一小点(老程序在 200% 缩放下更明显),
+    截图比对判「没变」→ 换真鼠标再点一次 = 按了两下(勾选框就是勾上又取消)。
+    点的是这两种控件时,改成读它「选没选中」:点前点后不一样就算点成了(照 Mac 11-14 勾选框自我核实)。
+    按编号点的直接用那个控件;按位置点的问一下那一点上是什么控件(只认这个窗口里的)。不是这两种 → None(照旧比截图)。"""
+    try:
+        el = (e or {}).get("el")
+        if el is None:
+            hit = uia.at_point(x, y)
+            el = hit[2] if hit and _in_window(hit[2], h) else None
+        if el is None:
+            return None
+        props = [p for p, has in ((P_IS_SELECTED, P_HAS_SEL), (P_TOGGLE_STATE, P_HAS_TOG)) if el.GetCurrentPropertyValue(has)]
+        if not props:
+            return None
+    except Exception:   # noqa: BLE001
+        return None
+
+    def read():
+        try:
+            return "state:" + ",".join(str(el.GetCurrentPropertyValue(p)) for p in props)
+        except Exception:   # noqa: BLE001
+            return None
+    return read
 
 
 def _reader(h):
@@ -870,6 +1014,10 @@ def type(app, text, enter=False, at=None, allow=None):
         ax_, ay_, field = _resolve(app, at, h)
         if field is not None and field.get("password"):
             return _refused("光标在密码框里,SeeU 不往里打字(这一步请你自己来)")
+        try:
+            _check_name(field, win)  # 11-23 C-4.0 Fable 复查:带 target 打字会先点它,危险名字的按钮同样不点
+        except safety.Refused as ex:
+            return _refused(ex)
         if field is None:            # at 是截图位置:截图不可信就不点也不打(11-15)
             bad = _stale_pixel(h)
             if bad:
@@ -884,6 +1032,11 @@ def type(app, text, enter=False, at=None, allow=None):
             return _refused(NEED_FIELD)
         if f.get("password"):
             return _refused("光标在密码框里,SeeU 不往里打字(这一步请你自己来)")
+    if _in_address(win, field):            # 11-23 C-3.9:资源管理器地址栏只打已有文件夹的路径(见 safety.check_address_text)
+        try:
+            safety.check_address_text(text)
+        except safety.Refused as ex:
+            return _refused(ex)
     dlg = _blocking_dialog(h, field)
     if dlg is not None:
         return dict(outcome="failed", route=None, tried=[], png=None,
@@ -956,12 +1109,26 @@ def type(app, text, enter=False, at=None, allow=None):
                 return _busy(r2, busy[0][1][len("error:"):])
             r = r2
     if enter:
-        if r["outcome"] == "delivered":
+        if r["outcome"] == "delivered" and _in_address(win, field) and not _address_now_folder(win, field):
+            r["enter"] = "skipped"      # 11-23 C-4.0 Fable 复查:地址栏里整串(不只是这次打的字)不是已有文件夹就不按回车
+            r["note"] = safety.NOT_FOLDER_ENTER
+        elif r["outcome"] == "delivered":
             inputs.key(h, "return", target=target)
             r["enter"] = "sent"
         else:
             r["enter"] = "skipped"
     return r
+
+
+def _address_now_folder(win, field):
+    """地址栏里现在的整串是不是已有文件夹(读不出来算不是)。"""
+    try:
+        el = _address_el(win)
+        if el is None and field is not None and safety.is_address(field.get("name") or field.get("text")):
+            el = field["el"]
+        return safety.folder_ok(uia.read_element(el) if el is not None else None)
+    except Exception:   # noqa: BLE001
+        return False
 
 
 EM_GETSEL = 0x00B0
@@ -997,6 +1164,10 @@ def press(app, key, *mods, at=None):
     field = None
     if at is not None:
         ax_, ay_, field = _resolve(app, at, h)
+        try:
+            _check_name(field, win)  # 11-23 C-4.0 Fable 复查:带 target 按键会先点它,危险名字的按钮同样不点
+        except safety.Refused as ex:
+            return _refused(ex)
         if field is None:            # at 是截图位置:截图不可信就不点也不打(11-15)
             bad = _stale_pixel(h)
             if bad:
@@ -1012,6 +1183,21 @@ def press(app, key, *mods, at=None):
                 return _refused(NEED_FIELD)
             if f.get("password"):
                 return _refused("光标在密码框里,这个键会改里面的内容,SeeU 不按(这一步请你自己来)")
+    if (len(str(key)) == 1 or safety.norm_key(key) == "space") and not set(m.lower() for m in mods) - {"shift"} \
+            and _in_address(win, field):
+        return _refused(safety.NOT_ADDRESS_KEY)      # 11-23 C-4.0 Fable 复查:一个个按字符拼出命令,再打文件夹路径带回车就绕过去了
+    if safety.norm_key(key) in ("return", "enter") and _in_address(win, field):
+        # 11-23 C-3.9:地址栏里回车 = 运行里面的东西 → 只在地址栏里现在是已有文件夹时才按(读不出来也不按)
+        cur = None
+        try:
+            el = _address_el(win)
+            if el is None and field is not None and safety.is_address(field.get("name") or field.get("text")):
+                el = field["el"]
+            cur = uia.read_element(el) if el is not None else None
+        except Exception:   # noqa: BLE001
+            cur = None
+        if not safety.folder_ok(cur):
+            return _refused(safety.NOT_FOLDER_ENTER)
     target = inputs.type_target(h)
     if safety.key_enters(key, mods) and _secret_focus(h, target):
         return _refused("光标在密码框里,这个键会改里面的内容,SeeU 不按(这一步请你自己来)")
@@ -1019,6 +1205,10 @@ def press(app, key, *mods, at=None):
     # 只给不带修饰键的挪光标键读(省时间;Shift+End 这种改的是选区,11-15 复查)
     car0 = _caret(h, target) if safety.norm_key(key) in CARET_KEYS and not mods else None
     r = _ladder(h, [("后台按键", lambda: inputs.key(h, safety.norm_key(key), mods, target=target))], read=_reader(h))
+    if safety.moves_focus(key, mods):
+        # 11-23 C-3.9 整体复查:Tab 这类键按完,光标可能已经到了别的框(比如密码框)—— 记住的那个输入框不能再当「光标所在的框」;
+        # 之后在用户自己的浏览器里不带 target 打字会被要求重新指定输入框(那时会查它是不是密码框)
+        _FIELD.pop(h, None)
     if r["outcome"] == "ineffective" and car0 is not None:
         # 11-15:End / Home / 方向键只挪光标,画面几乎不变 → 读光标位置核实(Win10 验收时各家按 End 全是「核实不了」)
         car1 = _caret(h, target)
@@ -1148,6 +1338,22 @@ def _report(r):
     return 0 if r["outcome"] == "delivered" else (3 if r["outcome"] == "refused" else 1)
 
 
+def _bad_args(cmd, rest):
+    """命令行参数够不够、该是数字的是不是数字。有问题返回一句说明,没问题返回 None。"""
+    num = lambda x: x.replace(".", "", 1).lstrip("-").isdigit()       # noqa: E731
+    if "--at" in rest and rest.index("--at") == len(rest) - 1:
+        return "参数不全:--at 后面要写输入框的编号或名字"
+    plain = [x for i, x in enumerate(rest) if x not in ("--enter", "--at") and not (i and rest[i - 1] == "--at")]
+    if cmd in ("tap", "type", "press", "longpress", "长按") and not plain:
+        return "参数不全:" + {"tap": "tap 要写点哪里(编号、名字,或屏幕点 x y)", "type": "type 要写打什么字",
+                             "press": "press 要写按哪个键"}.get(cmd, "longpress 要写按哪里(编号、名字,或屏幕点 x y)")
+    if cmd == "scroll" and not all(num(x) for x in rest[:2]):
+        return "参数不对:scroll 后面要写数字(负数 = 往下翻)"
+    if cmd in ("drag", "拖动") and not all(num(x) for x in rest):
+        return "拖动要给屏幕点 x y,至少两个点:python -m seeu drag <App> x1 y1 x2 y2 [...]"
+    return None
+
+
 def main(argv=None):
     a = list(sys.argv[1:] if argv is None else argv)
     if a[:1] == ["windows"]:
@@ -1167,6 +1373,11 @@ def main(argv=None):
         _usage()
         return 2
     cmd, app, rest = a[0], a[1], a[2:]
+    bad = _bad_args(cmd, rest)       # 11-23 C-3.9 整体复查:参数不全 / 不是数字时给用法,不出 traceback
+    if bad:
+        _say(bad)
+        _usage()
+        return 2
     try:
         if cmd == "see":
             v = see(app)
@@ -1276,8 +1487,15 @@ try:
     drag = _sched.scheduled("drag", positional=lambda a, k: (lambda p: tuple(p[0][:2]) if p else True)(a[0] if a else k.get("pts")),
                             focus=True)(drag)
     # 外部评审 11-17:不带输入框(at)的打字 / 按键往「当前焦点」里送 → 上一步之后别的任务动过焦点就不做;带 at 的一次占用里先点框再打
-    type = _sched.scheduled("type", focus=True, focus_check=lambda a, k: k.get("at", a[2] if len(a) > 2 else None) is None)(type)   # noqa: A001
-    press = _sched.scheduled("press", focus=True, focus_check=lambda a, k: k.get("at") is None)(press)
+    # 11-23 C-3.9 整体复查:at 是屏幕点(按截图位置先点框)的打字 / 按键,排队太久才轮到也先核画面(跟单独按位置点一样;
+    # Mac 是 mcp_server 里 sched.hold(app, pt=…) 做的)。at 是编号 / 名字 → None(轮到时重新找控件)
+    def _at_pos(v):
+        return tuple(v[:2]) if isinstance(v, (tuple, list)) and len(v) >= 2 else None
+
+    type = _sched.scheduled("type", positional=lambda a, k: _at_pos(k.get("at", a[2] if len(a) > 2 else None)), focus=True,   # noqa: A001
+                            focus_check=lambda a, k: k.get("at", a[2] if len(a) > 2 else None) is None)(type)
+    press = _sched.scheduled("press", positional=lambda a, k: _at_pos(k.get("at")), focus=True,
+                             focus_check=lambda a, k: k.get("at") is None)(press)
     scroll = _sched.scheduled("scroll")(scroll)
 except Exception:   # noqa: BLE001 —— 调度模块出问题不影响 SeeU 本身
     pass

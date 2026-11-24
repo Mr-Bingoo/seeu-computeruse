@@ -123,7 +123,8 @@ def seeu_procs():
     ps = ("Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | "
           "ForEach-Object { \"$($_.ProcessId)`t$($_.ParentProcessId)`t$($_.CommandLine)\" }")
     try:
-        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+        from seeu.win import ocr as _ocr      # 11-23 C-3.9 整体复查:powershell 用全路径(别被当前目录里同名程序顶替)
+        r = subprocess.run([_ocr._powershell(), "-NoProfile", "-NonInteractive", "-Command",
                             "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + ps],
                            capture_output=True, timeout=PS_TIMEOUT_S, creationflags=0x08000000)
         out = []

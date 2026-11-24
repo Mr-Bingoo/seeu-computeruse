@@ -1,0 +1,27 @@
+{
+  "name": "seeu",
+  "version": "1.6.0",
+  "description": "Background computer use for your Mac, Windows PC or Linux desktop: the AI looks at app windows and clicks, types and scrolls without taking your mouse or switching the front app.",
+  "author": {
+    "name": "@Mr_Bingoo"
+  },
+  "homepage": "https://github.com/Mr-Bingoo/seeu-computeruse",
+  "repository": "https://github.com/Mr-Bingoo/seeu-computeruse",
+  "license": "MIT",
+  "keywords": [
+    "computer-use",
+    "mcp",
+    "automation",
+    "accessibility",
+    "macos",
+    "windows",
+    "linux"
+  ],
+  "icon": "./assets/icon.png",
+  "mcpServers": {
+    "seeu": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/launch/seeu-mcp",
+      "args": []
+    }
+  }
+}

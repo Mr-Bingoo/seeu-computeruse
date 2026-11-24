@@ -465,6 +465,11 @@ def _key(app):
     if str(app or "").startswith(WEB_KEY):
         return str(app or "").strip()
     from seeu import bgclick as bg
+    try:      # 11-23 C-3.9 整体复查:原来只有 AI 工具入口把名字归一,命令行 / import 写 TextEdit、AI 那边被换成「文本编辑」→ 成了两个占用键、
+        from seeu import ax          # 不排队(中文系统);「iPhone镜像」也对不上设备锁的英文名。在算键的地方统一归一(归一过的再归一不变)
+        app = ax.canon_name(app)
+    except Exception:
+        pass
     try:
         from seeu import web
         app = web.canon(app)
@@ -1004,7 +1009,7 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                         # 复查 11-17(C-2.7):真动过手才记「最后动过焦点」(被拦下、防过时没点、出错没做的不算,
                         # 不然别的任务的插队保护会被它顶掉)
                         release(app, key=info.get("key"), focus=bool(focus) and isinstance(r, dict)
-                                and (r.get("outcome") in ACTED or r.get("code") == "wrong_window")
+                                and (_acted(r) or r.get("code") == "wrong_window")
                                 and r.get("code") not in ("focus_moved", "stale"),
                                 keep=not (isinstance(r, dict) and r.get("code") in ("focus_moved", "stale")))
             finally:
@@ -1017,6 +1022,19 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
 
 
 ACTED = ("delivered", "unverified", "ineffective", "partial")    # 发出过事件的结果
+
+
+def _acted(r):
+    """这一步有没有真往 App 里发过事件。11-23 C-3.9 整体复查:最后结果是 refused / failed,但前面某条路(后台点击)已经发过
+    —— 比如后台点了没看出变化、接着借真鼠标被拒 —— 焦点其实可能已经被挪了,也要记「动过焦点」,不然别的任务不带输入框打字会写进这个框。
+    前面那条路是出错(error:)的也算:发完事件才抛错的分不出来,宁可多记(别的任务顶多被要求先点一下输入框)。"""
+    if r.get("outcome") in ACTED:
+        return True
+    for t in r.get("tried") or ():
+        st_ = str(t[1]) if isinstance(t, (tuple, list)) and len(t) > 1 else ""
+        if st_ in ACTED or st_.startswith("error:"):
+            return True
+    return False
 
 
 def _wait_show(app, on, qinfo=None):

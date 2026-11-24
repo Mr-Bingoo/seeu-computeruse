@@ -247,12 +247,19 @@ def click(top, sx, sy, right=False):
 
 
 def type_text(top, text):
-    """真键盘打字(Unicode 输入,跟输入法无关)。换行按回车。"""
+    """真键盘打字(Unicode 输入,跟输入法无关)。换行按 Shift+回车。"""
+    text = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    plain = not inputs._newline_mods(top)      # 11-23 C-4.0:VS Code / Jupyter / 表格按单独回车(seeu/newline.py)
+
     def act():
         items = []
         for ch in text:
-            if ch == "\n":
+            if ch == "\n" and plain:
                 items += [_key(0x0D), _key(0x0D, flags=KEYUP)]
+                continue
+            if ch == "\n":
+                # 11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
+                items += [_key(0x10), _key(0x0D), _key(0x0D, flags=KEYUP), _key(0x10, flags=KEYUP)]
                 continue
             b = ch.encode("utf-16-le")
             for i in range(0, len(b), 2):

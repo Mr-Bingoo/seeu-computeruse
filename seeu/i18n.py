@@ -49,6 +49,9 @@ TEXT = {
     "island.operating": ("操作 {app}", "Working in {app}"),
     "card.screen_hidden": ("隐身中,看不了画面", "Working hidden, no screen to show"),
     "card.hidden_note": ("{app} 在后台隐身干活,别点开它", "{app} is working hidden, don't open it"),
+    "isee.hand_only.title": ("I See 没有打开", "I See was not turned on"),
+    "isee.hand_only.body": ("这次点击不像是你亲手点的。请自己用鼠标点一下,或在终端运行 python3 -m seeu isee on",
+                            "That click did not come from your own mouse. Click it yourself, or run python3 -m seeu isee on in a terminal"),
     "card.stuck_at": ("卡在: {step}", "Stuck at: {step}"),
     "card.stuck": ("卡住了 · {step}", "Stuck · {step}"),
     "card.screen_off": ("网页模块操作的可能是后台标签页,不放画面", "May be a background tab, no live view"),
@@ -87,6 +90,20 @@ TEXT = {
     # 11-01 更新命令(python3 -m seeu 更新 / update)
     "upd.not_git": ("这份 SeeU 不是用 git clone 装的(或者是开发用的本机版),没法自动更新。到 {url} 下载新版覆盖,或重新 git clone。",
                     "This copy of SeeU wasn't installed with git clone (or it's a development copy), so it can't update itself. Download the new version from {url}, or git clone it again."),
+    "inst.plugin": ("这份 SeeU 是从插件市场装的,装插件时已经接好了(不用再接入,再接一次会多出一份同样的工具)。"
+                    "要给别的 AI 客户端用,请用 git clone 装一份,或在那家客户端里装 SeeU 插件。",
+                    "This copy of SeeU was installed as a plugin, and installing the plugin already connected it (no need to "
+                    "connect it again; doing so would add a second copy of the same tools). To use SeeU in another AI client, "
+                    "git clone a copy, or install the SeeU plugin in that client."),
+    "upd.plugin_claude": ("这份 SeeU 是在 Claude Code 里从插件市场装的,更新请在终端里运行:claude plugin update seeu(或在 Claude Code 里输 /plugin 打开插件管理更新),"
+                          "装完新开一个会话。你的设置(借用鼠标、语言等)存在用户文件夹里,更新不会丢。",
+                          "This copy of SeeU was installed as a Claude Code plugin. To update, run claude plugin update seeu in a terminal "
+                          "(or type /plugin in Claude Code to open the plugin manager), then start a new session. Your settings (borrow-mouse, language…) "
+                          "live in your user folder and are kept."),
+    "upd.plugin_codex": ("这份 SeeU 是在 Codex 里从插件市场装的,更新请运行:codex plugin marketplace upgrade seeu-computeruse,再重开 Codex。"
+                         "你的设置(借用鼠标、语言等)存在用户文件夹里,更新不会丢。",
+                         "This copy of SeeU was installed as a Codex plugin. To update, run codex plugin marketplace upgrade seeu-computeruse, "
+                         "then reopen Codex. Your settings (borrow-mouse, language…) live in your user folder and are kept."),
     "upd.npx": ("这份 SeeU 是用 npx skills 装的,更新请运行:npx skills update seeu(装完把 AI 客户端退出再打开)。",
                 "This copy of SeeU was installed with npx skills; to update run: npx skills update seeu (then quit and reopen your AI client)."),
     "upd.no_git": ("没找到 git 命令:先装 Xcode 命令行工具(xcode-select --install),再运行一次。",
@@ -130,7 +147,11 @@ TEXT = {
 }
 
 _C = {"t": 0.0, "lang": "zh"}
-_SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "设置.json")
+try:
+    from seeu.where import settings_file as _sf
+    _SETTINGS = _sf()  # 11-22 C-3.7:插件版存用户文件夹(seeu/where.py)
+except Exception:   # noqa: BLE001
+    _SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "设置.json")
 
 
 def lang():

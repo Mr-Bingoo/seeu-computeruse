@@ -646,7 +646,7 @@ def page_fn(h, fn, args, tab=None):
     if r is None:
         raise CDPError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise CDPError(r["__err"], r.get("code") or "page")
+        raise CDPError(*aejs.page_err(r))      # 11-23 C-3.9:网页说的话不当 SeeU 的提示(见 aejs.page_err)
     return r
 
 

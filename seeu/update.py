@@ -176,6 +176,10 @@ def _linux_ext():
 
 def main(args=()):
     check_only = "--check" in args
+    from seeu.where import as_plugin            # 11-22 C-3.7:插件版由 Claude Code / Codex 自己的插件管理更新,没有 git
+    if as_plugin(ROOT):
+        print(T("upd.plugin_codex" if "/.codex/" in ROOT.replace(os.sep, "/").lower() else "upd.plugin_claude"))
+        return 1
     if not shutil.which("git"):
         print(T("upd.no_git_win" if sys.platform == "win32" else "upd.no_git_linux" if sys.platform.startswith("linux") else "upd.no_git"))
         return 1

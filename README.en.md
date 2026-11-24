@@ -62,7 +62,31 @@ A floating badge on screen (open it to see what the AI is doing, or a live view 
 
 **Requirements**: on the Mac, Apple silicon (tested on macOS 27; earlier versions and Intel Macs are untested); the Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM, both in virtual machines); the Linux preview needs GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended) and Python 3.10 or later (tested so far on Ubuntu 26.04 x64 and ARM, Fedora 40, 43 and 45 ARM, and Debian 13 ARM, in virtual machines); KDE and other desktops don't work.
 
-### Easiest: give the link to your AI
+### Easiest: install the plugin (Claude Code / Codex)
+
+In Claude Code, type:
+
+```
+/plugin install seeu --marketplace Mr-Bingoo/seeu-computeruse
+```
+
+If your Claude Code is too old for that, use two steps:
+
+```
+/plugin marketplace add Mr-Bingoo/seeu-computeruse
+/plugin install seeu@seeu-computeruse
+```
+
+For Codex, run in a terminal:
+
+```bash
+codex plugin marketplace add Mr-Bingoo/seeu-computeruse
+codex plugin add seeu@seeu-computeruse
+```
+
+Then start a new session and it's ready: no separate download or connecting. The first time you use it, SeeU installs the Python libraries it needs in the background (Mac / Windows, usually a minute or two). On a Mac you still turn on the permissions as in "3. Check and grant permissions" below; on Linux the AI walks you through the system packages and the GNOME extension as described under "By hand". Tested so far: Claude Code and Codex on Mac, Claude Code and Codex on Windows, Codex on Linux; Claude Code on Linux hasn't been tested yet.
+
+### Also easy: give the link to your AI
 
 ```
 Install SeeU for me: https://github.com/Mr-Bingoo/seeu-computeruse
@@ -72,14 +96,14 @@ The AI downloads it, installs the dependencies and connects it (to whichever AI 
 
 ### By hand
 
-The commands below are written mainly for Mac/Linux; on Windows, write `python` instead of `python3`.
+The commands below are written mainly for Mac/Linux; on Windows, write `python` instead of `python3`. On a Mac with another Python installed (Homebrew, pyenv, conda…), write `/usr/bin/python3` instead of `python3` (SeeU uses the system Python on Mac; the check reminds you if you used the wrong one).
 
 **1. Install the dependencies**
 
-Mac (comes with `python3`; the first run asks to install the Command Line Developer Tools, just click Install):
+Mac (comes with `python3`; the first run asks to install the Command Line Developer Tools, just click Install; `<12` is there because the built-in Python 3.9 can't install the newest pyobjc):
 
 ```bash
-/usr/bin/python3 -m pip install --user pyobjc-framework-Cocoa pyobjc-framework-Quartz pyobjc-framework-ScreenCaptureKit pyobjc-framework-CoreMedia opencv-python-headless numpy
+/usr/bin/python3 -m pip install --user --only-binary=:all: "pyobjc-core<12" "pyobjc-framework-Cocoa<12" "pyobjc-framework-Quartz<12" "pyobjc-framework-ScreenCaptureKit<12" "pyobjc-framework-CoreMedia<12" opencv-python-headless numpy
 ```
 
 Windows:
@@ -142,9 +166,9 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 
 ## Update and remove
 
-- **Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (on Windows, install [Git for Windows](https://git-scm.com) first); if you installed with `npx skills`, run `npx skills update seeu`. On Linux, if a new version changes the GNOME extension, it is installed for you and you're reminded to log out and back in once. See the [changelog](CHANGELOG.en.md) for what changed in each release.
+- **Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (on Windows, install [Git for Windows](https://git-scm.com) first); if you installed with `npx skills`, run `npx skills update seeu`. If you installed the plugin: in Claude Code run `claude plugin update seeu`, in Codex run `codex plugin marketplace upgrade seeu-computeruse`, then start a new session; your settings are kept. On Linux, if a new version changes the GNOME extension, it is installed for you and you're reminded to log out and back in once. See the [changelog](CHANGELOG.en.md) for what changed in each release.
 - **Version**: ask the AI, or run `python3 -m seeu version`.
-- **Remove**: `python3 -m seeu uninstall <client>`. On Linux, once no client is connected to SeeU any more, the GNOME extension is removed at the same time.
+- **Remove**: `python3 -m seeu uninstall <client>`; if you installed the plugin, run `claude plugin uninstall seeu` (Claude Code) or `codex plugin remove seeu@seeu-computeruse` (Codex). On Linux, once no client is connected to SeeU any more, the GNOME extension is removed at the same time.
 
 <!-- sync:safety -->
 ## Safety rules
@@ -152,9 +176,10 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 **Hard-coded, the AI can't get around them:**
 
 - Never touches terminals, apps that run scripts directly (Script Editor, Automator, Shortcuts), the Privacy & Security pages of System Settings, system password / authorization dialogs, Keychain and password managers, or the AI client running SeeU itself (so the AI can't approve itself).
-- No dangerous shortcuts (empty trash, lock screen, log out, force quit…) and no dangerous commands (sudo, wiping a disk…).
+- No dangerous shortcuts (empty trash, lock screen, log out, force quit…), no clicking buttons or menu items with those names (Empty Trash / Recycle Bin, Shut Down, Log Out…), and no dangerous commands (sudo, wiping a disk…).
 - Never types into password or verification-code fields; while the cursor is in one it also won't press character keys, Return or Delete, or paste (⌘V / Ctrl+V, Paste in a menu and on-screen buttons named "Paste" all count; keys for leaving the field — Tab, Esc, arrows — still work). It never fills bank-card fields on web pages. (In iPhone Mirroring, emulators and other picture-only scenes, and in Electron apps you installed yourself, SeeU can't tell what kind of field it is, so there this rule relies on the AI; in SeeU's background browser and the Electron apps it opens separately, only standard password inputs are recognised; a frame embedded from another site (common for payments and third-party sign-in) can't be looked into, so it is judged by the frame's own name and address, and one with a plain name is not recognised.)
 - No long-press in browsers: a long-press clicks by screen position, which would bypass the web allow list; things on a page are clicked by number only.
+- Windows only: never touches the Start menu or taskbar search box (typing a program name there and pressing Enter runs it); in the File Explorer address bar, only the path of an existing folder is typed; nothing at all while the screen is locked.
 - Linux only: never touches the Settings app at all or GNOME Shell itself (the Alt+F2 run box, the system menu); nothing at all while the screen is locked; no borrowing your mouse or keyboard while a system dialog (password, authorization) is open; no clicking an editor's "Run" menu that would run the file as a program.
 - In browsers, no Return or Space while the keyboard focus is outside the web page: on a toolbar button, an extension's popup, a browser settings page or a dialog the browser itself shows, those two keys would click the button for you (for example "Allow this site"). Esc and Tab still work; inside pages and in the address bar nothing changes.
 
@@ -214,7 +239,7 @@ Almost every model maker is building stronger "AI operates the computer" abiliti
 
 1. Ask the AI to check which permission is missing (or run `python3 -m seeu check`), then turn it on as it says. (Windows needs no permissions; write `python` instead of `python3` in the commands; on Linux, `python3 -m seeu check --fix` fixes most permissions and settings for you, and for missing system packages it tells you which sudo command to run.)
 2. After turning a permission on or changing it, quit the AI client completely and reopen it, or it won't take effect. (Linux: after the extension is installed or updated, log out and back in; after turning on the accessibility switch, reopen Qt apps, VS Code, Chrome and the like.)
-3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (or run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
+3. Still stuck? Open an [issue](https://github.com/Mr-Bingoo/seeu-computeruse/issues) with your version (ask the AI, or run `python3 -m seeu version`), which AI you use, which app you were controlling and the step where it got stuck. You can ask the AI to record what happened and attach it (on Mac and Windows you can also run `python3 -m seeu evidence`), but it may include window titles and screenshots, so check it for any personal information first.
 <!-- /sync:notes -->
 
 ## Docs

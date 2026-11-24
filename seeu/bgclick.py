@@ -70,7 +70,100 @@ def available():
     return bool(SLEventPostToPid and SLEventSetIntegerValueField and CGEventSetWindowLocation)
 
 
+# 11-23 C-3.8:Intel Mac(macOS 14.8)第三轮实测,打字时整个 SeeU 服务进程崩了(怀疑下面按偏移读指针在那个系统上读错,
+# 未证实)。改成:每个系统版本第一次要附认证时,先在一个单独的小 Python 里照样造一次(只造不发,不碰任何 App);
+# 小 Python 正常退出才附,崩了 / 超时就这台机器这个系统版本不再附(按键照发,只是不带认证),SeeU 服务本身不倒。
+# 结果记在 seeu_auth_probe.json(按系统版本号),换系统会重试一次。
+_AUTH_OK = None
+AUTH_PROBE_TIMEOUT_S = 15
+
+
+def _os_build():
+    try:
+        import subprocess
+        return subprocess.run(["sysctl", "-n", "kern.osversion"], capture_output=True, text=True, timeout=3).stdout.strip() or "?"
+    except Exception:
+        return "?"
+
+
+_PROBE = """
+import os, sys
+sys.path[:0] = %r
+import Quartz
+from seeu import bgclick as bg
+ev = Quartz.CGEventCreateKeyboardEvent(Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateHIDSystemState), 0, True)
+bg._attach_auth_raw(ev.__c_void_p__().value, os.getpid())
+m = bg._CG.CGEventCreateMouseEvent(None, 1, bg.CGPoint(0, 0), 0)
+bg._attach_auth_raw(m, os.getpid())
+bg._CG.CFRelease(m)
+print("ok")
+"""
+
+
+import threading as _th
+_AUTH_LOCK = _th.Lock()
+
+
+def auth_ok():
+    """这台机器上附事件认证安不安全(见上)。
+    11-23 复查:只有小 Python 被信号打死(真崩了,退出码 < 0)才按系统版本记进文件、以后不再试;
+    超时、导入失败这类(机器忙、库还没装齐)只在本进程里当不安全,下次启动再试。"""
+    global _AUTH_OK
+    if _AUTH_OK is not None:
+        return _AUTH_OK
+    with _AUTH_LOCK:                 # 几个线程同时第一次打字:只试一次
+        if _AUTH_OK is not None:
+            return _AUTH_OK
+        import json
+        import os
+        import subprocess
+        import sys
+        build = _os_build()
+        f = home("seeu_auth_probe.json")
+        try:
+            with open(f, encoding="utf-8") as fh:
+                rec = json.load(fh)
+            if not isinstance(rec, dict):
+                rec = {}
+        except Exception:
+            rec = {}
+        if isinstance(rec.get(build), bool):
+            _AUTH_OK = rec[build]
+            return _AUTH_OK
+        crashed, why = False, ""
+        try:
+            r = subprocess.run([sys.executable, "-c", _PROBE % (list(sys.path),)], capture_output=True, text=True,
+                               timeout=AUTH_PROBE_TIMEOUT_S, stdin=subprocess.DEVNULL)
+            ok = r.returncode == 0 and r.stdout.strip().endswith("ok")
+            crashed = r.returncode < 0
+            why = f"exit={r.returncode} " + (r.stderr or "").strip()[-300:]
+        except subprocess.TimeoutExpired:
+            ok, why = False, "timeout"
+        except Exception as e:   # noqa: BLE001
+            ok, why = False, repr(e)[:300]
+        _AUTH_OK = ok
+        if ok or crashed:            # 定论才记文件
+            try:
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                rec[build] = ok
+                rec[build + "_why"] = "" if ok else why
+                tmp = f + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    json.dump(rec, fh, ensure_ascii=False, indent=1)
+                os.replace(tmp, f)
+            except Exception:
+                pass
+        return ok
+
+
 def _attach_auth(ev, pid):
+    """附"事件认证"。这台机器试过不安全就不附(见 auth_ok)。"""
+    if not auth_ok():
+        return False
+    return _attach_auth_raw(ev, pid)
+
+
+def _attach_auth_raw(ev, pid):
     """附"事件认证":用 SkyLight 自己公开导出的工厂方法造(Cua 键盘路径的做法)。造不出来就不附。"""
     cls = _OBJC.objc_getClass(b"SLSEventAuthenticationMessage")
     sel = _OBJC.sel_registerName(b"messageWithEventRecord:pid:version:")
@@ -94,7 +187,9 @@ def focus_without_raise(pid, wid):
     psn = (ctypes.c_uint8 * 8)()
     if GetProcessForPID(pid, psn) != 0:
         return False
-    buf = (ctypes.c_uint8 * 0xF8)()
+    # 🔴 11-24:记录本身 0xF8,但系统里的事件记录比这长,macOS 14(Intel)会接着往后读一个「认证信息」指针;只给 0xF8 就读到
+    # 外面的内存 → SIGSEGV(Intel 朋友和 Sonoma 虚拟机打字崩的根因)。多给些清零的地方,读到的是空指针就跳过。
+    buf = (ctypes.c_uint8 * 0x400)()
     buf[0x04] = 0xF8
     buf[0x08] = 0x0D
     for i in range(4):
@@ -153,7 +248,8 @@ def _watch_on():
     if now - _W["on_t"] > 2.0:
         _W["on_t"] = now
         try:
-            with open(os.path.join(os.path.dirname(__file__), "设置.json"), encoding="utf-8") as f:
+            from seeu.where import settings_file   # 11-22 C-3.7:插件版存用户文件夹
+            with open(settings_file(), encoding="utf-8") as f:
                 v = str(json.load(f).get("监看小窗", "开")).strip()
         except Exception:
             v = "开"
@@ -809,7 +905,12 @@ def split_target(app_name):
 
 def _match(w, app_name):
     owner, title = split_target(app_name)
-    return w.get("kCGWindowOwnerName") == owner and w.get("kCGWindowLayer", 0) == 0 and \
+    try:                                        # 11-22:英文名在中文系统里也认(Safari → Safari浏览器)
+        from seeu.ax import same_app
+        same = same_app(w.get("kCGWindowOwnerName"), owner)
+    except Exception:
+        same = w.get("kCGWindowOwnerName") == owner
+    return same and w.get("kCGWindowLayer", 0) == 0 and \
         (title is None or (w.get("kCGWindowName") or "") == title)
 
 
@@ -835,7 +936,12 @@ def main_window(app_name, min_w=50, min_h=50):
         return None
     # 镜像还有个隐藏的「Welcome to iPhone Mirroring」大窗,同名窗口优先
     # 🔴 10-15:同名窗口排最前(隐藏的「Welcome」大窗有时报在屏,见 seeu_lib.mac_input.win_geo)
-    cand.sort(key=lambda d: (d["name"] == (title or owner), d["onscreen"], d["w"] * d["h"]), reverse=True)
+    try:
+        from seeu.ax import local_name
+        main_names = {title} if title else {owner, local_name(owner)}   # 11-23:中文系统里镜像主窗口叫「iPhone镜像」
+    except Exception:
+        main_names = {title or owner}
+    cand.sort(key=lambda d: (d["name"] in main_names, d["onscreen"], d["w"] * d["h"]), reverse=True)
     return cand[0]
 
 

@@ -60,6 +60,7 @@ STREAM_REOPEN = 1.2      # 窗口变大超过两成(或缩到 1/1.6 以下)才�
 HIDE_AFTER_S = 60        # 多久没收到 show 就收起(10-15 定 10 秒;C-1.3 用户:两次操作间常隔十几秒,关了又开体验差,改 60)
 LINGER_S = 60            # SeeU C-0.4 用户定(1 分钟画面 + 1 分钟悬浮标;原定 300 用户嫌久):到点先缩成悬浮标(不直接消失),再留这么多秒才淡出;点开看的是实时画面
 IDLE_EXIT_S = 600        # 硬上限:空闲 10 分钟退出
+STUCK_KEEP_S = 3600      # 11-24 用户定:卡住时展开的悬浮窗最多留 1 小时(原来 60 秒就缩回悬浮标,人不在电脑前会错过);你点收起 / AI 接着干活照旧
 RING_S = 0.6             # 点击波纹时长
 DOT_S = 3.0              # 最后一次点击位置的小圆点留多久
 TB_H = 28                # 顶部按钮栏高
@@ -95,6 +96,13 @@ LOG_FILE = home("watch_window.log")
 SPAWN_WAIT_S = 3.0       # 硬上限:拉起进程后等它就绪
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEEU_SETTINGS = os.path.join(ROOT, "seeu", "设置.json")   # I See 开关存这里(seeu/isee.py 管;这里只读,改走命令)
+try:                     # 11-22 C-3.7:插件版的设置在用户文件夹(seeu/where.py);读不到 where 就照旧
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    from seeu.where import settings_file as _sf
+    SEEU_SETTINGS = _sf()
+except Exception:   # noqa: BLE001
+    pass
 BROWSER_W = 300          # 浏览器卡片宽(10-20 用户:按钮栏四个都写全称)
 BROWSER_H, BROWSER_H_ISEE = 68, 90   # 卡片高:顶部一行(浏览器名 / 鼠标移上来换按钮栏)+ 步骤;I See 开着多一行说明
 EXPAND_EDGE = 40         # 悬浮标离屏幕左/右边这么近就算"贴边",从那一角展开(展开方式 C,10-30 用户定)
@@ -569,7 +577,12 @@ def serve():
             return c[1]
         hid = False
         try:
-            a = next((x for x in NSWorkspace.sharedWorkspace().runningApplications() if x.localizedName() == app), None)
+            try:                                    # 11-22:英文名在中文系统里也认(Safari → Safari浏览器)
+                from seeu.ax import local_name
+                shown = local_name(app)
+            except Exception:
+                shown = app
+            a = next((x for x in NSWorkspace.sharedWorkspace().runningApplications() if x.localizedName() in (app, shown)), None)
             if a is not None:
                 pid = a.processIdentifier()
                 wins = [w for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, 0) or []
@@ -905,6 +918,7 @@ def serve():
 
         def mouseDown_(self, ev):
             touch()
+            st["hand_t"] = time.time() if isl.hand_event(ev) else 0     # 11-23 C-3.9:这一下是不是亲手点的(开 I See 要看)
             p = self.convertPoint_fromView_(ev.locationInWindow(), None)
             if p.y <= TB_H and edge_of(self, p) is None:
                 w = self.bounds().size.width
@@ -2017,6 +2031,10 @@ def serve():
                 return
             toggle_view()
         elif name == "isee":
+            if not st["isee"] and time.time() - st.get("hand_t", 0) > 2:
+                isee_not_hand("按钮")                 # 11-23 C-3.9 整体复查:开 I See 只认硬件来的点击(关可以,AI 本来就能关)
+                return
+            st["hand_t"] = 0                          # 一次手按只管一次
             st["isee"] = not st["isee"]
             st["isee_click_t"] = time.time()         # 命令写设置文件要一小会,这几秒先不拿文件里的旧值盖回来(见主循环)
             # 交给 seeu 的命令去改(开的时候顺带体检浏览器开关,可能等系统授权框;放子进程,不卡住显示)
@@ -2034,6 +2052,8 @@ def serve():
             view.setNeedsDisplay_(True)
             cap_view.setNeedsDisplay_(True)
         elif name == "collapse" and in_browser():
+            if not st.get("solo"):                    # 单看时收起 = 回岛,岛上那行照留
+                stuck_ack()
             st["solo"] = None                         # 单看一个任务时点收起 = 回到多任务岛(C-0.8)
             st["b_expanded"] = False                  # 浏览器卡片收起:只这一轮,不改记住的展开/收起
             st["hover"] = False
@@ -2274,13 +2294,29 @@ def serve():
         stp = (stp or "").strip()
         return tr_step(stp[2:] if stp.startswith("正在") else stp)
 
+    def stuck_open(now):
+        """卡住说明正展开着、还没留满 STUCK_KEEP_S(碰过悬浮窗就从那时重新算)。"""
+        sk = (st.get("browser") or {}).get("stuck")
+        return bool(sk and st["b_expanded"] and not sk.get("ack") and now - max(sk["t"], st["last_touch"]) < STUCK_KEEP_S)
+
+    def stuck_ack():
+        """卡住说明被收起(你点的,或留满了):之后按平时的规矩缩回、淡出,不再自己弹。"""
+        sk = (st.get("browser") or {}).get("stuck")
+        if not sk or sk.get("ack"):
+            return
+        sk["ack"] = True
+        for t in tasks.values():
+            if t["stuck"] and t["stuck"].get("why") == sk["why"] and t["app"] == st["browser"]["app"]:
+                t["stuck"]["ack"] = True
+
     def alive_tasks(now):
         out = []
         for k, t in list(tasks.items()):
             idle = now - t["last"]
-            if idle > IDLE_EXIT_S:
+            stuck_ = t["stuck"] and not t["stuck"].get("ack")      # ack = 你已经点过收起(或留满 1 小时):不再当卡住留着
+            if idle > (STUCK_KEEP_S if stuck_ else IDLE_EXIT_S):
                 del tasks[k]
-            elif idle < HIDE_AFTER_S or t["stuck"]:     # 卡住的留着(等人处理),最多 IDLE_EXIT_S
+            elif idle < HIDE_AFTER_S or stuck_:     # 卡住的留着(等人处理),最多 STUCK_KEEP_S
                 t["borrow"] = now < t["real_until"]
                 out.append(t)
         return out
@@ -2293,7 +2329,20 @@ def serve():
             pending.append(t["raw"])
         _log(f"单看任务 {key}")
 
-    def isee_toggle():
+    def isee_not_hand(where):
+        """11-23 C-3.9 整体复查:这一下不是硬件来的点击(别的程序发的模拟点击)→ 不开,记日志并告诉用户还能怎么开。"""
+        _log(f"{where} I See(开)不接受:这次点击不是硬件来的")
+        try:
+            from seeu_lib import cursor_overlay as _co
+            _co.toast(tr("isee.hand_only.title", "I See 没有打开"),
+                      tr("isee.hand_only.body", "这次点击不像是你亲手点的。请自己用鼠标点一下,或在终端运行 python3 -m seeu isee on"), 6)
+        except Exception:
+            pass
+
+    def isee_toggle(hand=False):
+        if not st["isee"] and not hand:
+            isee_not_hand("岛上按钮")
+            return
         st["isee"] = not st["isee"]
         st["isee_click_t"] = time.time()
         old = st.get("isee_proc")                  # 11-07 复查:上一条还没跑完就结束它(连点两下时「开」比「关」慢,会后写、停在开)
@@ -2325,7 +2374,7 @@ def serve():
                     _log(f"tick 出错:{e!r}")
                 try:
                     idle = time.time() - alive_t()
-                    if idle > HIDE_AFTER_S + 3:
+                    if idle > HIDE_AFTER_S + 3 and not stuck_open(time.time()):
                         for win, key in ((panel, "alpha"), (cap, "cap_alpha")):
                             if key == "cap_alpha" and idle <= HIDE_AFTER_S + LINGER_S + 3:
                                 continue                # 悬浮标还在多留的那几分钟里
@@ -2385,9 +2434,12 @@ def serve():
                     if st["stream"] is not None:
                         close_stream()                  # 卡住强制切回文字卡(用户 10-21 定)
                     st["light"] = None
+                    # 从灵动岛掉回单任务时是重放:按当初卡住的时间算,不重新数 1 小时
+                    t0_ = max((t["last"] for t in tasks.values() if t["stuck"]), default=now) if replay else now
                     st["browser"] = dict(app=sapp, step=sstep, wid=(st.get("browser") or {}).get("wid"),
-                                         stuck=dict(why=why, todo=todo, helps=bool(helps), t=now))
+                                         stuck=dict(why=why, todo=todo, helps=bool(helps), t=t0_))
                     st["wid"], st["aspect"], st["mode"] = None, None, "bg"
+                    st["borrow_auto"] = False           # 借鼠标弹开的那几秒里卡住:改由卡住管,别到点自动收
                     set_pass(0)
                     st["last_show"] = st["last_act"] = now
                     was_cap = st["cap_alpha"] > 0.05 and not st["b_expanded"]
@@ -2412,7 +2464,7 @@ def serve():
                     except Exception:
                         bapp, bstep, bwid = "浏览器", "", None
                     from_mirror = st.get("browser") is None
-                    first = from_mirror or now - alive_t() > HIDE_AFTER_S
+                    first = from_mirror or (now - alive_t() > HIDE_AFTER_S and not stuck_open(now))   # 卡住开着的,AI 接着干活窗口不收
                     # 正在看这个浏览器窗口的画面就接着看;换了窗口 / 不知道窗口 / 从镜像换过来 → 关流回文字卡
                     keep = (not first) and st["stream"] is not None and bwid and bwid == st.get("stream_wid")
                     if st["stream"] is not None and not keep:
@@ -2493,6 +2545,7 @@ def serve():
                         st["dot"] = (fx, fy, now)
                         st["last_mark"] = (msg[1], now)      # 镜像「看操作」文字卡用
                 elif msg and msg[0] == "hide":
+                    stuck_ack()
                     st["last_show"] = st["last_touch"] = 0.0
                     tasks.clear()
                     st["solo"] = None
@@ -2556,8 +2609,16 @@ def serve():
             brw = in_browser()
             idle = now - alive_t()
             has = st["wid"] is not None or brw
-            active = has and idle < HIDE_AFTER_S and not multi
-            linger = has and HIDE_AFTER_S <= idle < HIDE_AFTER_S + LINGER_S and not multi   # 到点先缩成悬浮标多留一会儿(不改记住的展开/收起)
+            skx = (st.get("browser") or {}).get("stuck")
+            if skx and st["b_expanded"] and not skx.get("ack") and not multi and not st.get("morph") and not stuck_open(now):
+                stuck_ack()                           # 留满 1 小时没人理:缩回悬浮标,再按平时淡出
+                st["b_expanded"] = False
+                st["last_show"] = now - HIDE_AFTER_S
+                idle = now - alive_t()
+                place_cap()
+                morph(False)
+            active = has and (idle < HIDE_AFTER_S or stuck_open(now)) and not multi
+            linger = has and not active and HIDE_AFTER_S <= idle < HIDE_AFTER_S + LINGER_S and not multi   # 到点先缩成悬浮标多留一会儿(不改记住的展开/收起)
             if linger and st["cap_alpha"] <= 0.01 and not st.get("morph"):
                 place_cap()                          # 悬浮标摆回悬浮窗右上角再淡入
             if st.get("morph"):      # 变形动画进行中:窗口透明度/显隐由动画管
@@ -2619,7 +2680,7 @@ def serve():
             if st["marks"] or (st["dot"] and now - st["dot"][2] < DOT_S + 0.1):
                 st["marks"] = [m for m in st["marks"] if now - m[3] < RING_S]
                 view.setNeedsDisplay_(True)
-            if now - st["last_msg"] > IDLE_EXIT_S and st["alpha"] <= 0.01 and st["cap_alpha"] <= 0.01:
+            if now - st["last_msg"] > IDLE_EXIT_S and st["alpha"] <= 0.01 and st["cap_alpha"] <= 0.01 and not st.get("multi"):
                 close_stream()
                 NSApplication.sharedApplication().terminate_(None)
 

@@ -29,7 +29,8 @@ from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,�
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 11-13:环境变量 SEEU_SETTINGS_FILE 可以把 I See 的开关换到别的文件(只给开发测试用:虚拟机里的代码是共享目录,
 # 不换的话在虚拟机里点 I See 会改到这台 Mac 上真的 设置.json)。平时不设。
-SETTINGS = os.environ.get("SEEU_SETTINGS_FILE") or os.path.join(HERE, "设置.json")
+from seeu.where import settings_file as _sf
+SETTINGS = _sf()   # 环境变量 SEEU_SETTINGS_FILE 优先(在 where 里);11-22 C-3.7:插件版存用户文件夹
 LOG = home("seeu_isee.log")
 KEY, KEY_UNTIL, KEY_PROOF = "I See", "I See 到期", "I See 凭证"
 # 11-16:凭证用的本机密钥(只本用户可读);删了 = 现有的开着作废,关 / 到期时就删(旧凭证抄回去也不算)。
@@ -319,20 +320,22 @@ def _win_console_ok():
 
 def _win_overlay_ok():
     """Windows 悬浮窗那条:本进程就是浮标,而且它刚认出一次手按(GetCurrentInputMessageSource = 硬件)按下。"""
-    cands = [sys.modules.get("seeu.win.floatwin")]
-    m = sys.modules.get("__main__")          # 用 -m 拉起时浮标代码叫 __main__(floatwin 顶上也登记了别名,这里双保险)
-    if m is not None and getattr(getattr(m, "__spec__", None), "name", "") == "seeu.win.floatwin":
-        cands.append(m)
+    # 11-23 C-3.9 整体复查:原来只要本进程里导入过 floatwin、两个变量设上就算(有命令行的 AI 一句 python -c 就能凑出来,
+    # Mac 11-16 堵过同一条)。现在要求本进程就是用 -m 拉起的浮标显示进程(__main__ 就是 floatwin、命令行是 serve)。
+    m = sys.modules.get("__main__")
+    if m is None or getattr(getattr(m, "__spec__", None), "name", "") != "seeu.win.floatwin" or "serve" not in sys.argv[1:2]:
+        return False
+    cands = [m, sys.modules.get("seeu.win.floatwin")]
     now = time.time()
     return any(fw is not None and getattr(fw, "SERVING", False) and 0 <= now - getattr(fw, "HAND_T", 0) < 5 for fw in cands)
 
 
 def _linux_overlay_ok():
     """Linux 悬浮标那条(11-18 C-3.0):本进程就是浮标显示进程,而且小插件刚报过一次来自硬件(/dev/input)的按下。"""
-    cands = [sys.modules.get("seeu.linux.floatwin")]
-    m = sys.modules.get("__main__")
-    if m is not None and getattr(getattr(m, "__spec__", None), "name", "") == "seeu.linux.floatwin":
-        cands.append(m)
+    m = sys.modules.get("__main__")           # 11-23 C-3.9 整体复查:同 Windows,本进程得是 -m 拉起的浮标显示进程
+    if m is None or getattr(getattr(m, "__spec__", None), "name", "") != "seeu.linux.floatwin" or "serve" not in sys.argv[1:2]:
+        return False
+    cands = [m, sys.modules.get("seeu.linux.floatwin")]
     now = time.time()
     return any(fw is not None and getattr(fw, "SERVING", False) and 0 <= now - getattr(fw, "HAND_T", 0) < 5 for fw in cands)
 

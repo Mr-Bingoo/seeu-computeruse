@@ -87,6 +87,11 @@ def _set_step(step):
             fn(step)
 
 
+def one_newline(text):
+    """\r\n、单独的 \r 都并成 \n(11-23 C-3.9)。"""
+    return str(text).replace("\r\n", "\n").replace("\r", "\n")
+
+
 def press(pid, key, mods=(), auth=True, step=None):
     """按一个键(可带 cmd/shift/alt/ctrl)。step = 这一步在做什么(浏览器卡片上写,同 bgclick.set_step)。
     🔴 10-15 C-1.2:修饰键要先单独发"按下"(flagsChanged)、最后发"松开",只把标记挂在字母上的话,
@@ -210,6 +215,33 @@ def _app_of(pid):
         return ""
 
 
+def _bundle_of(pid):
+    try:
+        from AppKit import NSRunningApplication
+        a = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(pid))
+        return str(a.bundleIdentifier() or "") if a else ""
+    except Exception:
+        return ""
+
+
+def _skip_shift(pid):
+    """11-23 C-4.0 Fable 复查:中文系统里镜像叫「iPhone镜像」,原来只比英文名,镜像里就走了没测过的「真键位 + Shift」。
+    名字先归一(ax.canon_name),再比包名。"""
+    name = _app_of(pid)
+    try:
+        from seeu import ax
+        name = ax.canon_name(name) or name
+    except Exception:
+        pass
+    return name in SHIFT_SKIP_APPS or _bundle_of(pid) == "com.apple.ScreenContinuity"
+
+
+def _newline_mods(pid):
+    """换行带的修饰键(见 seeu/newline.py):VS Code、Jupyter、表格类按单独的回车,别的按 Shift+回车。"""
+    from seeu import newline
+    return newline.mods(_bundle_of(pid), _app_of(pid))
+
+
 TYPE_WAIT_USER_S = 3.0      # 后台打字前等用户停手的上限;到点照打,不卡流程(11-01 用户定)
 _MOD_MASK = 0x20000 | 0x40000 | 0x80000 | 0x100000   # Shift / Control / Option / Command 按着
 
@@ -239,11 +271,12 @@ def type_unicode(pid, text, auth=True, step=None):
     _watch(pid, "打字")
     verify_focus(pid)
     _wait_user_keys()
-    shift_ok = SHIFT_REAL and _app_of(pid) not in SHIFT_SKIP_APPS
-    for ch in text:
+    shift_ok = SHIFT_REAL and not _skip_shift(pid)
+    nl = _newline_mods(pid)
+    for ch in one_newline(text):
         _called_out(pid)       # 每个字前查一次:打到一半被叫出来也马上停(整组按下/松开不拆开)
-        if ch in "\n\r":
-            press(pid, "return", auth=auth)
+        if ch == "\n":
+            press(pid, "return", nl, auth=auth)     # 11-23 C-4.0:VS Code / Jupyter / 表格按单独回车(见 seeu/newline.py)。11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
             continue
         sc = _shifted_code(ch) if shift_ok else None
         if sc is not None:
@@ -271,10 +304,11 @@ def type_physical(pid, text, auth=True, step=None):
     _set_step(step)
     _watch(pid, "打字")
     verify_focus(pid)
-    for ch in text:
+    nl = _newline_mods(pid)
+    for ch in one_newline(text):
         _called_out(pid)       # 每个字前查一次:打到一半被叫出来也马上停(整组按下/松开不拆开)
-        if ch in "\n\r":
-            press(pid, "return", auth=auth)
+        if ch == "\n":
+            press(pid, "return", nl, auth=auth)     # 11-23 C-3.9:同 type_unicode,换行按 Shift+回车(C-4.0 起 VS Code / 表格按单独回车)
             continue
         if ch == " ":
             press(pid, "space", auth=auth)

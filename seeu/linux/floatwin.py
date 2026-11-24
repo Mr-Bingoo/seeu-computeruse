@@ -112,6 +112,67 @@ def mark(fx, fy, wid=0):
         send("mark", float(fx), float(fy), int(wid or 0))
 
 
+# ───────── 信号是谁发的(11-23 C-3.9 整体复查)─────────
+# 「手按」(real=true)是小插件用 FloatEvent 信号报上来的。小插件不在时(锁屏、被停用)org.seeu.SeeU 这个名字谁都能占,
+# 占了发一条假的 real=true 就能开 I See。所以每条信号都核对发送方是不是 gnome-shell,两条路过一条就认:
+#   ① 问总线它的进程号,那个进程的程序文件名字是 gnome-shell、归 root、别人改不了(普通程序造不出这样的文件);
+#   ② 程序文件读不到时(有的发行版给 gnome-shell 加了特权,/proc/<pid>/exe 不让同账号读):它得同时是总线上
+#      org.gnome.Shell 这个名字的主人(gnome-shell 整个会话都占着,锁屏时也在),而且进程名是 gnome-shell。
+# 都核不了一律当「不是手按」。
+_SHELL_NAMES = ("gnome-shell", ".gnome-shell-wrapped", "gnome-shell-wayland")
+SHELL_BUS_NAME = "org.gnome.Shell"
+_sender_ok = {}                     # 总线上的唯一名(:1.23,用过不会再发给别人)→ (是不是 gnome-shell, 查的时间)
+SENDER_RECHECK_S = 5.0              # 判成「不是」的隔这么久重查一次;判成「是」的一直算数
+
+
+def _exe_is_shell(link, uid, mode):
+    """link = /proc/<pid>/exe 指向哪;uid / mode = 那个文件的属主和权限。"""
+    name = os.path.basename(str(link or "").replace(" (deleted)", ""))       # 系统更新换掉文件后会带 (deleted)
+    return name in _SHELL_NAMES and uid == 0 and not (mode & 0o022)
+
+
+def _pid_is_shell(pid):
+    """True / False = 程序文件读到了,是 / 不是;None = 不让读(走第 ② 条路)。"""
+    try:
+        st = os.stat(f"/proc/{int(pid)}/exe")
+        return _exe_is_shell(os.readlink(f"/proc/{int(pid)}/exe"), st.st_uid, st.st_mode)
+    except PermissionError:
+        return None
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _comm_is_shell(pid):
+    try:
+        with open(f"/proc/{int(pid)}/comm", encoding="utf-8") as f:
+            return f.read().strip() == "gnome-shell"
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def sender_is_shell(sender, pid_of, owner_of=None, now=None, exe_check=None, comm_check=None):
+    """发信号的是不是 gnome-shell。sender = 总线唯一名;pid_of(sender) → 进程号;owner_of(名字) → 占着它的唯一名
+    (问不到都可以抛错)。exe_check / comm_check 测试时换替身。"""
+    now = time.time() if now is None else now
+    if not sender or not str(sender).startswith(":"):
+        return False
+    hit = _sender_ok.get(sender)
+    if hit and (hit[0] or now - hit[1] < SENDER_RECHECK_S):
+        return hit[0]
+    try:
+        pid = int(pid_of(sender))
+        ok = (exe_check or _pid_is_shell)(pid) if pid > 1 else False
+        if ok is None:
+            ok = bool(owner_of) and owner_of(SHELL_BUS_NAME) == sender and bool((comm_check or _comm_is_shell)(pid))
+    except Exception:   # noqa: BLE001
+        ok = False
+    ok = bool(ok)
+    if len(_sender_ok) > 200:
+        _sender_ok.clear()
+    _sender_ok[sender] = (ok, now)
+    return ok
+
+
 # ───────── 显示进程 ─────────
 def _hex(c):
     return "#%02X%02X%02X" % tuple(int(v) for v in c[:3])
@@ -284,6 +345,10 @@ def serve():
             if st["borrow"]:
                 info = dict(info, borrow=st["borrow"])
         st["multi"] = st["solo"] is None and len(al) >= 2
+        lk_ = None if st["solo"] else F.lone_stuck(al)
+        if lk_ in tasks and tasks[lk_] is not st["info"]:
+            st["info"] = tasks[lk_]
+            info = dict(st["info"], borrow=st["borrow"]) if st["borrow"] else st["info"]
         wid = 0
         if st["multi"]:
             ost["open"] = st["open"]
@@ -406,6 +471,8 @@ def serve():
             isee_click(real)
         elif name == "collapse":
             st["light_open"] = st["more"] = False
+            if not st["solo"]:
+                F.stuck_ack(st, tasks, time.time())
             st["solo"] = None
             toggle(False)
         elif name == "more":
@@ -466,9 +533,10 @@ def serve():
             glow_on("bg", 2.5)
         elif m[0] == "stuck" and len(m) >= 5:
             t_ = task(m[5] if len(m) > 5 else "", m[1], now)
-            t_.update(step=m[2], why=m[3], todo=m[4])
+            t_.update(step=m[2], why=m[3], todo=m[4], ack=False)
             st["info"] = t_
             st["last_msg"] = now
+            st["borrow_auto"] = False
             show(True)
             toggle(True)
         elif m[0] == "borrow":
@@ -528,6 +596,7 @@ def serve():
         elif m[0] == "expand" and st["shown"]:
             toggle(True)
         elif m[0] == "collapse" and st["shown"]:
+            F.stuck_ack(st, tasks, now)
             toggle(False)
         elif m[0] == "hide":
             tasks.clear()
@@ -632,16 +701,60 @@ def serve():
             elif st["light_open"]:
                 st["light_open"] = False
 
+    def pid_of(sender):
+        r = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetConnectionUnixProcessID",
+                          GLib.Variant("(s)", (sender,)), None, Gio.DBusCallFlags.NONE, 500, None)
+        return int(r.unpack()[0])
+
+    def owner_of(name):
+        r = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetNameOwner",
+                          GLib.Variant("(s)", (name,)), None, Gio.DBusCallFlags.NONE, 500, None)
+        return str(r.unpack()[0])
+
     def sig_cb(_conn, _sender, _path, _iface, _name, params):
         try:
             kind, x, y, real = params.unpack()
-            on_event(kind, float(x), float(y), bool(real))
-        except Exception:   # noqa: BLE001
-            pass
+            # 11-23 C-3.9 整体复查:real 只在发信号的确实是 gnome-shell 时才认(别的程序占了名字发的假信号 → 当不是手按)
+            real = bool(real) and sender_is_shell(_sender, pid_of, owner_of)
+            on_event(kind, float(x), float(y), real)
+        except Exception as ex:   # noqa: BLE001
+            oops("event", ex)
 
     bus.signal_subscribe(shell.NAME, shell.IFACE, "FloatEvent", shell.PATH, None, Gio.DBusSignalFlags.NONE, sig_cb)
 
+    err = {"t0": 0.0, "log": 0.0}
+
+    def oops(where, ex):
+        """定时回调 / 事件里出错:记一行日志(最多 10 秒一条,文件超过 200KB 清掉重写),不往外抛。"""
+        now = time.time()
+        if now - err["log"] < 10:
+            return
+        err["log"] = now
+        try:
+            import traceback
+            p_ = F._home("seeu_float_err.log")
+            mode = "w" if os.path.exists(p_) and os.path.getsize(p_) > 200_000 else "a"
+            with open(p_, mode, encoding="utf-8") as f_:
+                f_.write(f"{time.strftime('%m-%d %H:%M:%S')} {where}: {ex!r}\n{traceback.format_exc()}\n")
+        except Exception:   # noqa: BLE001
+            pass
+
     def tick():
+        """11-23 C-3.9 整体复查:原来 tick 里(frame() 等)一抛错,GLib 就把这个定时回调摘掉 → 悬浮标冻在屏幕上、再也不动。
+        现在整个包起来:出错记日志、照常返回 True;连着错超过 3 秒就先让小插件把悬浮标藏了(恢复后下一帧自己再画出来)。"""
+        try:
+            tick_body()
+            err["t0"] = 0.0
+        except Exception as ex:   # noqa: BLE001
+            oops("tick", ex)
+            now = time.time()
+            err["t0"] = err["t0"] or now
+            if now - err["t0"] > 3 and not st.get("sent_hidden"):
+                dbus("Float", "(s)", (json.dumps(dict(show=False)),))
+                st["sent_hidden"] = True
+        return True
+
+    def tick_body():
         for _ in range(20):
             try:
                 data = sock.recv(4096)
@@ -656,13 +769,12 @@ def serve():
             borrow_end()
         if not st["shown"]:
             return True
-        if now - st["last_msg"] > F.HIDE_AFTER_S and not st["drag"] and not st["rs"]:
+        if now - st["last_msg"] > F.hide_after(tasks, now, st["open"]) and not st["drag"] and not st["rs"]:
             tasks.clear()
             st["info"], st["more"], st["solo"] = None, False, None
             show(False)
             return True
-        for k_ in [k_ for k_, t_ in tasks.items() if now - t_["last"] > 600]:
-            del tasks[k_]
+        F.drop_old(tasks, now)
         hv, mp_ = False, None
         if st["open"] and st["card"] and st["inside"] and st["mp"] and not st["through"]:
             cx, cy, cw_, ch_ = st["card"]
@@ -690,12 +802,22 @@ def serve():
     SERVING = True
     loop = GLib.MainLoop()
     GLib.timeout_add(16, tick)
+    # 11-23 C-3.9 整体复查:被 kill(SIGTERM)/ 终端关掉(SIGHUP)/ Ctrl+C 时也走下面的 finally,把悬浮标藏了再退
+    # (原来直接死,最后一帧留在屏幕上)。被强杀(SIGKILL)拦不了,靠小插件自己「多久没新帧就藏」。
+    try:
+        import signal
+        for sg in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+            GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sg, lambda *_a: (loop.quit(), True)[1])
+    except Exception:   # noqa: BLE001
+        pass
     try:
         loop.run()
     finally:
         try:
-            show(False)
+            st["shown"] = False
+            dbus("Float", "(s)", (json.dumps(dict(show=False)),))       # 不管记的状态是什么都发一次隐藏
             glow_off()
+            bus.flush_sync(None)                 # 消息是后台线程发的,等它真发出去再退
         except Exception:   # noqa: BLE001
             pass
         sock.close()

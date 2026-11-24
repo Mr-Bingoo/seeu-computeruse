@@ -59,6 +59,7 @@ NOTE_LINE = 15                                  # 原因折到第二行时多出
 SHIM_W, SHIM_SPEED, SHIM_PERIOD, ACTIVE_S = 48.0, 150.0, 5.0, 3.0   # 文字微光:亮带宽、每秒扫多远、几秒一轮;最近几秒有动作才扫(同 Mac)
 BREATH_S = 2.2
 HIDE_AFTER_S = 120           # 这么久没收到消息就消失(Mac:1 分钟收成悬浮标 + 再留 1 分钟)
+STUCK_KEEP_S = 3600          # 11-24 用户定:卡住时展开着的悬浮窗最多留 1 小时(同 Mac);你点收起 / AI 接着干活照旧
 SUB_A = 0.62                 # 小字透明度(同 Mac)
 BORROW_HOLD_S = 2.5          # 借鼠标 / 键盘的提示:最后一次借用消息后留这么多秒再收回(同 Mac,10-27)
 ORANGE = (255, 159, 10)      # 借用系统鼠标时的颜色(同 Mac)
@@ -746,11 +747,45 @@ def zz_alpha(tm):
     return 0.7 + 0.3 * math.cos(2 * math.pi * (tm % 3.0) / 3.0)
 
 
+def stuck_waiting(tasks, now):
+    """有没有卡住了还在等人处理的(你没点过收起、没满 STUCK_KEEP_S)。"""
+    return any(t.get("why") and not t.get("ack") and now - t["last"] < STUCK_KEEP_S for t in tasks.values())
+
+
+def hide_after(tasks, now, opened):
+    """多久没消息就消失:卡住说明展开着 = STUCK_KEEP_S,平时 HIDE_AFTER_S。"""
+    return STUCK_KEEP_S if opened and stuck_waiting(tasks, now) else HIDE_AFTER_S
+
+
+def lone_stuck(alive):
+    """只剩一个还在跑的任务、它卡住了在等人 → 它的键(悬浮窗该写它,不是最后发消息的那个已经停了的任务);否则 None。"""
+    if len(alive) == 1 and alive[0].get("why") and not alive[0].get("ack"):
+        return alive[0]["key"]
+    return None
+
+
+def stuck_ack(st, tasks, now):
+    """你点了收起:单任务的卡住不再当「等人处理」留着(岛上的行照留);从现在起按平时的时间消失。"""
+    if not stuck_waiting(tasks, now):
+        return
+    st["last_msg"] = now
+    if not st["multi"]:
+        for t in tasks.values():
+            if t.get("why"):
+                t["ack"] = True
+
+
+def drop_old(tasks, now):
+    """太久没动静的任务清掉:卡住没人管的最多 STUCK_KEEP_S,其他 10 分钟。"""
+    for k in [k for k, t in tasks.items() if now - t["last"] > (STUCK_KEEP_S if t.get("why") and not t.get("ack") else 600)]:
+        del tasks[k]
+
+
 def alive_tasks(tasks, now):
     """还算在跑的任务:TASK_KEEP_S 内有动静,或卡住了在等人处理(同 Mac)。顺手把借鼠标的状态算出来。"""
     out = []
     for t in tasks.values():
-        if now - t["last"] < TASK_KEEP_S or t.get("why"):
+        if now - t["last"] < TASK_KEEP_S or (t.get("why") and not t.get("ack")):
             out.append(dict(t, borrow=t.get("borrow_kind") if now < t.get("borrow_until", 0) else None))
     return out
 
@@ -1392,6 +1427,10 @@ def serve():
             if st["borrow"]:
                 info = dict(info, borrow=st["borrow"])
         st["multi"] = st["solo"] is None and len(al) >= 2
+        lk_ = None if st["solo"] else lone_stuck(al)
+        if lk_ in tasks and tasks[lk_] is not st["info"]:      # 岛退回单任务:换成还卡着的那个(同 Mac 重放它最后一条消息)
+            st["info"] = tasks[lk_]
+            info = dict(st["info"], borrow=st["borrow"]) if st["borrow"] else st["info"]
         if st["multi"]:                           # 两个以上任务同时在跑:换成多任务岛
             ost["open"] = st["open"]
             sc = island(k_now(), now - st["t0"], st["theme_now"], measure, ordered(al, now, ost), now,
@@ -1561,6 +1600,8 @@ def serve():
             isee_click(real)
         elif name == "collapse":
             st["light_open"] = st["more"] = False
+            if not st["solo"]:                     # 单看时收起 = 回岛,岛上那行照留
+                stuck_ack(st, tasks, time.time())
             st["solo"] = None                      # 单看一个任务时点收起 = 回到多任务岛(同 Mac)
             toggle(False)
         elif name == "more":                       # 岛:叠着的那几行展开 / 折叠
@@ -1621,9 +1662,10 @@ def serve():
             glow_on("bg", 2.5)
         elif m[0] == "stuck" and len(m) >= 5:
             t_ = task(m[5] if len(m) > 5 else "", m[1])
-            t_.update(step=m[2], why=m[3], todo=m[4])
+            t_.update(step=m[2], why=m[3], todo=m[4], ack=False)
             st["info"] = t_
             st["last_msg"] = now
+            st["borrow_auto"] = False             # 借鼠标弹开的那几秒里卡住:改由卡住管,别到点自动收
             show(hwnd, True)
             toggle(True)                          # 卡住:自动展开说清楚
         elif m[0] == "borrow":
@@ -1684,6 +1726,7 @@ def serve():
         elif m[0] == "expand" and st["shown"]:
             toggle(True)
         elif m[0] == "collapse" and st["shown"]:
+            stuck_ack(st, tasks, now)
             toggle(False)
         elif m[0] == "hide":
             tasks.clear()
@@ -1715,13 +1758,12 @@ def serve():
         glow_tick(now)
         if not st["shown"]:
             return
-        if now - st["last_msg"] > HIDE_AFTER_S and not st["drag"] and not st["rs"]:
+        if now - st["last_msg"] > hide_after(tasks, now, st["open"]) and not st["drag"] and not st["rs"]:
             tasks.clear()
             st["info"], st["more"], st["solo"] = None, False, None
             show(hwnd, False)
             return
-        for k_ in [k_ for k_, t_ in tasks.items() if now - t_["last"] > 600]:   # 卡住没人管的最多留 10 分钟
-            del tasks[k_]
+        drop_old(tasks, now)
         hv = False
         if st["open"] and st["card"]:
             c = wt.POINT(); u.GetCursorPos(ctypes.byref(c))

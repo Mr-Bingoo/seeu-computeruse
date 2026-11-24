@@ -156,6 +156,17 @@ def _win_gate_log(what, said):
 if __name__ == "__main__":
     args = sys.argv[1:]
     cmd = args[0] if args else ""
+    # 11-22 C-3.7:插件版已经由 Claude Code / Codex 接好了,再「接入」会多出一份同样的工具 → 说清楚、不做(「看接了没有」照常)
+    if cmd in ("接入", "install") and len(args) > 1:
+        try:
+            from seeu.where import as_plugin as _asp
+            _plugin = _asp()
+        except Exception:   # noqa: BLE001
+            _plugin = False
+        if _plugin:
+            from seeu.i18n import T as _T
+            print(_T("inst.plugin"))
+            sys.exit(1)
     if sys.platform.startswith("linux"):   # 11-18:Linux 预览版(第 1 段),命令都在 seeu/linux/
         import seeu as _seeu                 # 包里没有 linux/ 时,这一行会给「只支持 macOS」的话
         if cmd == "mcp":                     # 11-18 第 2 段

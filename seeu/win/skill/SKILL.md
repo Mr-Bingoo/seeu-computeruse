@@ -14,7 +14,7 @@ description: Use SeeU to see and operate apps on the user's Windows PC in the ba
   `seeu_allow_site`, `seeu_manage`. You can tap a pixel on the screenshot (`px`, `py`); give every action a one-sentence `why`.
 - **Only without those tools** use the command line (run from the folder that contains the `seeu` folder):
   `python -m seeu windows | see <App> | tap <App> <number> | type <App> "text" [--enter] [--at <number>] | press <App> <key> [ctrl|shift|alt] | scroll <App> -600 | longpress <App> <number> [ms] | drag <App> x1 y1 x2 y2 … | probe <App>`.
-  To connect the tools: `python -m pip install comtypes`, then `python -m seeu install claude` (or `install codex`), then start a new conversation (Codex: quit and reopen it).
+  To connect the tools: `python -m pip install comtypes`, then `python -m seeu install auto` (detects the AI client you are running in; or name it: `install claude` / `codex` / `cursor` / `trae` / `vscode`), then start a new conversation (Codex, Cursor, Trae, VS Code: quit and reopen it).
 
 ## 1. Basic loop: look, act, look again
 1. `seeu_check` once per conversation; `seeu_windows` to see what's open and what to call it (program name like `Notepad`, `chrome`,

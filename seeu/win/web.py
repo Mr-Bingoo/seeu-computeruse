@@ -213,7 +213,7 @@ def _fn(d, tab, fn, args):
     if r is None:
         raise WebError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise WebError(r["__err"], r.get("code") or "page")
+        raise WebError(*aejs.page_err(r))      # 11-23 C-3.9 整体复查:网页说的话不当 SeeU 的提示(见 seeu/web/aejs.page_err)
     return r
 
 
@@ -243,9 +243,14 @@ def open(url, browser="chrome"):
         raise WebError("只能打开 http / https 网址", "bad_url")
     if not _allowed(u):
         raise _not_allowed(u)
-    d = start(browser)
+    # 11-23 C-3.9 整体复查:已经有一份在跑就用它(包括 show() 开出来给用户登录的可见窗口)。原来这里一律 start(无界面):
+    # 用户正看着登录窗口时 AI 一开网页,窗口被关掉、换成无界面重开。可见那份里新标签页开在后台,不切走用户正看的那页。
+    d = _load(browser) or start(browser)
+    args = {"url": u}
+    if d.get("visible"):
+        args["background"] = True
     with cdp.Session(cdp._http(d["port"], "/json/version")["webSocketDebuggerUrl"]) as s:
-        tid = s.call("Target.createTarget", {"url": u})["targetId"]
+        tid = s.call("Target.createTarget", args)["targetId"]
     _wait_loaded(d, tid)
     # 第一次开会留着 about:blank 那页,关掉它,省得 tabs 里多一页
     for p in _pages(d):
@@ -262,6 +267,14 @@ def tabs(browser="chrome"):
     if not d:
         return []
     return [dict(id=p["id"], title=p.get("title", ""), url=p.get("url", "")) for p in _pages(d)]
+
+
+def tabs_view(browser="chrome"):
+    """给 AI 看的标签页清单(11-23 C-3.9 整体复查,照 Mac web.tabs):没进 SeeU 允许名单的网站只给个数(I See 下全给);
+    空白页照给。返回 dict(tabs=[…], hidden=几个没给)。tabs() 照旧给全部(取证、老调用方用)。"""
+    allt = tabs(browser)
+    shown = [t for t in allt if not str(t.get("url") or "").lower().startswith(("http://", "https://")) or _allowed(t["url"])]
+    return dict(tabs=shown, hidden=len(allt) - len(shown))
 
 
 _last = {}

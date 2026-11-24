@@ -1,0 +1,20 @@
+{
+  "name": "seeu-computeruse",
+  "interface": {
+    "displayName": "SeeU"
+  },
+  "plugins": [
+    {
+      "name": "seeu",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

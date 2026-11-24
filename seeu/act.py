@@ -97,18 +97,28 @@ def _pid(app):
 
 
 def _activate(app, wait_front_s=1.5):
-    """真鼠标前把目标提到前台。带「标题」的按进程号激活(按名字激活分不清多实例)。"""
-    owner, title = bg.split_target(app)
-    if title is None:
-        return mi.activate(owner, wait_front_s=wait_front_s)
+    """真鼠标前把目标提到前台。一律按进程号激活:按名字激活分不清多实例;11-23 中文系统里前台名叫「iPhone镜像」,
+    按英文名核对前台永远对不上(白等 1.5 秒还报没到前台)。"""
     import AppKit
+    from seeu_lib import input_guard as ig
     pid = _pid(app)
+    fa = ig.frontmost_app()
+    if fa and fa["pid"] == pid:
+        return True                   # 已经在前台:不再激活,免得窗口一闪
     ra = AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
     if ra is None:
         return False
     ra.activateWithOptions_(AppKit.NSApplicationActivateIgnoringOtherApps)
+    try:                              # 11-23 复查:macOS 14 起后台进程发起的激活可能被系统忽略 → 按包名 AppleScript 兜底
+        time.sleep(0.3)
+        fa = ig.frontmost_app()
+        if not (fa and fa["pid"] == pid) and ra.bundleIdentifier():
+            import subprocess
+            subprocess.run(["osascript", "-e", f'tell application id "{ra.bundleIdentifier()}" to activate'],
+                           capture_output=True, timeout=10)
+    except Exception:   # noqa: BLE001
+        pass
     t0 = time.time()
-    from seeu_lib import input_guard as ig
     while time.time() - t0 < wait_front_s:
         time.sleep(0.2)
         fa = ig.frontmost_app()       # 🔴 别直接问 NSWorkspace:没事件循环时一直返回旧值(10-14 C-1.1 又踩到)
@@ -156,7 +166,7 @@ def mirror_baseline(app="iPhone Mirroring", force=False):
         route = "后台菜单没调到基准大小;按设置没借真键盘"
     elif (g["w"], g["h"]) != MIRROR_BASE:
         def keys(ig):
-            ig.preflight(g0["x"] + g0["w"] / 2, g0["y"] + 20, app, check_modal=False)
+            ig.preflight(g0["x"] + g0["w"] / 2, g0["y"] + 20, ax.local_name(app), check_modal=False)   # 11-23 中文系统进程名
             mi.key_cmd(app, "0")
             time.sleep(0.6)
             mi.key_cmd(app, "+")
@@ -887,12 +897,13 @@ def _real_mouse(app, fn, modal=False):
         _rebase()                         # 11-17 C-2.8:让路、排队都等完了,真动手前重拍「动作前」
         try:
             _halo("real", 5)              # 借用系统鼠标期间亮光圈(按档位);结束后 0.8 秒淡出
-            with ig.FrontState(avoid_owner=bg.split_target(app)[0] if _is_canvas(app) else None):
+            with ig.FrontState(avoid_owner=ax.local_name(bg.split_target(app)[0]) if _is_canvas(app) else None):
                 _activate(app)
                 fn(ig)
         finally:
             _halo("real", 0.8)
-            dl.release()
+            if not r.get("reentrant"):    # 11-23 C-3.9 整体复查:调用方(同一个进程)自己先拿着桌面锁时,这把锁是它的,SeeU 点完不能替它放掉
+                dl.release()
     return act
 
 
@@ -901,7 +912,8 @@ def _real_mouse(app, fn, modal=False):
 # 用 seeu_lib.cursor_overlay(纯显示,不碰真鼠标)。任何异常都吞掉,绝不影响动作本身。不想要光标设 SEEU_NO_CURSOR=1。
 # 用名牌 + 颜色区分(用户 10-14 定):后台模式 = 「SeeU」紫色;让路模式(借用系统鼠标)= 署名(设置.json,没写就 SeeU)亮橙(10-15 改,原蓝色);
 # 用户自己的鼠标 = 系统黑色指针、无名牌。
-_SETTINGS = os.path.join(os.path.dirname(__file__), "设置.json")
+from seeu.where import settings_file as _sf
+_SETTINGS = _sf()  # 11-22 C-3.7:插件版存用户文件夹(seeu/where.py)
 
 
 def _hex(v, default):
@@ -1096,7 +1108,7 @@ def _cursor_visible(app, x, y):
     # 截图工具(⌘⇧4/5)会挂一个全屏、报不透明的透明层,只影响"画不画",不算挡住(10-14 紫色光标因它没出来)
     top = ig.window_at(x, y, skip=SEE_THROUGH)
     owner, title = bg.split_target(app)
-    return bool(top and top["owner"] == owner and (title is None or (top.get("name") or "") == title))
+    return bool(top and ax.same_app(top["owner"], owner) and (title is None or (top.get("name") or "") == title))
 
 
 def _watch(app, kind=None, x=None, y=None):
@@ -1141,7 +1153,7 @@ def _cursor(app, kind, x, y, mode="bg", force=False):
         if force or _cursor_visible(app, x, y):
             _cursor_serve()
             label, color = _cursor_style(mode)
-            owner = bg.split_target(app)[0]
+            owner = ax.local_name(bg.split_target(app)[0])   # 11-23:显示进程按系统显示名比对(中文系统「iPhone镜像」)
             # 11-17 C-2.5:一个任务一只光标(key = 任务显示名);后台模式名牌按规则(只剩一只写 SeeU,多只写任务名)
             from seeu import sched as _sc
             key = _sc.cursor_key()
@@ -1186,6 +1198,9 @@ def tap(app, target, real=True, allow=None):
     blocked = _tap_secret_block(app, e, x, y)      # 11-07:点「粘贴」按钮 / 右键菜单里的粘贴项 = 粘贴,光标在密码框里就不点
     if blocked:
         return blocked
+    blocked = _tap_danger_block(e, app, x, y)       # 11-23 C-3.9:叫「清倒废纸篓 / 关机 / 注销」的按钮、菜单项也不点(原来只有 menu() 查)
+    if blocked:
+        return blocked
     rx, ry = _rel(app, x, y)   # 窗口被挪了也点得准:每条路动手前按窗口当时位置重算(10-14 跨桌面实测窗口被挪过)
     steps = []
     if e is not None and ("AXPress" in e["actions"] or "AXPick" in e["actions"]):
@@ -1225,7 +1240,7 @@ def tap(app, target, real=True, allow=None):
                     _modal_recheck(app, [(ax_, ay_)], e)
                     _seen_modals.pop(app, None)     # 往弹窗里点过一次就作废:同样大小的下一个弹窗要 AI 再看一次才算看过
                 mi.qtap(ax_, ay_)
-            ig.guarded(ax_, ay_, bg.split_target(app)[0], do=do, check_modal=not inside)
+            ig.guarded(ax_, ay_, ax.local_name(bg.split_target(app)[0]), do=do, check_modal=not inside)
         r2 = _ladder(app, [("真鼠标", _real_mouse(app, real_tap, modal=lambda: ([_abs(app, rx, ry)], e)))],
                      expect_factory=factory)
         r2["tried"] = r["tried"] + r2["tried"]
@@ -1253,6 +1268,9 @@ def long_press(app, target, ms=1000):
         if bad:
             return bad
     blocked = _tap_secret_block(app, e, x, y)      # 11-07 复查:长按 50 毫秒就是一次点击,跟 tap 查同一条
+    if blocked:
+        return blocked
+    blocked = _tap_danger_block(e, app, x, y)       # 11-23 C-3.9:同 tap
     if blocked:
         return blocked
     rx, ry = _rel(app, x, y)
@@ -1526,7 +1544,11 @@ class _TypeLock:
     def __init__(self, app):
         import hashlib
         d = os.path.expanduser("~/.seeu/seeu_typelock")
-        self.path = os.path.join(d, hashlib.md5(bg.split_target(app)[0].encode("utf-8")).hexdigest()[:12] + ".lock")
+        try:                                  # 11-23 C-3.9 整体复查:名字先归一(中文系统里 TextEdit / 文本编辑 要落到同一把锁)
+            name = bg.split_target(ax.canon_name(app))[0]
+        except Exception:
+            name = bg.split_target(app)[0]
+        self.path = os.path.join(d, hashlib.md5(name.encode("utf-8")).hexdigest()[:12] + ".lock")
         self.app, self.f = app, None
 
     def __enter__(self):
@@ -1708,6 +1730,60 @@ def _tap_secret_block(app, e, x, y):
     return _secret_block(app, what) if what else None
 
 
+DANGER_TAP_ROLES = ("AXButton", "AXMenuItem", "AXMenuBarItem", "AXMenuButton")
+
+
+def _danger_names_at(app, x, y):
+    """11-23 C-4.0 Fable 复查:按位置点时,问辅助功能那个位置是什么控件(只读);是字 / 图标就往上找 PASTE_UP 层,
+    碰到按钮 / 菜单项就返回它的名字。读不到返回 []。"""
+    try:
+        el = ax.element_at(ax.app_element(_pid(app))[0], x, y)
+    except Exception:
+        return []
+    cur = el
+    for _ in range(PASTE_UP + 1):
+        if cur is None:
+            return []
+        role = ax.attr(cur, "AXRole")
+        if role in DANGER_TAP_ROLES:
+            return [v for v in (ax.attr(cur, "AXTitle"), ax.attr(cur, "AXDescription")) if v]
+        if role in _UP_STOP:
+            return []
+        cur = ax.attr(cur, "AXParent")
+    return []
+
+
+def _tap_danger_block(e, app=None, x=None, y=None):
+    """11-23 C-3.9 整体复查:访达废纸篓窗口右上角的「清倒」、确认框里的「清倒废纸篓」、苹果菜单展开后的「关机…」,
+    按编号 / 名字点时不经过 act.menu,原来没人查(Linux 11-20 补过,Mac 漏了)。按钮、菜单项的名字过一遍菜单那张词表。
+    11-23 C-4.0 Fable 复查:按位置点的原来直接放行(按编号被拒后换位置点同一个按钮就过了)→ 先问那个位置是什么控件再查;
+    镜像 / 模拟器(画面类)里读不到控件的查不了,照旧。"""
+    if e is not None:
+        if e.get("role") not in DANGER_TAP_ROLES:
+            return None
+        names = [x_ for x_ in (e.get("title"), e.get("desc")) if x_]
+    elif app is not None and x is not None and not _is_canvas(app):
+        names = _danger_names_at(app, x, y)
+    else:
+        return None
+    from seeu import safety
+    try:
+        safety.check_menu(names)
+        if app is not None and _is_finder(app):
+            safety.check_finder_button(names)
+    except safety.Refused as ex:
+        return dict(outcome="refused", route=None, tried=[], png=None, reason=str(ex))
+    return None
+
+
+def _is_finder(app):
+    try:
+        n = ax.canon_name(bg.split_target(app)[0]) if hasattr(bg, "split_target") else str(app)
+    except Exception:
+        n = str(app)
+    return str(n).split("「")[0].strip().lower() in ("finder", "访达")
+
+
 ACTIVATE_KEYS = {"return", "enter", "space"}     # 会「按下」当前焦点所在按钮的键
 
 
@@ -1882,6 +1958,10 @@ def _keep_front(app, fn):
 def drag(app, pts, hold_ms=0, allow=None):
     """拖动:macOS 没有后台拖动的路,直接走真鼠标。pts = 屏幕点列表。"""
     x0, y0 = pts[0]
+    from seeu import web as _web
+    if _web.is_browser(_web.canon(app)):     # 11-23 C-3.9 整体复查:跟长按同一个口子(起点终点同一处的拖动就是按屏幕位置点一下,绕开允许名单)
+        return dict(outcome="refused", route=None, tried=[], png=None,
+                    reason="浏览器里不能拖动(拖动是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号")
     bad = _stale_pixel(app)          # 11-15 C-2.0:拖动全靠截图位置
     if bad:
         return bad
@@ -1901,7 +1981,7 @@ def drag(app, pts, hold_ms=0, allow=None):
                 _modal_recheck(app, list(pts))
                 _seen_modals.pop(app, None)
             mi.qdrag(pts, hold_ms=hold_ms)
-        ig.guarded(x0, y0, bg.split_target(app)[0], do=do, check_modal=not inside)
+        ig.guarded(x0, y0, ax.local_name(bg.split_target(app)[0]), do=do, check_modal=not inside)
         _cursor(app, "move", *pts[-1], mode="real", force=True)
     if not real_allowed(allow):
         r = dict(outcome="refused", route=None, tried=[], png=None,

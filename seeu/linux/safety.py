@@ -37,7 +37,8 @@ def norm_key(key):
 def norm_mods(mods=()):
     if isinstance(mods, str):
         mods = [mods]
-    return [MOD_ALIAS.get(str(m).strip().lower(), str(m).strip().lower()) for m in mods or ()]
+    # 11-23 C-3.9 整体复查:空串不算修饰键(AI 传 [""] 时别被下面「不认识的修饰键」误拦)
+    return [MOD_ALIAS.get(str(m).strip().lower(), str(m).strip().lower()) for m in mods or () if str(m).strip()]
 
 
 def key_enters(key, mods=()):
@@ -54,13 +55,21 @@ def key_enters(key, mods=()):
     return True
 
 
+KNOWN_MODS = {"ctrl", "alt", "shift", "super"}
+
+
 def check_keys(key, mods=()):
+    """11-23 C-3.9 整体复查:原来按「修饰键集合正好等于」判,多写一个就绕过(ctrl+alt+shift+delete;ctrl+alt+fn+delete 里
+    不认识的 fn 真按时被丢掉,按出去就是 Ctrl+Alt+Delete)。改成:不认识的修饰键直接拒;危险组合按「包含」判。"""
     k, m = norm_key(key), set(norm_mods(mods))
+    unknown = sorted(m - KNOWN_MODS)
+    if unknown:
+        raise Refused(f"不认识的修饰键「{unknown[0]}」(只认 ctrl / shift / alt),SeeU 不按(这一步请你自己来)")
     if "super" in m:
         raise Refused("带 Super(Windows / ⌘)键的组合是系统快捷键,SeeU 不按(这一步请你自己来)")
-    if m == {"ctrl", "alt"} and k in ("delete", "forwarddelete", "backspace", "t", "l"):
+    if {"ctrl", "alt"} <= m and k in ("delete", "forwarddelete", "backspace", "t", "l"):
         raise Refused("这是注销 / 锁屏 / 开终端一类的系统快捷键,SeeU 不按(这一步请你自己来)")
-    if m == {"alt"} and k in ("f2",):
+    if "alt" in m and k in ("f2",):
         raise Refused("Alt+F2 是「运行命令」框,SeeU 不按(这一步请你自己来)")
 
 
@@ -210,8 +219,12 @@ def check_unlocked():
 # ---------------------------------------------------------------- 菜单(11-18 C-3.0,照 Mac safety.check_menu)
 # Mac 那份 + Linux 多两样:注销 / 挂起 / 关机这类会话菜单;「运行 / 执行」(FeatherPad 这类编辑器的「Run」直接把文件当程序跑)
 BLOCKED_MENU = re.compile(r"清[空倒]废纸篓|[清倒]空?垃圾桶|清空回收站|立即[删刪]除|永久删除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|锁屏|关机|關機|"
-                          r"重新启动|重新開機|重启|挂起|休眠|强制退出|強制結束|Empty (the )?(Trash|Bin)|Delete (Immediately|Permanently)|"
-                          r"Log ?Out|Lock Screen|Shut ?Down|Power Off|Restart|Reboot|Suspend|Hibernate|Force Quit", re.I)
+                          r"挂起|休眠|强制退出|強制結束|\b(Empty (the )?(Trash|Bin)|Delete (Immediately|Permanently)|"
+                          r"Log ?Out|Lock Screen|Shut ?Down|Power Off|Suspend|Hibernate|Force Quit)\b", re.I)
+# 11-23 C-4.0 Fable 复查:「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
+# 「Restart Kernel」「Restart Language Server」「重启服务」这类程序自己的按钮不算;英文词加词边界(「Design Outline」里的 sign out 不算)
+BLOCKED_RESTART = re.compile(r"^\s*(重新启动|重新開機|重启|Restart|Reboot)(\s*(Now|Computer|电脑|计算机|系统))?\s*(\(&?[A-Za-z]\))?\s*(\.{3}|…)?\s*$|"
+                             r"\bUpdate and restart\b|更新并重启", re.I)
 RUN_MENU = re.compile(r"^\s*(run|execute|运行|執行|执行)\b", re.I)
 
 
@@ -219,7 +232,7 @@ def check_menu(path, run=True):
     """run=False:只查危险词、不查「运行」(第二轮复查:列表项里叫 run.sh 的文件会被误伤)。"""
     for p in path:
         t = str(p)
-        if BLOCKED_MENU.search(t):
+        if BLOCKED_MENU.search(t) or BLOCKED_RESTART.search(t):
             raise Refused(f"菜单「{p}」是危险操作,SeeU 不点(这一步请你自己来)")
         if run and RUN_MENU.search(t):
             raise Refused(f"菜单「{p}」会把文件当程序运行,SeeU 不点(这一步请你自己来)")

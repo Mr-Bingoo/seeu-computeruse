@@ -143,7 +143,8 @@ def shot():
     """截整屏:iPhone 镜像在当前桌面就不截(会触发有的 App 的截屏提示)。"""
     try:
         from seeu_lib import mac_input as mi
-        g = mi.win_geo("iPhone Mirroring")
+        from seeu.ax import local_name
+        g = mi.win_geo(local_name("iPhone Mirroring"))     # 11-23:中文系统里进程名叫「iPhone镜像」
     except Exception:
         g = "查不到"
     if g is not None:

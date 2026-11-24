@@ -130,23 +130,68 @@ def _full(timeout=TIMEOUT):
     return dst
 
 
+_LOGICAL = [0.0, None]
+
+
+def logical_size():
+    """桌面(所有显示器拼起来)的逻辑尺寸 (宽, 高),跟窗口坐标、控件坐标同一套;问不到返回 None。记 3 秒。
+    11-23 C-3.9 整体复查(虚拟机实测):显示缩放 200% 时整屏截图是实际像素(宽是逻辑的 2 倍),窗口坐标却是逻辑的 →
+    原来直接拿窗口坐标裁,裁到的只是窗口左上角那一块、还混着别的窗口(给 AI 的截图错了,按截图位置点也跟着偏)。"""
+    now = time.time()
+    if now - _LOGICAL[0] < 3:
+        return _LOGICAL[1]
+    out = None
+    try:
+        import gi
+        gi.require_version("Gio", "2.0")
+        from gi.repository import Gio
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        _s, monitors, logical, props = bus.call_sync(
+            "org.gnome.Mutter.DisplayConfig", "/org/gnome/Mutter/DisplayConfig", "org.gnome.Mutter.DisplayConfig",
+            "GetCurrentState", None, None, Gio.DBusCallFlags.NONE, 2000, None).unpack()
+        size = {}
+        for (conn, *_), modes, _mp in monitors:
+            for m in modes:
+                if m[6].get("is-current"):
+                    size[conn] = (m[1], m[2])
+        phys = int(props.get("layout-mode", 1)) == 2          # 2 = 按实际像素排(X11 式);1 = 按逻辑尺寸排(Wayland 默认)
+        x1 = y1 = 0.0
+        for lx, ly, scale, transform, _p, mons, _lp in logical:
+            pw, ph = size.get(mons[0][0], (0, 0))
+            if transform in (1, 3, 5, 7):                     # 竖屏:宽高对调
+                pw, ph = ph, pw
+            k = 1.0 if phys else float(scale or 1)
+            x1, y1 = max(x1, lx + pw / k), max(y1, ly + ph / k)
+        out = (x1, y1) if x1 > 0 and y1 > 0 else None
+    except Exception:   # noqa: BLE001
+        out = None
+    _LOGICAL[:] = [now, out]
+    return out
+
+
 def crop(png, x, y, w, h, out=None, mask=()):
     """从整屏图里裁出一块(超出屏幕的部分截掉)。返回 (路径, 实际的 x, y, w, h)。
-    mask:屏幕坐标的 (x, y, w, h) 列表,裁之前涂黑(11-20 复查:盖在目标窗口上面的终端、密码程序那块不发给 AI)。"""
+    mask:屏幕坐标的 (x, y, w, h) 列表,裁之前涂黑(11-20 复查:盖在目标窗口上面的终端、密码程序那块不发给 AI)。
+    11-23 C-3.9:传进来的、返回的坐标都是逻辑坐标(跟窗口、控件一套);整屏图是实际像素时按倍数换算再裁,
+    裁出来的图保持实际像素(更清楚),调用方按「返回的范围 ↔ 图的尺寸」换算(mcp_server._px_to_screen、认字清单)。"""
     from PIL import Image, ImageDraw
     im = Image.open(png)
+    ls = logical_size()
+    k = im.width / float(ls[0]) if ls and ls[0] > 0 else 1.0
+    if abs(k - 1.0) < 0.02:
+        k = 1.0
     if mask:
         im = im.convert("RGB")
         d = ImageDraw.Draw(im)
         for mx, my, mw, mh in mask:
-            d.rectangle((int(mx), int(my), int(mx + mw) - 1, int(my + mh) - 1), fill=(0, 0, 0))
-    x0, y0 = max(0, int(x)), max(0, int(y))
-    x1, y1 = min(im.width, int(x + w)), min(im.height, int(y + h))
+            d.rectangle((int(mx * k), int(my * k), int((mx + mw) * k) - 1, int((my + mh) * k) - 1), fill=(0, 0, 0))
+    x0, y0 = max(0, int(round(x * k))), max(0, int(round(y * k)))
+    x1, y1 = min(im.width, int(round((x + w) * k))), min(im.height, int(round((y + h) * k)))
     if x1 <= x0 or y1 <= y0:
         raise RuntimeError("窗口不在屏幕范围里")
     out = out or os.path.join(_tmpdir(), f"win_{int(time.time() * 1000)}.png")
     im.crop((x0, y0, x1, y1)).save(out)
-    return out, (x0, y0, x1 - x0, y1 - y0)
+    return out, (x0 / k, y0 / k, (x1 - x0) / k, (y1 - y0) / k)
 
 
 def diff(a, b, box=None):

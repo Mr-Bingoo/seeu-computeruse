@@ -56,10 +56,26 @@ HOST_APPS = {"Claude": "claude", "ChatGPT": "codex", "Codex": "codex", "Cursor":
              "Trae": "trae", "Visual Studio Code": "vscode"}
 
 
+SYS_PY_DIRS = ("/Applications/Xcode", "/Library/Developer/CommandLineTools", "/usr/bin/", "/System/Library/Frameworks/Python")
+
+
+def system_python(exe=None):
+    """Mac 上这个 Python 是不是系统自带的那个(/usr/bin/python3 和它转去的 Xcode / 命令行工具里的真身)。"""
+    exe = exe or sys.executable
+    return exe.startswith(SYS_PY_DIRS) or os.path.realpath(exe).startswith(SYS_PY_DIRS)
+
+
 def _python():
-    """写进设置的 Python:系统那个是 /usr/bin/python3 转到 Xcode / 命令行工具里的真身,真身路径升级就变 → 写入口那个(10-30 实测)。"""
+    """写进设置的 Python:系统那个是 /usr/bin/python3 转到 Xcode / 命令行工具里的真身,真身路径升级就变 → 写入口那个(10-30 实测)。
+    11-23 C-3.9 整体复查:装了 Homebrew / pyenv / conda 的 Mac,终端里的 python3 不是系统那个;README 第 1 步把库装进了系统 Python,
+    这里却把 Homebrew 的写进客户端 → 连得上、真用时缺库,「检查」给的命令又是已经跑过的那条,绕不出来。
+    Mac 上一律写系统那个(插件启动器、README、检查给的命令都是它)。"""
     exe = sys.executable
-    if exe.startswith(("/Applications/Xcode", "/Library/Developer/CommandLineTools")) and os.path.exists("/usr/bin/python3"):
+    if os.path.exists("/usr/bin/python3") and (exe.startswith(("/Applications/Xcode", "/Library/Developer/CommandLineTools"))
+                                              or not system_python(exe)):
+        if not system_python(exe):
+            _p(f"注意:你现在用的是 {exe},SeeU 在 Mac 上用系统自带的 /usr/bin/python3,接入时写的是它"
+               "(库要装在它下面:/usr/bin/python3 -m pip install --user …,见 README)")
         return "/usr/bin/python3"
     return exe
 
@@ -577,6 +593,14 @@ QIANWEN_HOW = ("千问(5.2 起)的设置不在文件里,要在它界面上加一
 def write_pointer():
     """11-15 C-2.0:留一张「SeeU 装在这儿」的纸条,给 npm 启动包 seeu-computeruse 找(千问只认 npx 启动命令)。
     内容:用哪个 Python、服务在哪。接入 / 每次服务启动都写一次(装的位置挪了也能跟上)。写不了就算了。"""
+    try:
+        from seeu.where import as_plugin
+        if as_plugin():
+            # 11-23 复查:插件版不写。纸条是给千问的 npx 启动包找 git 版用的;插件版一写,千问就被改去跑插件缓存里那份
+            # (换了设置文件),插件一更新旧缓存被删,千问直接启动失败
+            return
+    except Exception:   # noqa: BLE001
+        pass
     try:
         d = {"python": _python(), "server": SERVER}
         try:

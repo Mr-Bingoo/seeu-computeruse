@@ -127,13 +127,23 @@ class fake_active:
         return False
 
 
+def _newline_mods(top):
+    from seeu import newline
+    try:
+        return newline.mods(W.exe(W.pid_tid(top)[0]))
+    except Exception:   # noqa: BLE001
+        return ("shift",)
+
+
 def type_text(top, text, target=None, gap=0.01):
-    """WM_CHAR 逐字发。emoji 这类要两个 UTF-16 单元的,两半各发一次。换行按回车键发(见 key)。返回目标子窗口。"""
+    """WM_CHAR 逐字发。emoji 这类要两个 UTF-16 单元的,两半各发一次。换行按 Shift+回车发(见 key)。返回目标子窗口。"""
     t = target or type_target(top)
+    text = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    nl = _newline_mods(top)
     with fake_active(top):
         for ch in text:
             if ch == "\n":
-                _key(top, "return", (), t)
+                _key(top, "return", nl, t)     # 11-23 C-4.0:VS Code / Jupyter / 表格按单独回车(seeu/newline.py)      # 11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
                 continue
             b = ch.encode("utf-16-le")
             for i in range(0, len(b), 2):
@@ -142,15 +152,21 @@ def type_text(top, text, target=None, gap=0.01):
     return t
 
 
-def _vk_of(name):
+def _vk_shift(name):
+    """键名 → (虚拟键码, 要不要同时按 Shift)。11-23 C-3.9 整体复查:VkKeyScanW 的高位是「要按着哪些修饰键」,
+    原来只取低位,「?」被按成了「/」(「!」按成「1」)。只认 Shift 那一位;字母先转成小写了,不受影响。"""
     n = str(name).strip().lower()
     if n in VK:
-        return VK[n]
+        return VK[n], False
     if len(n) == 1:
         r = u.VkKeyScanW(n)
         if r != -1:
-            return r & 0xFF
+            return r & 0xFF, bool((r >> 8) & 1)
     raise ValueError(f"不认识的键:{name}")
+
+
+def _vk_of(name):
+    return _vk_shift(name)[0]
 
 
 def key(top, name, mods=(), target=None):
@@ -164,7 +180,9 @@ def _key(top, name, mods=(), target=None):
     """后台按一个键(可带 ctrl / shift / alt)。修饰键也按「按下…抬起」发给同一个子窗口。
     ⚠️ 带修饰键的组合:有的程序读的是系统键盘状态(发消息改不了),可能不认 —— 调用方要核实。"""
     t = target or type_target(top)
-    vk = _vk_of(name)
+    vk, need_shift = _vk_shift(name)
+    if need_shift and "shift" not in mods:       # 11-23 C-3.9 整体复查:要 Shift 才打得出的符号键(? ! @ …)带上 Shift
+        mods = list(mods) + ["shift"]
     mvk = [MOD_VK[m] for m in mods]
     alt = "alt" in mods
     down = api.WM_SYSKEYDOWN if alt else api.WM_KEYDOWN

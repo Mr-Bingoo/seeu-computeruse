@@ -64,7 +64,7 @@ KEY_YIELD_STEP_S = 0.4
 KEY_RECENT_S = 0.5          # 这么短时间内有按键 = 正在打字
 # 动作硬上限(照官方:单次文本 ≤4000 字、拖动 ≤20 点;点击连击、滚动格数是我们补的)
 LIMITS = {"text_chars": 4000, "drag_points": 20, "click_count": 3, "scroll_ticks": 60}
-SKIP_OWNERS = {"Dock"}      # Dock 的窗口号称占满全屏,实际只有底部一条挡点击(交给 visibleFrame 判)
+SKIP_OWNERS = {"Dock", "程序坞"}   # Dock 的窗口号称占满全屏,实际只有底部一条挡点击(交给 visibleFrame 判);简体中文系统叫「程序坞」
 OVERLAY_LEVEL = 1000        # NSScreenSaverWindowLevel:seeu_lib.cursor_overlay 在这层,且不拦鼠标
 
 
@@ -479,6 +479,9 @@ def window_at(x, y, skip=()):
         b = w.get("kCGWindowBounds") or {}
         r = (b.get("X", 0), b.get("Y", 0), b.get("Width", 0), b.get("Height", 0))
         if _inside(x, y, r):
+            # 中文系统里进程名是显示名(skip 传的英文名对不上):落点命中时才按系统语言再比一次,英文系统零开销
+            if skip and any(_same_app(owner, s) for s in skip):
+                continue
             return {"owner": owner, "pid": int(w.get("kCGWindowOwnerPID", 0)),
                     "id": int(w.get("kCGWindowNumber", 0)), "name": w.get("kCGWindowName"),
                     "layer": layer, "bounds": r}
@@ -493,7 +496,7 @@ def check_target_at(x, y, owner, window_id=None):
     top = window_at(x, y)
     if top is None:
         raise GuardBlocked("no_window", f"({x:.0f},{y:.0f}) 上没有任何窗口", x=x, y=y)
-    if top["owner"] != owner or (window_id is not None and top["id"] != window_id):
+    if not _same_app(top["owner"], owner) or (window_id is not None and top["id"] != window_id):
         raise GuardBlocked("occluded", f"({x:.0f},{y:.0f}) 最上层是「{top['owner']}」"
                            f"(层 {top['layer']}),不是「{owner}」,点下去会点错", top=top)
     return top
@@ -565,12 +568,33 @@ def _activate_pid(pid, bundle):
     return bool(fa and fa["pid"] == pid)
 
 
+def _same_app(shown, owner):
+    """系统给的应用名是不是 owner:先比原名,对不上再按系统语言换名比(中文系统 iPhone Mirroring → iPhone镜像;11-23 加)。"""
+    if not shown or not owner:
+        return False
+    if shown == owner:
+        return True
+    try:
+        from seeu_lib import appname
+        return appname.same_app(shown, owner)
+    except Exception:
+        return False
+
+
 def _owner_rects(owner):
     import Quartz
     opts = Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements
     out = []
-    for w in Quartz.CGWindowListCopyWindowInfo(opts, Quartz.kCGNullWindowID) or []:
-        if w.get("kCGWindowOwnerName") == owner:
+    wins = Quartz.CGWindowListCopyWindowInfo(opts, Quartz.kCGNullWindowID) or []
+    owners = {owner}
+    if not any(w.get("kCGWindowOwnerName") == owner for w in wins):
+        try:
+            from seeu_lib import appname
+            owners = appname.names(owner)
+        except Exception:
+            pass
+    for w in wins:
+        if w.get("kCGWindowOwnerName") in owners:
             b = w.get("kCGWindowBounds") or {}
             out.append((b.get("X", 0), b.get("Y", 0), b.get("Width", 0), b.get("Height", 0)))
     return out
@@ -665,7 +689,7 @@ def main(argv=None):
             pid = int(argv[1])
         else:
             rects = [w for w in __import__("Quartz").CGWindowListCopyWindowInfo(
-                1, 0) or [] if w.get("kCGWindowOwnerName") == argv[1]]
+                1, 0) or [] if _same_app(w.get("kCGWindowOwnerName"), argv[1])]
             if not rects:
                 print(f"❌ 没找到「{argv[1]}」的窗口")
                 return 2

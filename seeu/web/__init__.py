@@ -460,7 +460,8 @@ def _watch(app, step):
     if os.environ.get("SEEU_NO_WATCH"):
         return
     try:
-        cfg = json.load(builtins.open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "设置.json"), encoding="utf-8"))
+        from seeu.where import settings_file   # 11-22 C-3.7:插件版存用户文件夹
+        cfg = json.load(builtins.open(settings_file(), encoding="utf-8"))
         if str(cfg.get("监看小窗", "开")).strip() in ("关", "off"):
             return
         from seeu_lib import watch_window as ww
@@ -542,9 +543,43 @@ def _guard(fn):
     return wrap
 
 
+def _tab_url(app, route, tid):
+    """这个标签页现在的网址,问浏览器自己(11-23 C-4.0 Fable 复查:原来用网页里跑的 location.href,坏网页能改掉 JSON.stringify
+    回一个名单内的网址)。浏览器那头问不到才退回网页自己报的;都问不到返回 None(调用方当不让做)。"""
+    try:
+        if route == "调试端口":
+            from seeu import cdp
+            h = _cdp(app)
+            if h:
+                u = cdp.find_page(h, tab=tid).get("url")
+                if u:
+                    return u
+        else:
+            u = aejs.find_tab(_name(app), tid).get("url")
+            if u:
+                return u
+    except Exception:
+        pass
+    try:
+        return (_page(app, route, "pageRead", [0], tid) or {}).get("url")
+    except Exception:
+        return None
+
+
 def _ae_act(app, cur, it, action, value=None, mode="replace"):
-    """开关 / 调试端口两条路的 pageAct(按这一页实际走的路)。"""
-    return _page(app, cur["route"], "pageAct", [it["id"] - 1 if it else -1, action, value, mode], cur["tab"]["id"])
+    """开关 / 调试端口两条路的 pageAct(按这一页实际走的路)。
+    11-23 C-3.9 整体复查:名单原来只在 see 时查一次;see 之后页面跳到名单外(定时跳转、用户在那个标签里点走了),
+    新页面自己摆一个 window.__seeuEls 就能接住 AI 按编号写的字。插件那条路每步都查(background.js),这两条路动手前也现查一次网址。"""
+    tid = cur["tab"]["id"]
+    if not isee.active():
+        url = _tab_url(app, cur["route"], tid)
+        if url is None:
+            raise WebError(_explain(WebError("读不出这个标签页现在的网址,这一步没做;先 see 一次再试", "not_allowed_ae"),
+                                    "操作网页", app), "not_allowed_ae")
+        if not aejs.is_allowed(url):
+            ex = WebError(f"页面已经换成了 {aejs.origin(url)},不在 SeeU 允许名单里,这一步没做", "not_allowed_ae")
+            raise WebError(_explain(ex, "操作网页", app), ex.code)
+    return _page(app, cur["route"], "pageAct", [it["id"] - 1 if it else -1, action, value, mode], tid)
 
 
 # ---------------------------------------------------------------- 动作

@@ -60,6 +60,14 @@ def write_pointer():
     """11-15 C-2.1(照 Mac 版 install.write_pointer):留「SeeU 装在这儿」的纸条给 npm 启动包 seeu-computeruse 找。
     接入 / 每次 MCP 服务启动都写一次;写不了就算了。"""
     try:
+        from seeu.where import as_plugin
+        if as_plugin():
+            # 11-23 复查:插件版不写。纸条是给千问的 npx 启动包找 git 版用的;插件版一写,千问就被改去跑插件缓存里那份
+            # (换了设置文件),插件一更新旧缓存被删,千问直接启动失败
+            return
+    except Exception:   # noqa: BLE001
+        pass
+    try:
         d = {"python": _python(), "server": SERVER}
         try:
             with open(POINTER, encoding="utf-8") as f:
@@ -100,6 +108,13 @@ EN = [
     ("好了。新开一个对话,说一句「用 SeeU 看一下记事本」试试。不想用了:python -m seeu 移除 claude",
      "Done. Start a new chat and say \"use SeeU to look at Notepad\". To remove later: python -m seeu uninstall claude"),
     ("· Claude 桌面版:已移除 seeu(只删这一条)→ ", "· Claude desktop: seeu removed (only that entry) → "),
+    ("· Claude 桌面版:设置里有一条叫 seeu 的,但不是这份 SeeU 接的,没动。真要删:打开 ",
+     "· Claude desktop: there is an entry named seeu, but this copy of SeeU didn't add it; left untouched. To remove it anyway: open "),
+    (",手动删掉「mcpServers」里的 seeu", " and delete seeu from \"mcpServers\" by hand"),
+    ("② Claude Code:已经有一条叫 seeu 的,看不出是不是指着这份 SeeU,没动、也没记成这份接的。",
+     "② Claude Code: there is already an entry named seeu and SeeU can't tell whether it points at this copy; left untouched and not recorded as ours."),
+    ("   想换成这份:先运行 claude mcp remove -s user ", "   To switch to this copy: run claude mcp remove -s user "),
+    (",再运行一次接入", ", then run the install again"),
     ("· Claude Code:已移除 seeu", "· Claude Code: seeu removed"), ("· Skill 已拿掉 → ", "· Skill removed → "),
     ("移除好了。Claude 开着的话退出再开。", "Removed. If Claude is open, quit and reopen it."),
     ("移除好了。Codex 开着的话退出再开。", "Removed. If Codex is open, quit and reopen it."),
@@ -289,15 +304,26 @@ def install_claude():
                 done = True
     else:
         _p("① 没找到 Claude 桌面版(%APPDATA%\\Claude 不在)。要用的话先装:https://claude.ai/download")
-    if shutil.which("claude"):
-        r = subprocess.run(["claude", "mcp", "add", "-s", "user", NAME, "--", _python(), SERVER],
-                           capture_output=True, text=True, timeout=60)
-        if r.returncode == 0 or "already exists" in (r.stdout + r.stderr):
+    claude = shutil.which("claude")
+    if claude:
+        # 11-23 C-3.9 整体复查:① 用 which 找到的完整路径当命令(npm 装的是 claude.cmd,直接写 "claude" 系统找不到、整个接入崩掉);
+        # ② 这一步出错 / 卡住也接着往下走(原来崩在这,第 ① 步已经改了桌面版设置却没存记录);
+        # ③「already exists」= 已经有一条叫 seeu 的:查得出指着这份才记成自己接的(以前接过的照旧算),不然不记、移除时不会去删它
+        try:
+            r = subprocess.run([claude, "mcp", "add", "-s", "user", NAME, "--", _python(), SERVER],
+                               capture_output=True, text=True, timeout=60)
+            out, rc = (r.stdout or "") + (r.stderr or ""), r.returncode
+        except (subprocess.TimeoutExpired, OSError) as ex:
+            out, rc = f"{type(ex).__name__}: {ex}", -1
+        if rc == 0 or ("already exists" in out and (st.get("claude_code") or _claude_code_mine(claude))):
             st["claude_code"] = dict(time=time.strftime("%m-%d %H:%M"))
             _p("② Claude Code:MCP 已接上 ✅")
             done = True
+        elif "already exists" in out:
+            _p("② Claude Code:已经有一条叫 seeu 的,看不出是不是指着这份 SeeU,没动、也没记成这份接的。\n"
+               f"   想换成这份:先运行 claude mcp remove -s user {NAME},再运行一次接入")
         else:
-            _p(f"② Claude Code:接 MCP 失败:{(r.stdout + r.stderr)[-300:]}")
+            _p(f"② Claude Code:接 MCP 失败:{out[-300:]}")
     else:
         _p("② 没有 claude 命令,Claude Code 这边跳过")
     sk = _skills_dir()
@@ -318,6 +344,16 @@ def install_claude():
     return 0 if (done and n) else 1
 
 
+def _claude_code_mine(claude):
+    """Claude Code 里那条叫 seeu 的是不是指着这份 SeeU(问 claude mcp get,看输出里有没有这份的 mcp_server.py)。问不出来 = 不是。"""
+    try:
+        r = subprocess.run([claude, "mcp", "get", NAME], capture_output=True, text=True, timeout=30)
+        out = ((r.stdout or "") + (r.stderr or "")).replace("\\\\", "\\").replace("/", "\\").lower()
+        return os.path.normpath(SERVER).replace("/", "\\").lower() in out
+    except Exception:   # noqa: BLE001
+        return False
+
+
 def uninstall_claude():
     st = _load()
     bad = False                       # 11-15 第五轮复查:桌面版这步失败也把 Claude Code、Skill 照常拆完,最后返回 1
@@ -328,6 +364,9 @@ def uninstall_claude():
         if d is None:
             _p(f"· Claude 桌面版:设置文件读不懂,没动:{cfg}。请手动删掉「mcpServers」里的 seeu")
             bad = True
+        elif isinstance(servers, dict) and NAME in servers and not _json_mine(st.get("claude_desktop"), servers[NAME]):
+            # 11-23 C-3.9 整体复查(照 uninstall_json):叫 seeu 但不是这份接的(没有接入记录、也没指着这份),不删
+            _p(f"· Claude 桌面版:设置里有一条叫 seeu 的,但不是这份 SeeU 接的,没动。真要删:打开 {cfg},手动删掉「mcpServers」里的 seeu")
         elif isinstance(servers, dict) and NAME in servers:
             _backup(cfg, "claude_desktop_before_remove")
             del servers[NAME]
@@ -337,9 +376,10 @@ def uninstall_claude():
                 bad = True            # 写不进:接入记录留着
     if not bad:
         st.pop("claude_desktop", None)
-    if st.get("claude_code") and shutil.which("claude"):
+    claude = shutil.which("claude")   # 11-23 C-3.9 整体复查:用找到的完整路径当命令(npm 装的是 claude.cmd)
+    if st.get("claude_code") and claude:
         try:                          # 11-15 快速复查:看结果、接住超时;失败照实说、记录留着
-            r = subprocess.run(["claude", "mcp", "remove", "-s", "user", NAME], capture_output=True, text=True, timeout=60)
+            r = subprocess.run([claude, "mcp", "remove", "-s", "user", NAME], capture_output=True, text=True, timeout=60)
             gone = r.returncode == 0 or "not found" in (r.stdout + r.stderr).lower()
         except (subprocess.TimeoutExpired, OSError):
             gone = False

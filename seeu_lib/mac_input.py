@@ -30,7 +30,24 @@ TRIGGER_SYNC_MAX_ROUNDS = 8   # 硬上限
 # ---------------------------------------------------------------- 窗口
 
 # 应用自己藏着、但系统窗口列表里照样有的大窗:永远不当主窗口(属性跟真窗口一样,只能按标题认)。
+# 🔴 中文系统里这个窗口的标题还不知道(11-23),知道了往这里加;all_spaces 那条路有「标题 = 应用名优先」兜底。
 HIDDEN_WINDOWS = {"Welcome to iPhone Mirroring"}
+
+
+def _alt_names(owner):
+    """owner 在当前系统语言下可能叫的所有名字(中文系统:iPhone Mirroring → iPhone镜像)。只在原名对不上时调。"""
+    try:
+        from seeu_lib import appname
+        return appname.names(owner)
+    except Exception:
+        return {owner}
+
+
+def same_app(shown, owner):
+    """系统给的应用名是不是 owner(先比原名,对不上再按系统语言换名比;11-23 为中文系统加)。"""
+    if not shown or not owner:
+        return False
+    return shown == owner or shown in _alt_names(owner)
 
 
 def win_geo(owner, min_w=200, min_h=400, all_spaces=False):
@@ -42,9 +59,28 @@ def win_geo(owner, min_w=200, min_h=400, all_spaces=False):
     import Quartz
     opt = Quartz.kCGWindowListOptionAll if all_spaces else Quartz.kCGWindowListOptionOnScreenOnly
     wins = Quartz.CGWindowListCopyWindowInfo(opt, Quartz.kCGNullWindowID) or []
+    cand = _win_cand(wins, {owner}, min_w, min_h, all_spaces)
+    if not cand:   # 中文系统里进程名是「iPhone镜像」这类显示名:原名找不到再按系统语言换名找一遍(英文系统零开销)
+        alt = _alt_names(owner)
+        if alt - {owner}:
+            cand = _win_cand(wins, alt, min_w, min_h, all_spaces)
+    if not cand:
+        return None
+    if all_spaces:
+        # 🔴 标题 = 应用名的排最前,再看在不在当前桌面。镜像切走桌面后,隐藏的「Welcome」大窗有时报"在当前桌面",
+        # 原来"在屏优先"就选了它 → 截到一张纯白大图。
+        cand.sort(key=lambda d: (d["_named"], d["onscreen"], d["w"] * d["h"]), reverse=True)
+        cand[0].pop("_named")
+        return cand[0]
+    cand.sort(key=lambda d: d["w"] * d["h"], reverse=True)
+    return cand[0]
+
+
+def _win_cand(wins, owners, min_w, min_h, all_spaces):
+    """win_geo 的筛选:进程名在 owners 里、够大、不是藏着的大窗。"""
     cand = []
     for w in wins:
-        if w.get("kCGWindowOwnerName") != owner:
+        if w.get("kCGWindowOwnerName") not in owners:
             continue
         if (w.get("kCGWindowName") or "") in HIDDEN_WINDOWS:   # 10-15:隐藏大窗,截到是纯白
             continue
@@ -57,18 +93,9 @@ def win_geo(owner, min_w=200, min_h=400, all_spaces=False):
         d = dict(x=int(b["X"]), y=int(b["Y"]), w=int(wd), h=int(ht), id=int(w["kCGWindowNumber"]))
         if all_spaces:
             d["onscreen"] = bool(w.get("kCGWindowIsOnscreen"))
-            d["_named"] = (w.get("kCGWindowName") or "") == owner
+            d["_named"] = (w.get("kCGWindowName") or "") in owners
         cand.append(d)
-    if not cand:
-        return None
-    if all_spaces:
-        # 🔴 标题 = 应用名的排最前,再看在不在当前桌面。镜像切走桌面后,隐藏的「Welcome」大窗有时报"在当前桌面",
-        # 原来"在屏优先"就选了它 → 截到一张纯白大图。
-        cand.sort(key=lambda d: (d["_named"], d["onscreen"], d["w"] * d["h"]), reverse=True)
-        cand[0].pop("_named")
-        return cand[0]
-    cand.sort(key=lambda d: d["w"] * d["h"], reverse=True)
-    return cand[0]
+    return cand
 
 
 def frontmost_name():
@@ -97,7 +124,7 @@ def activate(owner, wait_front_s=0):
     """把 owner 提到最前(别的窗口盖着时,合成点击会静默打到上层窗口)。已经是前台就直接返回,免得窗口一闪一闪。
     wait_front_s>0:激活后每 0.2 秒查一次,直到前台真是 owner(最多等这么久),返回 True/False;
     (真机实测:用户点过别的窗口后只发 activate 不核实,第一下点击只把窗口叫到前台,没传进手机)。"""
-    if frontmost_name() == owner:
+    if same_app(frontmost_name(), owner):
         return True
     subprocess.run(["osascript", "-e", f'tell application "{owner}" to activate'], capture_output=True)
     time.sleep(0.35)                 # 原 random.uniform(0.25, 0.45),10-31 SeeU 换固定值(不加随机,取中间值)
@@ -105,11 +132,11 @@ def activate(owner, wait_front_s=0):
         return None
     t0 = time.time()
     while time.time() - t0 < wait_front_s:
-        if frontmost_name() == owner:
+        if same_app(frontmost_name(), owner):
             time.sleep(0.2)          # 刚切到前台,再稳一下再发事件
             return True
         time.sleep(0.2)
-    return frontmost_name() == owner
+    return same_app(frontmost_name(), owner)
 
 
 def key_cmd(owner, key):
@@ -131,7 +158,7 @@ def trigger_paste_sync(owner, away="Finder"):
         time.sleep(1.5 if slow else 1.0)
         subprocess.run(["osascript", "-e", f'tell application "{owner}" to activate'], capture_output=True)
         time.sleep(2.7 if slow else 1.8)
-        if frontmost_name_osa() == owner:
+        if same_app(frontmost_name_osa(), owner):
             ok_rounds += 1
             if ok_rounds >= 2:
                 return True

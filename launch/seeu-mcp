@@ -1,0 +1,28 @@
+#!/bin/sh
+# SeeU plugin launcher (Claude Code / Codex plugin): starts SeeU's MCP server with the right Python for this system.
+# macOS: the system Python (/usr/bin/python3), the one the README installs SeeU's libraries into.
+# Linux: the system python3 (/usr/bin/python3; the GNOME libraries come from the system packages, conda / pyenv can't see them).
+# On first use SeeU installs the Python libraries it still needs by itself (see seeu/deps.py).
+D=$(cd "$(dirname "$0")/.." && pwd)
+case "$(uname -s)" in
+  Darwin)
+    PY=/usr/bin/python3
+    S="$D/seeu/mcp_server.py"
+    if ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
+      echo "SeeU needs the system Python: install the Xcode Command Line Tools (run: xcode-select --install), then restart this app." >&2
+    fi
+    ;;
+  Linux)
+    if [ -x /usr/bin/python3 ]; then PY=/usr/bin/python3; else PY=$(command -v python3); fi
+    if [ -z "$PY" ]; then
+      echo "SeeU needs python3: install it with your system's package manager, then restart this app." >&2
+      exit 1
+    fi
+    S="$D/seeu/linux/mcp_server.py"
+    ;;
+  *)
+    echo "SeeU: unsupported system $(uname -s)" >&2
+    exit 1
+    ;;
+esac
+exec "$PY" "$S" "$@"

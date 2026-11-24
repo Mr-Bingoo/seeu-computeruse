@@ -83,13 +83,28 @@ def _fix(key):
     return isee.fix_plan(key)
 
 
-def _row(rows, ok, name, note="", fix=None):
-    rows.append(dict(ok=ok, name=name, note=note, fix=fix))
+def _row(rows, ok, name, note="", fix=None, can_fix=True):
+    """can_fix=False:标 ❌ 但用户没法照办(只是降级提示),结尾不算进「还缺」(11-23 复查)。"""
+    rows.append(dict(ok=ok, name=name, note=note, fix=fix, can_fix=can_fix))
 
 
 def check():
     """返回 [{ok: ✅/❌/—, name, note, fix(FIXES 键或 None)}]。"""
     rows = []
+    try:                                 # 11-23 C-3.9 整体复查:用 Homebrew / pyenv / conda 的 python3 跑检查,查的是那个 Python 的库,
+        from seeu import install as _ins  # 跟 SeeU 真用的系统 Python 对不上(照着装了也一直是 ❌)→ 先说清
+        if not _ins.system_python():
+            _row(rows, BAD, "Python", f"你现在用的是 {sys.executable},不是系统自带的。SeeU 在 Mac 上用 /usr/bin/python3:"
+                 "请改运行 /usr/bin/python3 -m seeu check(接入也用 /usr/bin/python3 -m seeu install auto)", can_fix=False)
+    except Exception:
+        pass
+    try:                                 # 11-22 Intel Mac:pyobjc 没装时下面两行只显示「查不到(ModuleNotFoundError)」,结尾还说「都齐了」
+        from seeu import deps
+        lack = [p for p in deps.missing() if p.startswith("pyobjc-")]
+    except Exception:
+        lack = []
+    if lack:
+        _row(rows, BAD, "Python 库(pyobjc)", "没装:授权、控件、截图都查不了、用不了。运行 " + deps._manual(lack))
     try:
         from seeu import ax
         t = ax.trusted()
@@ -112,15 +127,19 @@ def check():
         import cv2, numpy  # noqa: F401
         _row(rows, OK, "图像库(OpenCV、numpy)", "已装")
     except Exception:
-        _row(rows, BAD, "图像库(OpenCV、numpy)",
-             "没装:截图、核实画面都会报错。运行 /usr/bin/python3 -m pip install --user opencv-python-headless numpy")
+        try:
+            from seeu import deps
+            cmd = deps._manual(["opencv-python-headless", "numpy"])
+        except Exception:
+            cmd = "/usr/bin/python3 -m pip install --user --only-binary=:all: opencv-python-headless numpy"
+        _row(rows, BAD, "图像库(OpenCV、numpy)", "没装:截图、核实画面都会报错。运行 " + cmd)
 
     try:
         from seeu import bgclick
         a = bgclick.available()
-        _row(rows, OK if a else BAD, "后台点击(SkyLight)", "可用" if a else "系统改了私有接口,只能退回真鼠标 + 让路")
+        _row(rows, OK if a else BAD, "后台点击(SkyLight)", "可用" if a else "系统改了私有接口,只能退回真鼠标 + 让路", can_fix=False)
     except Exception as e:
-        _row(rows, BAD, "后台点击(SkyLight)", f"加载失败({e.__class__.__name__}),只能退回真鼠标")
+        _row(rows, BAD, "后台点击(SkyLight)", f"加载失败({e.__class__.__name__}),只能退回真鼠标", can_fix=False)
 
     m = os.path.isdir("/System/Applications/iPhone Mirroring.app")
     _row(rows, OK if m else NA, "iPhone 镜像", "系统自带,已有" if m else "这台 Mac 没有(要 macOS 15+ 和配对的 iPhone)")
@@ -226,10 +245,19 @@ def stealth_chrome(rows):
 def _register(rows):
     """经 SeeU 小程序跑、又缺授权时,向系统申请一次 → 「SeeU」出现在辅助功能 / 屏幕录制列表里(开关要用户亲手开)。"""
     miss = {r["fix"] for r in rows if r["fix"]}
+    # 11-24:原来 import ApplicationServices(依赖里没有,本机和 Sonoma 虚拟机都没装)→ 报错被吞,两项都没申请成。
+    # 改成直接从系统框架加载;两项分开,一项不成不连累另一项。
     try:
         if "accessibility" in miss:
-            import ApplicationServices as AS
-            AS.AXIsProcessTrustedWithOptions({AS.kAXTrustedCheckOptionPrompt: True})
+            import objc
+            from Foundation import NSBundle
+            f = {}
+            objc.loadBundleFunctions(NSBundle.bundleWithPath_("/System/Library/Frameworks/ApplicationServices.framework"), f,
+                                     [("AXIsProcessTrustedWithOptions", b"Z@")])
+            f["AXIsProcessTrustedWithOptions"]({"AXTrustedCheckOptionPrompt": True})
+    except Exception:
+        pass
+    try:
         if "screen" in miss:
             import Quartz
             Quartz.CGRequestScreenCaptureAccess()
@@ -262,9 +290,14 @@ def main(argv=None):
     for r in rows:
         print(f"  {r['ok']} {r['name']}{' ' * (w - _w(r['name']))}  {r['note']}")
     todo = [r for r in rows if r["fix"]]
-    if not todo:
+    bad = [r for r in rows if r["ok"] == BAD and not r["fix"] and r.get("can_fix", True)]   # 11-22:缺库这类 ❌ 没有「去哪开」,原来漏算、照样说「都齐了」
+    if not todo and not bad:
         print("\n" + _t("都齐了(— 是没装/没开着、查不了的,不算缺)。"))
         return 0
+    if bad:
+        print("\n" + _t("还缺标 ❌ 的,照那一行说的办。"))
+    if not todo:
+        return 1
     print("\n" + _t("缺的,照这样开:"))
     seen = set()
     for r in todo:

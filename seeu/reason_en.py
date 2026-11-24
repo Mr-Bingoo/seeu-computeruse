@@ -347,6 +347,9 @@ PHRASES = [
     ("辅助功能", "Accessibility"), ("屏幕录制", "Screen Recording"),
     ("图像库(OpenCV、numpy)", "Image libraries (OpenCV, numpy)"), ("已装", "installed"),
     ("没装:截图、核实画面都会报错。运行 ", "missing: screenshots and result checks will fail. Run "),
+    ("Python 库(pyobjc)", "Python libraries (pyobjc)"),
+    ("没装:授权、控件、截图都查不了、用不了。运行 ", "missing: permissions, controls and screenshots can't be checked or used. Run "),
+    ("还缺标 ❌ 的,照那一行说的办。", "Still missing the items marked ❌; do what that line says."),
     # —— 缺授权怎么开(isee.FIXES)
     ("装 SeeU 浏览器插件", "Install the SeeU browser extension"),
     ("跟 AI 说一声它来装(也可以终端 python3 -m seeu.web.install),装完在网页上点浏览器右上角的 SeeU 图标「允许这个网站」",

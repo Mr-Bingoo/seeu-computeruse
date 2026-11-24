@@ -184,13 +184,84 @@ def _short(v, n=60):
 
 # ---------- 找 App / 窗口 ----------
 
-def running_apps():
+def _gui_apps():
+    """正在运行的、有界面的 App(NSRunningApplication)。"""
     from AppKit import NSWorkspace
     from Foundation import NSRunLoop, NSDate
     # 长驻进程(MCP 服务)不转消息循环,这张名单停在启动那一刻,之后打开的 App 找不到(11-01 Trae 实测)
     NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(0.02))
-    return [(a.localizedName(), a.processIdentifier(), a.bundleIdentifier())
-            for a in NSWorkspace.sharedWorkspace().runningApplications() if a.activationPolicy() == 0]
+    return [a for a in NSWorkspace.sharedWorkspace().runningApplications() if a.activationPolicy() == 0]
+
+
+def running_apps():
+    return [(a.localizedName(), a.processIdentifier(), a.bundleIdentifier()) for a in _gui_apps()]
+
+
+_base_cache = {}   # App 包路径 -> 不随系统语言变的名字(包文件名、CFBundleName、可执行文件名)
+_local_cache = {}  # 名字 -> (时间, 系统现在叫它的名字)
+
+
+def _bases(a):
+    """11-22 中文系统 Intel Mac 实测:系统语言是中文时,正在运行的 App 叫「文本编辑」「计算器」「Safari浏览器」,
+    AI 和 SeeU 代码里写的是 TextEdit / Calculator / Safari,按显示名对不上 → 「没找到正在运行的 App」。
+    这里取不随语言变的名字:包文件名(TextEdit.app)、Info.plist 里的 CFBundleName / CFBundleExecutable。"""
+    try:
+        url = a.bundleURL()
+        path = str(url.path()) if url is not None else ""
+    except Exception:
+        path = ""
+    if not path:
+        return set()
+    if path in _base_cache:
+        return _base_cache[path]
+    import os
+    import plistlib
+    out = {os.path.basename(path)[:-4] if path.endswith(".app") else os.path.basename(path)}
+    try:
+        with open(os.path.join(path, "Contents", "Info.plist"), "rb") as f:
+            info = plistlib.load(f)
+        for k in ("CFBundleName", "CFBundleExecutable"):
+            v = info.get(k)
+            if isinstance(v, str) and v:
+                out.add(v)
+    except Exception:
+        pass
+    out.discard("")
+    _base_cache[path] = out
+    return out
+
+
+def local_name(name):
+    """英文 / 包里的名字 → 系统现在显示的名字(中文系统里 TextEdit → 文本编辑、Safari → Safari浏览器)。
+    已经是显示名、对不上任何正在运行的 App、或不是字符串,原样返回。结果记 2 秒(按窗口逐个比对时别每次都查一遍)。"""
+    owner = str(name or "")
+    if not owner or owner.isdigit():
+        return name
+    import time
+    hit = _local_cache.get(owner)
+    if hit and time.time() - hit[0] < 2:
+        return hit[1]
+    out = owner
+    try:
+        apps = _gui_apps()
+        if not any(str(a.localizedName() or "") == owner for a in apps):
+            low = owner.casefold()
+            for a in apps:
+                if any(b.casefold() == low for b in _bases(a)):
+                    out = str(a.localizedName() or owner)
+                    break
+    except Exception:
+        pass
+    # 对上了记 2 秒;没对上(App 可能正在启动)只记 0.3 秒,免得刚开的 App 2 秒内都认不出(11-23 复查)
+    _local_cache[owner] = (time.time() - (0 if out != owner else 1.7), out)
+    return out
+
+
+def same_app(shown, name):
+    """系统给的名字(显示名 / 窗口的进程名)是不是这个 App(name 可以是英文名)。"""
+    if not shown or not name:
+        return False
+    return shown == name or shown == local_name(name)
 
 
 _loc_names = {}   # App 包路径 -> 各语言的显示名集合(读一次就记住)
@@ -228,16 +299,52 @@ def _bundle_local_names(path):
     return names
 
 
+def _mirror_names():
+    """iPhone 镜像各语言的名字(iPhone镜像、iPhone鏡像輸出、iPhoneミラーリング…)。没装返回空集。"""
+    return _bundle_local_names("/System/Applications/iPhone Mirroring.app")
+
+
+_canon_cache = {}
+
+
 def canon_name(app):
+    """同 _canon_name,结果记 3 秒。11-23 C-3.9:排队算占用键(sched._key)也要归一名字,一步里会调好几次;
+    名字对不上正在运行的 App 时要翻一遍装着的 App 包(约 35 毫秒),不记的话每步多花零点几秒。"""
+    import time
+    k = str(app or "")
+    hit = _canon_cache.get(k)
+    if hit and time.time() - hit[0] < 3:
+        return hit[1]
+    out = _canon_name(app)
+    if len(_canon_cache) > 200:
+        _canon_cache.clear()
+    _canon_cache[k] = (time.time(), out)
+    return out
+
+
+def _canon_name(app):
     """11-15 千问实测:AI 写中文名「备忘录」,英文系统里正在跑的叫 Notes,SeeU 找不到。
     名字(去掉「窗口标题」)对不上任何正在运行的 App 时,再看各 App 包里写的别的语言的名字,对上就换成系统现在叫它的名字;
     「窗口标题」原样接回去。纯英文、数字(进程号)、包名照旧不动;找不到也原样返回(后面照常报找不到)。"""
     s = str(app or "")
     owner, title = split_window(s)
     owner = str(owner or "").strip()
-    if not owner or owner.isascii():
-        return app                          # 英文名、进程号、包名不动(11-15 复查:中文系统里英文名会被换成中文名,代码里按
-                                            # "iPhone Mirroring" 这类英文名认的地方就对不上了)
+    if not owner or owner.isdigit():
+        return app                          # 进程号不动
+    if owner.casefold() == "iphone mirroring":
+        # 镜像代码里到处按标准英文名认,不换成本地名;小写写法也归回标准写法(11-23 复查:中文系统里小写会被换成「iPhone镜像」)
+        return "iPhone Mirroring" if title is None else f"iPhone Mirroring「{title}」"
+    if not owner.isascii() and owner in _mirror_names():
+        # 11-23:中文系统里镜像叫「iPhone镜像」,AI 照列表写中文名 → 归回英文名(镜像的那套判断按英文名认,
+        # 往下找窗口、比对进程名时再经 local_name / same_app 换成系统显示名)
+        return "iPhone Mirroring" if title is None else f"iPhone Mirroring「{title}」"
+    if owner.isascii():
+        # 11-22:中文系统里 AI 写 TextEdit,正在跑的叫「文本编辑」→ 换成系统现在叫它的名字(后面按显示名、窗口进程名找都对得上)。
+        # 浏览器换成「Safari浏览器」也没事,网页层 web.canon 按包名再归回 Safari。包名(com.xxx)对不上任何 App 名,原样回去。
+        n = local_name(owner)
+        if n == owner:
+            return app
+        return n if title is None else f"{n}「{title}」"
     try:
         from AppKit import NSWorkspace
         from Foundation import NSRunLoop, NSDate
@@ -279,8 +386,9 @@ def app_element(name_or_pid):
         if title is not None:        # 11-01:"App「窗口标题」"按那个窗口的进程找(同名多实例也分得清)
             pid = _pid_of_window(owner, title)
         if pid is None:
+            shown = local_name(owner)        # 11-22:英文名在中文系统里也认(网页层传进来的是 Safari,系统里叫 Safari浏览器)
             for n, p, b in running_apps():
-                if owner in (n, b):
+                if owner in (n, b) or n == shown:
                     pid = p
                     break
     if pid is None:
@@ -299,7 +407,7 @@ def split_window(name):
 def _pid_of_window(owner, title):
     import Quartz
     for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, 0) or []:
-        if w.get("kCGWindowOwnerName") == owner and (w.get("kCGWindowName") or "") == title:
+        if same_app(w.get("kCGWindowOwnerName"), owner) and (w.get("kCGWindowName") or "") == title:
             return int(w["kCGWindowOwnerPID"])
     return None
 

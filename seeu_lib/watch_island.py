@@ -19,12 +19,16 @@ import time
 
 import Quartz
 from AppKit import (NSApp, NSApplication, NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSAttributedString,
-                    NSBackingStoreBuffered, NSColor, NSEvent, NSFont, NSFontAttributeName, NSGlassEffectView,
+                    NSBackingStoreBuffered, NSColor, NSEvent, NSFont, NSFontAttributeName,
                     NSPanel, NSScreen, NSStatusWindowLevel, NSTrackingActiveAlways, NSTrackingArea,
                     NSTrackingInVisibleRect, NSTrackingMouseEnteredAndExited, NSTrackingMouseMoved, NSView,
                     NSWindowCollectionBehaviorCanJoinAllSpaces, NSWindowStyleMaskBorderless,
                     NSWindowStyleMaskNonactivatingPanel)
 from Foundation import NSMakeRect, NSObject, NSRunLoop, NSRunLoopCommonModes, NSTimer
+try:      # 11-23 C-3.9 整体复查:液态玻璃是 macOS 26 才有的类,老系统上直接 import 会让整个悬浮窗进程起不来 → 没有就用深色底(见 _PlainGlass)
+    from AppKit import NSGlassEffectView
+except ImportError:
+    NSGlassEffectView = None
 try:
     from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 except ImportError:          # 当独立程序跑(python3 …/watch_window.py serve)时找不到 seeu_lib 包:同一取法兜底
@@ -310,6 +314,7 @@ class WatchIslandView(NSView):
 
     def mouseUp_(self, ev):
         now = time.time()
+        st["hand"] = hand_event(ev)          # 11-23 C-3.9:这一下是不是亲手点的(开 I See 要看)
         if st.get("drag") and st["drag"][2]:
             st["drag"] = None
             _save_pos()
@@ -332,7 +337,7 @@ class WatchIslandView(NSView):
                     elif who.startswith("lv_"):
                         H["light_set"](who[3:]); st["light_open"] = False
                     elif who in ("isee", "tb_isee"):
-                        H["isee_toggle"]()
+                        H["isee_toggle"](st.get("hand", False))
                     elif who in ("view", "tb_view"):
                         a = ordered(now)
                         if a and a[0].get("hidden"):
@@ -715,6 +720,32 @@ class WatchIslandPanel(NSPanel):
         return True
 
 
+class _PlainGlass(NSView):
+    """macOS 26 以前没有液态玻璃时的替身:一块深色半透明圆角底,接口照岛里用到的那几个(11-23 C-3.9)。"""
+
+    def setTintColor_(self, c):
+        pass
+
+    def setCornerRadius_(self, r):
+        pass
+
+    def setContentView_(self, v):
+        self.addSubview_(v)
+
+
+def hand_event(ev):
+    """这次鼠标事件是不是硬件来的(= 用户亲手点)。11-23 C-3.9 整体复查:I See 只能用户亲手开,
+    程序发的点击(CGEventPost、别家的电脑操作工具)会带着发送方的进程号,硬件来的是 0(11-23 本机实测程序发的 = 发送方进程号)。
+    读不到一律当「不是」。"""
+    try:
+        cg = ev.CGEvent()
+        if cg is None:
+            return False
+        return Quartz.CGEventGetIntegerValueField(cg, Quartz.kCGEventSourceUnixProcessID) == 0
+    except Exception:
+        return False
+
+
 def init(hooks):
     global iwin, holder, glass, content, proot, oroot, lroot
     H.update(hooks)
@@ -731,7 +762,12 @@ def init(hooks):
     iwin.setHasShadow_(False)      # 窗口阴影会在玻璃外多一圈深色细边(深色模式下像锯齿)
     iwin.setCollectionBehavior_(NSWindowCollectionBehaviorCanJoinAllSpaces)
     holder = WatchIslandView.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 32)); holder.setWantsLayer_(True)
-    glass = NSGlassEffectView.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 32))
+    if NSGlassEffectView is not None:
+        glass = NSGlassEffectView.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 32))
+    else:
+        glass = _PlainGlass.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 32))
+        glass.setWantsLayer_(True)
+        glass.layer().setBackgroundColor_(cg((0.12, 0.12, 0.14), 0.92))
     content = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 32)); content.setWantsLayer_(True)
     glass.setContentView_(content); holder.addSubview_(glass); iwin.setContentView_(holder)
     glass.setWantsLayer_(True); glass.layer().setMasksToBounds_(True)

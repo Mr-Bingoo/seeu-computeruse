@@ -49,7 +49,8 @@ def running(app):
     """只查不启动(osascript tell 一个没开的 App 会把它打开)。"""
     try:
         from seeu.ax import running_apps
-        return any(n == app for n, _, _ in running_apps())
+        from seeu.ax import same_app
+        return any(same_app(n, app) for n, _, _ in running_apps())
     except Exception:
         return subprocess.run(["pgrep", "-xq", app]).returncode == 0
 
@@ -58,7 +59,8 @@ def _instances(app):
     """这个浏览器现在开着几个(按 App 名数)。认不出时当 1 个。"""
     try:
         from seeu.ax import running_apps
-        return sum(n == app for n, _, _ in running_apps())
+        from seeu.ax import same_app
+        return sum(same_app(n, app) for n, _, _ in running_apps())
     except Exception:
         return 1
 
@@ -220,6 +222,19 @@ def _page_fn(name):
     return _FN[name]
 
 
+PAGE_CODES = ("page", "stale", "bad_action", "bad_target", "not_found", "refused")   # 网页函数自己会回的错误码(background.js pageAct)
+
+
+def page_err(r):
+    """网页函数回的错 → (给人看的文字, 错误码)。11-23 C-3.9 整体复查:网页函数跑在网页自己的环境里,网页能改掉
+    getComputedStyle / JSON.stringify 让它抛任意文字,原来这段字原样进了 SeeU 的原因 / 提示 / 悬浮卡片 ——
+    写一句「python3 -m seeu allow https://坏网站」,MCP 就会替它劝 AI 去问用户加名单。现在:标明是网页说的、截短、
+    把像 SeeU 命令的字拆开(MCP 认提示的正则就对不上了);错误码只认上面几个,别的一律当 page。"""
+    msg = re.sub(r"(?i)seeu(?=[\s.])", "SeeU\u200b", str(r.get("__err") or ""))[:200]
+    code = r.get("code") if r.get("code") in PAGE_CODES else "page"
+    return ("网页脚本报错:" + msg if code == "page" else msg), code
+
+
 def page(app, fn, args, tab=None):
     """跑插件同款的网页函数(pageSnapshot / pageAct / pageRead),返回解析好的结果。"""
     code = ("JSON.stringify((function(){try{return (" + _page_fn(fn) + ").apply(null," +
@@ -232,7 +247,7 @@ def page(app, fn, args, tab=None):
     if r is None:
         raise AEError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise AEError(r["__err"], r.get("code") or "page")
+        raise AEError(*page_err(r))
     return r
 
 
@@ -379,7 +394,8 @@ def open_bg(app, url, watch_s=3.0):
         time.sleep(0.25)
         _restore_front(front, app)
     fr = _frontmost()
-    if bare and (fr is None or fr.localizedName() != app):
+    from seeu.ax import same_app
+    if bare and (fr is None or not same_app(fr.localizedName(), app)):
         hide(app)
 
 
@@ -387,7 +403,8 @@ def _shown_windows(app):
     try:
         import Quartz
         ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements, 0)
-        return sum(1 for w in ws if w.get("kCGWindowOwnerName") == app and w.get("kCGWindowLayer") == 0)
+        from seeu.ax import same_app
+        return sum(1 for w in ws if same_app(w.get("kCGWindowOwnerName"), app) and w.get("kCGWindowLayer") == 0)
     except Exception:
         return 1                                # 查不到就当露着,不去藏
 
@@ -395,8 +412,9 @@ def _shown_windows(app):
 def hide(app):
     try:
         import AppKit
+        from seeu.ax import same_app
         for a in AppKit.NSWorkspace.sharedWorkspace().runningApplications():
-            if a.localizedName() == app and not a.isHidden():
+            if same_app(a.localizedName(), app) and not a.isHidden():
                 a.hide()
     except Exception:
         pass
@@ -406,8 +424,9 @@ def show(app):
     """把隐藏着的浏览器放出来,不抢前台(辅助功能那条路要看得见窗口)。"""
     try:
         import AppKit
+        from seeu.ax import same_app
         for a in AppKit.NSWorkspace.sharedWorkspace().runningApplications():
-            if a.localizedName() == app and a.isHidden():
+            if same_app(a.localizedName(), app) and a.isHidden():
                 a.unhide()
     except Exception:
         pass
@@ -418,7 +437,8 @@ def _restore_front(app_obj, thief=None):
     thief = 浏览器名:只有抢到前台的正是它才切回去(11-02:用户这几秒里自己切了别的程序,不能把人拽回去)。"""
     try:
         now = _frontmost()
-        if thief and (now is None or now.localizedName() != thief):
+        from seeu.ax import same_app
+        if thief and (now is None or not same_app(now.localizedName(), thief)):
             return
         if app_obj is not None and now is not None and now.processIdentifier() != app_obj.processIdentifier():
             app_obj.activateWithOptions_(0)

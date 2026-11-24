@@ -199,14 +199,15 @@ sequenceDiagram
       alt Success
         E-->>AI: delivered
       else Still no luck
-        F-->>U: Floating window expands: "Stuck:<br/>reason / what to do: …",<br/>stays open until you deal with it
+        F-->>U: Floating window expands: "Stuck:<br/>reason / what to do: …",<br/>stays open until you deal with it (1 hour at most)
         E-->>AI: Failed (where · why · what to do)
       end
     end
   end
 ```
 
-A window you opened stays open until you collapse it; as a fallback it shrinks to the badge after 60 s idle, then fades after another 60 s.
+Whoever opens it closes it: a window that opened itself to say the mouse is being borrowed collapses by itself 2.5 s afterwards; a window you opened stays open until you collapse it, and while the mouse is borrowed it only shows the notice and then switches back. Getting stuck also opens the window by itself; it waits for you to collapse it, or goes back to normal when the AI carries on.
+Fallback: after 60 s idle it shrinks to the badge, then fades after another 60 s; on Windows and Linux it simply disappears after 120 s idle. Stuck is the exception: the window stays open for up to 1 hour, and only then goes away like this.
 
 **Several tasks at once**
 
@@ -560,7 +561,7 @@ sequenceDiagram
         alt Still in use
           E-->>AI: refused "you're using the computer, not borrowing now"
         else You stopped
-          F-->>U: Orange named cursor + orange glow around the screen,<br/>badge says "Using your mouse"
+          F-->>U: Orange named cursor + orange glow around the screen,<br/>the window opens by itself: "Using your mouse",<br/>collapses 2.5 s afterwards
           R->>A: Bring to front, move the pointer, click / press / type<br/>(Chinese is pasted via the clipboard, then restored)
           R->>A: Pointer back where it was, front back to the previous app
           E->>E: Verify
@@ -649,18 +650,23 @@ stateDiagram-v2
   None: Not shown
   Badge: Badge
   Win: Floating window
-  Borrow: Expanded (borrowing the mouse)
-  Stuck: Expanded (stuck)
+  Borrow: Borrowing notice (opened by itself)
+  WinBorrow: The window you opened shows the borrowing notice
+  Stuck: Stuck notice
   Island: Island
   [*] --> None
   None --> Badge: SeeU starts acting (always starts as the badge, no memory of last time)
   Badge --> Win: You open it
   Win --> Badge: You collapse it, or 60 s idle
-  Badge --> None: Another 60 s idle, fades out
-  Badge --> Borrow: Borrows the real mouse
-  Borrow --> Badge: Collapses itself 2.5 s after handing back
-  Badge --> Stuck: A step gets stuck
-  Stuck --> Badge: You collapse it (it won't on its own)
+  Badge --> None: Auto · another 60 s idle, fades out
+  Badge --> Borrow: Auto · borrows the real mouse
+  Borrow --> Badge: Auto · collapses 2.5 s after handing back
+  Win --> WinBorrow: Auto · borrows the real mouse
+  WinBorrow --> Win: Auto · switches back, stays open
+  Badge --> Stuck: Auto · a step gets stuck
+  Win --> Stuck: Auto · a step gets stuck
+  Stuck --> Win: Auto · the AI carries on, stays open
+  Stuck --> Badge: You collapse it, or 1 hour unattended
   state Win {
     Live: Live view
     Steps: Steps
