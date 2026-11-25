@@ -333,14 +333,21 @@ def check_window(w):
         raise safety.Refused("窗口在另一个工作区:借鼠标要把它拉到前台,系统会把你切到那个工作区,SeeU 不借;请你切过去,或把窗口挪到现在的工作区")
 
 
-MODAL_WHY = ("系统的弹框开着(密码 / 钥匙环 / 管理员授权框、系统授权确认框、活动概览或运行框),这时键盘鼠标都给它,"
+MODAL_WHY = ("系统的弹框开着(密码 / 钥匙环 / 管理员授权框、系统授权确认框或运行框),这时键盘鼠标都给它,"
              "SeeU 不借(防止打进密码框);请用户先处理掉那个框")
+
+
+OVERVIEW_WHY = ("电脑停在「活动概览」(刚开机登录、没开窗口时会停在这里),这时键盘鼠标都给它,SeeU 不借;"
+                "请用户点一下桌面或按 Esc 退出活动概览")
 
 
 def check_modal():
     """Shell 自己的弹框开着就不借(11-18 虚拟机实测:登录后 VS Code 要钥匙环密码,弹框盖在所有窗口上、收着键盘)。"""
     p = shell.ping()
-    if int(p.get("modal") or 0) > 0 or p.get("overview"):
+    n, ov = int(p.get("modal") or 0), bool(p.get("overview"))
+    if ov and n <= 1:                 # 11-25:概览自己算 1 层(Debian 实测 modal=1、overview=True);多出来的才是别的弹框
+        raise safety.Refused(OVERVIEW_WHY)
+    if n > 0:
         raise safety.Refused(MODAL_WHY)
 
 

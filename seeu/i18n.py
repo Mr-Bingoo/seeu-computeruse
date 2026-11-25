@@ -196,6 +196,47 @@ def T(key, **kw):
         return s
 
 
+# 11-24 C-4.1(用户提):要借鼠标键盘而借不成时,给 AI 一句能照着转给用户的话。只在「后台做不成、确实要借」时出现
+# (后台能做的,窗口在别的桌面也照做,不会走到这里)。两处调用:三个系统的 mcp_server。
+TELL = {
+    "other_desktop": (
+        "接下来这一步要借用一下你的鼠标键盘,但「{app}」的窗口不在当前桌面。请把它挪到当前桌面(或切到它那个桌面),"
+        "弄好后回我一句“好了”,然后先别动鼠标键盘,大约 10 秒,我用完就还给你。",
+        "The next step needs your mouse and keyboard for a moment, but the {app} window isn't on the current desktop. Please move it here "
+        "(or switch to its desktop), reply \"ready\", then keep your hands off the mouse and keyboard for about 10 seconds. I'll give them right back."),
+    "user_busy": (
+        "接下来这一步要借用一下你的鼠标键盘,你好像正在用,我就先没借。方便的时候回我一句“好了”,"
+        "然后先别动鼠标键盘,大约 10 秒,我用完就还给你。",
+        "The next step needs your mouse and keyboard for a moment, but you seem to be using them, so I haven't borrowed them. When it suits you, reply \"ready\", "
+        "then keep your hands off the mouse and keyboard for about 10 seconds. I'll give them right back."),
+}
+_DESK_MARKS = ("目标窗口不在当前桌面上", "窗口在另一个虚拟桌面上:后台点不动", "窗口在另一个工作区:借鼠标")
+
+
+def tell_lines(r, app, mode="on"):
+    """结果 r 里要不要附一句转给用户的话 → 给 AI 看的几行(不用就 [])。mode = 借用鼠标设置,off 时不附(借不了,别说要借)。"""
+    if r.get("outcome") not in ("refused", "failed") or mode == "off":
+        return []
+    why = str(r.get("reason") or "")
+    if r.get("code") == "user_busy":
+        k = "user_busy"
+    elif r.get("code") == "other_desktop" or any(m in why for m in _DESK_MARKS):
+        k = "other_desktop"
+    else:
+        return []
+    zh, en = TELL[k]
+    name = str(app or "").split("「")[0].strip().strip("\"'")
+    if not name or name.startswith("#") or name.isdigit():       # 「#窗口号」这种写法用户看不懂
+        zh_name, en_name = "要操作的程序", "app"
+    else:
+        zh_name = en_name = name
+    out = ["tell the user (in their language), then wait for their reply; after it, call seeu_see first (the background attempt may already have worked) "
+           "and redo this step only if it hasn't taken effect: " + en.format(app=en_name)]
+    if lang() == "zh":
+        out.append("the same in Chinese: " + zh.format(app=zh_name))
+    return out
+
+
 def step(name):
     """步骤中文名 → 当前语言;没收录的原样返回。"""
     return T("step." + name) if ("step." + name) in TEXT else name

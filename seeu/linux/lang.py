@@ -51,6 +51,8 @@ CLI = [
     (";是旧版,借鼠标和代理光标要新版:运行 python3 -m seeu 检查 --fix,再注销重新登录一次",
      "; it's an old version — mouse borrowing and the proxy cursor need the new one: run python3 -m seeu check --fix, then log out and back in once"),
     ("(运行 python3 -m seeu 检查 --fix)", " (run python3 -m seeu check --fix)"),
+    ("SeeU 的 GNOME 小插件被关掉了:在「扩展」App 里把 SeeU 打开(或运行 python3 -m seeu 检查 --fix)",
+     "SeeU's GNOME helper is turned off: turn SeeU on in the Extensions app (or run python3 -m seeu check --fix)"),
     ("SeeU 的 GNOME 小插件还没加载:装好后要注销重新登录一次;已经重新登录过的话,看「扩展」App 里它有没有报错",
      "SeeU's GNOME helper isn't loaded: after installing it, log out and back in once; if you already did, check the Extensions app for an error"),
     ("允许了", "allowed"), ("Tesseract,语言:", "Tesseract, languages: "),

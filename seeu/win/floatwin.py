@@ -747,9 +747,24 @@ def zz_alpha(tm):
     return 0.7 + 0.3 * math.cos(2 * math.pi * (tm % 3.0) / 3.0)
 
 
+def kept_t(t):
+    """1 小时从什么时候数起:卡住那一刻,或你最后一次碰悬浮窗(11-25 三端统一,同 Mac)。"""
+    return max(t["last"], t.get("touch") or 0)
+
+
+def stuck_touch(st, tasks, now):
+    """你碰了展开着的悬浮窗(移上去、挪动、点、拖;停着不动不算):还在等人处理的卡住重新数 1 小时。"""
+    if not st["open"] or not stuck_waiting(tasks, now):
+        return
+    for t in tasks.values():
+        if t.get("why") and not t.get("ack"):
+            t["touch"] = now
+    st["last_msg"] = now
+
+
 def stuck_waiting(tasks, now):
     """有没有卡住了还在等人处理的(你没点过收起、没满 STUCK_KEEP_S)。"""
-    return any(t.get("why") and not t.get("ack") and now - t["last"] < STUCK_KEEP_S for t in tasks.values())
+    return any(t.get("why") and not t.get("ack") and now - kept_t(t) < STUCK_KEEP_S for t in tasks.values())
 
 
 def hide_after(tasks, now, opened):
@@ -777,7 +792,7 @@ def stuck_ack(st, tasks, now):
 
 def drop_old(tasks, now):
     """太久没动静的任务清掉:卡住没人管的最多 STUCK_KEEP_S,其他 10 分钟。"""
-    for k in [k for k, t in tasks.items() if now - t["last"] > (STUCK_KEEP_S if t.get("why") and not t.get("ack") else 600)]:
+    for k in [k for k, t in tasks.items() if (now - kept_t(t) > STUCK_KEEP_S if t.get("why") and not t.get("ack") else now - t["last"] > 600)]:
         del tasks[k]
 
 
@@ -1596,6 +1611,7 @@ def serve():
             u.ShowWindow(glow["hwnd"], 4)
 
     def on_hit(hwnd, name, real=False):
+        stuck_touch(st, tasks, time.time())
         if name == "isee":
             isee_click(real)
         elif name == "collapse":
@@ -1775,6 +1791,8 @@ def serve():
             changed, st["mouse"] = changed or mp_ != st.get("mouse"), mp_
         else:
             st["mouse"] = None
+        if changed or st["drag"] or st["rs"]:
+            stuck_touch(st, tasks, now)
         if not hv and st["light_open"]:
             st["light_open"] = False               # 鼠标离开卡片:灯光选项条收回
         if (changed or now - st["a_t0"] < ANIM_S + 0.1 or now - st["light_t0"] < 0.3 or now - st["h_t0"] < H_ANIM_S + 0.1

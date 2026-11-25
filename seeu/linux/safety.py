@@ -213,6 +213,9 @@ def check_unlocked():
     """锁屏 / 屏保时一律不做。"""
     from seeu.linux import shell
     if shell.locked():
+        # 11-25 C-4.2:刚装好小插件、还没重新登录时也走到这里(logind 明说没锁)→ 照旧不动手,但说真正的原因
+        if shell.not_loaded():
+            raise Refused(shell.why_missing())
         raise Refused("屏幕锁着(或屏保开着),SeeU 什么都不做;等你解锁后再说")
 
 

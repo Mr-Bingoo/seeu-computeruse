@@ -467,6 +467,7 @@ def serve():
         glow["until"] = 0.0
 
     def on_hit(name, real=False):
+        F.stuck_touch(st, tasks, time.time())
         if name == "isee":
             isee_click(real)
         elif name == "collapse":
@@ -783,6 +784,8 @@ def serve():
             mp_ = (lx, ly) if hv else None
         changed = hv != st["hover"] or mp_ != st.get("mouse")
         st["hover"], st["mouse"] = hv, mp_
+        if changed or st["drag"] or st["rs"]:
+            F.stuck_touch(st, tasks, now)
         if not hv and st["light_open"]:
             st["light_open"] = False
         if (changed or now - st["a_t0"] < F.ANIM_S + 0.1 or now - st["light_t0"] < 0.3 or now - st["h_t0"] < F.H_ANIM_S + 0.1

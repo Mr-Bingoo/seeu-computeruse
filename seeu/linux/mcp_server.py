@@ -59,7 +59,7 @@ How to work (look → act → look again):
    ineffective = nothing changed, try once more with a different target; refused = blocked by a safety rule, the screen
    is locked, or not possible on Linux yet — stop and pass the reason to the user, do not work around it;
    failed = an error, call seeu_see first; busy = another task is using the same window (or borrowing the mouse) right now:
-   wait a few seconds and retry; refused with code user_busy = the user is using the computer: wait and try later;
+   wait a few seconds and retry; refused with code user_busy = the user is using the computer: pass on the "tell the user" line and wait;
    failed with code focus_moved = another task changed the app's focus after your last step: for seeu_type redo it passing
    target (the field's number) so SeeU types into that field; for seeu_press pass target too, or tap the spot first, then press;
    failed with code stale = you waited in the queue and the window moved or changed meanwhile: seeu_see again before tapping;
@@ -328,6 +328,15 @@ LINUX_PHRASES = [
      "the text has characters keys can't type (e.g. Chinese), which need the clipboard; but the user's clipboard holds an image "
      "or file and SeeU won't overwrite it. Ask the user to clear it, or type English first"),
     ("剪贴板里是图片或文件,SeeU 不动它", "the clipboard holds an image or file; SeeU won't touch it"),
+    ("SeeU 的 GNOME 小插件还没装:运行 python3 -m seeu 检查 --fix 装上,然后注销重新登录一次",
+     "the SeeU GNOME helper isn't installed: the user should run python3 -m seeu check --fix, then log out and back in once"),
+    ("SeeU 的 GNOME 小插件被关掉了:在「扩展」App 里把 SeeU 打开(或运行 python3 -m seeu 检查 --fix)",
+     "the SeeU GNOME helper is turned off: turn SeeU on in the Extensions app (or run python3 -m seeu check --fix)"),
+    ("SeeU 的 GNOME 小插件还没加载:装好后要注销重新登录一次;已经重新登录过的话,看「扩展」App 里它有没有报错",
+     "the SeeU GNOME helper isn't loaded yet: log out and back in once after installing; if that was already done, check the Extensions app for an error on it"),
+    ("屏幕锁着(锁屏时 GNOME 会停用小插件)", "the screen is locked (GNOME turns the helper off on the lock screen)"),
+    ("现在的桌面不是 GNOME;SeeU Linux 版第一版只支持 GNOME(Ubuntu 默认桌面),别的桌面拿不到窗口位置",
+     "this desktop isn't GNOME; SeeU for Linux only supports GNOME (Ubuntu's default desktop) for now, because window positions aren't available on others"),
     ("SeeU 的 GNOME 小插件是旧版(没有借鼠标要用的功能):运行 python3 -m seeu 检查 --fix 换新版,然后注销重新登录一次",
      "the SeeU GNOME helper is an old version (no borrow-mouse support): the user should run python3 -m seeu check --fix, then log out and back in once"),
     ("这次调用不让借;按控件操作:先 see,按清单里的编号点、往输入框里写字", "this call doesn't allow borrowing; act on controls: call seeu_see, tap by number or type into a listed field"),
@@ -341,8 +350,11 @@ LINUX_PHRASES = [
     ("写字要指定输入框(编号或名字),不能按屏幕位置", "typing needs a field (its number or name), not a screen position"),
     ("借真鼠标", "borrowed real mouse"), ("借真键盘", "borrowed real keyboard"),
     ("(是「", " (it is \""), ("」)", "\")"), ("鼠标", "mouse"), ("键盘", "keyboard"),
-    ("系统的弹框开着(密码 / 钥匙环 / 管理员授权框、系统授权确认框、活动概览或运行框),这时键盘鼠标都给它,SeeU 不借(防止打进密码框);请用户先处理掉那个框",
-     "a system dialog is open (password / keyring / admin prompt, a permission dialog, the Activities overview or the run box); "
+    ("电脑停在「活动概览」(刚开机登录、没开窗口时会停在这里),这时键盘鼠标都给它,SeeU 不借;请用户点一下桌面或按 Esc 退出活动概览",
+     "the Activities overview is open (it stays open right after login when no window is open); it takes the keyboard and mouse, "
+     "so SeeU won't borrow them: ask the user to click the desktop or press Esc to leave the overview"),
+    ("系统的弹框开着(密码 / 钥匙环 / 管理员授权框、系统授权确认框或运行框),这时键盘鼠标都给它,SeeU 不借(防止打进密码框);请用户先处理掉那个框",
+     "a system dialog is open (password / keyring / admin prompt, a permission dialog or the run box); "
      "it gets all mouse and keyboard input, so SeeU won't borrow them (it could type into a password box). Ask the user to deal with it first"),
     # 核实(act._verify)
     ("没看到控件、标题、窗口有变化(有的动作本来就看不出来,比如按了一个已经选中的按钮)",
@@ -434,6 +446,19 @@ def _shot_box(v):
     return (win["x"], win["y"], win["w"], win["h"])
 
 
+def _tell(r):
+    """11-24 C-4.1:借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
+    try:
+        from seeu import i18n
+        from seeu.linux import real
+        return i18n.tell_lines(r, _CALL.get("app"), real.mode())
+    except Exception:   # noqa: BLE001
+        return []
+
+
+_CALL = {}       # 这一次调用的 App 名(tools/call 进来时记,只给 _tell 用)
+
+
 def _result(r):
     lines = [f"outcome: {r.get('outcome')}"]
     for k, label in (("route", "route"), ("code", "code"), ("reason", "reason"), ("note", "note"),
@@ -443,6 +468,7 @@ def _result(r):
     if r.get("borrow"):
         b = r["borrow"]
         lines.append(f"borrowed the real mouse/keyboard: held ~{b.get('held_ms', '?')} ms, focus given back: {b.get('back', True)}")
+    lines += _tell(r)
     return "\n".join(lines)
 
 
@@ -807,6 +833,7 @@ def call_tool(name, a):
         return {"content": [{"type": "text", "text": wait}], "isError": False}
     t0 = time.time()
     _show_step(name, a)
+    _CALL["app"] = a.get("app")
     try:
         parts, err = fn(a)
     except (Exception, SystemExit) as ex:
@@ -819,7 +846,7 @@ def call_tool(name, a):
             why = f"a value SeeU needed was missing ({ex}) — check this call's parameters, then call seeu_see and try again"
         else:
             why = str(ex)
-        parts, err = [f"outcome: {out}\nreason: {en(why)}"], True
+        parts, err = [f"outcome: {out}\nreason: {en(why)}" + "".join("\n" + x for x in _tell({"outcome": out, "reason": why}))], True
         note = f"{type(ex).__name__}: {why}"
     else:
         first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")

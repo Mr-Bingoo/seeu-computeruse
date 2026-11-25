@@ -237,6 +237,9 @@ def local_name(name):
     owner = str(name or "")
     if not owner or owner.isdigit():
         return name
+    if owner.casefold() == "bluestacks":
+        # 11-25 C-4.1:主程序没开、只有同包名的 HD-DiskCompaction 在跑时,会被归成那个名字,设备锁(认 BlueStacks)就没查。它不分语言,不换名
+        return "BlueStacks"
     import time
     hit = _local_cache.get(owner)
     if hit and time.time() - hit[0] < 2:

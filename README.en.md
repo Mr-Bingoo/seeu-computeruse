@@ -62,8 +62,8 @@ A floating badge on screen (open it to see what the AI is doing, or a live view 
 
 **Requirements**:
 
-- Mac: macOS 12.3 or later (some Apple system APIs SeeU relies on start there; most AI clients require about macOS 12 too); **macOS 14 or later recommended** (the ChatGPT / Codex desktop app needs 14; tested on 14 and 27, 12.3–13 untested). Both Apple silicon and Intel work: macOS 27 was tested on an Apple silicon Mac, macOS 14 in a virtual machine on an Intel chip; a physical Intel Mac running SeeU directly hasn't been tested yet.
-- The Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM, both in virtual machines).
+- Mac: macOS 12.3 or later (some Apple system APIs SeeU relies on start there; most AI clients require about macOS 12 too); **macOS 14 or later recommended** (the ChatGPT / Codex desktop app needs 14; tested on 14 and 27, 12.3–13 untested). Both Apple silicon and Intel work: macOS 27 was tested on an Apple silicon Mac, macOS 14 in a virtual machine on an Intel chip; on a physical Intel Mac, installing, viewing windows and clicking have been tested, typing hasn't yet.
+- The Windows preview needs Windows 10 or 11 and Python 3.10 or later (tested so far on Windows 10 x64 and Windows 11 ARM in virtual machines; on a physical Windows 11 x64 PC, only installing, viewing windows and typing).
 - The Linux preview needs GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended) and Python 3.10 or later (tested so far on Ubuntu 26.04 x64 and ARM, Fedora 40, 43 and 45 ARM, and Debian 13 ARM, in virtual machines); KDE and other desktops don't work.
 
 ### Easiest: give the link to your AI

@@ -76,8 +76,8 @@ SeeU 的名字来自发音相同的 CU(Computer Use,让 AI 操作电脑),意思�
 
 **系统要求** :
 
-- Mac : 最低 macOS 12.3(SeeU 用到的部分苹果官方接口从这一版起才有，多数 AI 客户端最低也在 12 左右)；**建议 macOS 14 以上**(ChatGPT / Codex 桌面版要 14，我们在 14 和 27 上实测过，12.3~13 没实测)。Apple 芯片和 Intel 芯片都能用 : macOS 27 是在 Apple 芯片的 Mac 上测的，macOS 14 是在 Intel 芯片的虚拟机里测的，Intel 真机还没测。
-- Windows 预览版要 Windows 10 或 11 以及 Python 3.10 以上(目前测试过 Windows 10 x64 和 Windows 11 ARM「虚拟机」)。
+- Mac : 最低 macOS 12.3(SeeU 用到的部分苹果官方接口从这一版起才有，多数 AI 客户端最低也在 12 左右)；**建议 macOS 14 以上**(ChatGPT / Codex 桌面版要 14，我们在 14 和 27 上实测过，12.3~13 没实测)。Apple 芯片和 Intel 芯片都能用 : macOS 27 是在 Apple 芯片的 Mac 上测的，macOS 14 是在 Intel 芯片的虚拟机里测的，Intel 真机测过安装、看画面和点击，打字还没测。
+- Windows 预览版要 Windows 10 或 11 以及 Python 3.10 以上(目前测试过 Windows 10 x64「虚拟机」、Windows 11 ARM「虚拟机」和 Windows 11 x64「真机，只测过安装、看画面、打字」)。
 - Linux 预览版要 GNOME 45 以上的桌面(约 Ubuntu 24.04+、Fedora 39+、Debian 13+，推荐 Wayland)以及 Python 3.10 以上(目前测试过 Ubuntu 26.04 x64 和 ARM、Fedora 40、43、45 ARM、Debian 13 ARM「虚拟机」)，KDE 等别的桌面用不了。
 
 ### 最省事 : 把链接丢给 AI

@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 
 UUID = "seeu@seeu-computeruse"
 NAME, PATH, IFACE = "org.seeu.SeeU", "/org/seeu_lib/SeeU", "org.seeu.SeeU"
@@ -212,11 +213,25 @@ def locked():
             return bool(ping().get("locked"))
         except NoHelper:
             # 小插件装了、启用了却不在:多半是锁屏(GNOME 锁屏时自动停用它)
-            return installed() and enabled()
+            # 装了但被停用:小插件说不了话,全靠 logind;logind 读不到 → 当锁着(11-25 C-4.2)
+            return installed() and (enabled() or lg is None)
         except Exception:   # noqa: BLE001
             # 11-23 C-3.9 整体复查:GNOME 没回话(超时等)时原来一律当没锁。logind 明说没锁(lg 是 False)才当没锁;
             # logind 也读不到(lg 是 None)= 两头都问不到 → 当锁着,不动手
             return lg is None
+    return False
+
+
+def not_loaded():
+    """logind 明说没锁、小插件却不在(多半是装好后还没重新登录)。只用来把话说对,放不放行照旧看 locked()。"""
+    if not is_gnome() or _logind_locked() is not False:
+        return False
+    try:
+        ping()
+    except NoHelper:
+        return True
+    except Exception:   # noqa: BLE001
+        pass
     return False
 
 
@@ -256,9 +271,27 @@ def _enabled_list(strict=False):
     return v
 
 
+def _disabled_list():
+    """「已停用」名单:在「扩展」App 里关过的会记在这里,比启用名单优先。读不出返回 None(不往回写)。"""
+    return _parse_list(subprocess.run(["gsettings", "get", "org.gnome.shell", "disabled-extensions"],
+                                      capture_output=True, text=True, timeout=10).stdout.strip())
+
+
+def _turned_off():
+    """明确读到「被关掉」才 True(在已停用名单里,或「扩展」总开关关着);读不出当没关。
+    11-25 C-4.2:原来只看启用名单,被停用时 enabled() 还是 True → 装了不启用,SeeU 还误报「屏幕锁着」。"""
+    try:
+        if UUID in (_disabled_list() or []):
+            return True
+        return subprocess.run(["gsettings", "get", "org.gnome.shell", "disable-user-extensions"],
+                              capture_output=True, text=True, timeout=10).stdout.strip() == "true"
+    except Exception:   # noqa: BLE001
+        return False
+
+
 def enabled():
     try:
-        return UUID in _enabled_list()
+        return UUID in _enabled_list() and not _turned_off()
     except Exception:   # noqa: BLE001
         return False
 
@@ -291,11 +324,21 @@ def install():
     if cur is not None and UUID not in cur:     # 读不出原来的列表就不写(免得抹掉用户别的扩展);用户可以在「扩展」App 里手动打开
         subprocess.run(["gsettings", "set", "org.gnome.shell", "enabled-extensions", str(cur + [UUID])],
                        capture_output=True, timeout=10, check=True)
+    was_off = _turned_off()
+    off = _disabled_list()
+    if off and UUID in off:                     # 在已停用名单里的话启用名单不管用,要移走(名单里别的扩展照旧)
+        subprocess.run(["gsettings", "set", "org.gnome.shell", "disabled-extensions", str([x for x in off if x != UUID])],
+                       capture_output=True, timeout=10, check=True)
     try:   # 用户在「扩展」App 里关过全部扩展的话,这个开关也要打开
         subprocess.run(["gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false"],
                        capture_output=True, timeout=10)
     except Exception:   # noqa: BLE001
         pass
+    if same and was_off:                        # 只是重新打开:GNOME 一两秒内自己启用,不用重新登录
+        for _ in range(6):
+            if available():
+                break
+            time.sleep(0.5)
     return {"copied": not same, "enabled": cur is not None, "relogin": (not same) or not available()}
 
 

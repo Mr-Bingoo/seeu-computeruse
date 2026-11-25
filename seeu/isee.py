@@ -45,7 +45,7 @@ _PANE = "x-apple.systempreferences:com.apple.preference.security?"
 # 卡住时「怎么办」只能从这里给:SeeU 自己要用的东西。(名字, 怎么做, 能直接打开的设置页 或 None)
 FIXES = {
     "plugin": ("装 SeeU 浏览器插件", "跟 AI 说一声它来装(也可以终端 python3 -m seeu.web.install),装完在网页上点浏览器右上角的 SeeU 图标「允许这个网站」", None),
-    "aejs_safari": ("打开 Safari 开关", "Safari 菜单 → 设置 → 高级 → 勾「显示网页开发者功能」;再到 开发 菜单 → 勾「允许来自 Apple 事件的 JavaScript」", None),
+    "aejs_safari": ("打开 Safari 开关", "Safari 菜单 → 设置 → 高级 → 勾「显示网页开发者功能」;再到 设置 → 开发者 → 勾「允许来自 Apple 事件的 JavaScript」(旧版 Safari 在菜单栏的「开发」菜单里)", None),
     "aejs_chrome": ("打开 Chrome 开关", "Chrome 菜单 查看 → 开发者 → 勾「允许 Apple 事件中的 JavaScript」", None),
     "accessibility": ("给辅助功能授权", "系统设置 → 隐私与安全性 → 辅助功能(新版 macOS 英文界面里叫 Device Control and Data Access) → 打开运行 SeeU 的程序(终端 / Claude)", _PANE + "Privacy_Accessibility"),
     "screen": ("给屏幕录制授权", "系统设置 → 隐私与安全性 → 屏幕与系统录音 → 打开运行 SeeU 的程序", _PANE + "Privacy_ScreenCapture"),

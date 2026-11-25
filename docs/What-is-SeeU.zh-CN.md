@@ -15,11 +15,11 @@ SeeU 让你设备上的 AI Agent 在**前台或后台执行各种动作、操作
 
 ## 支持平台
 - **SeeU For macOS**
-  - **设备要求**：最低 macOS 12.3（SeeU 用到的部分苹果官方接口从这一版起才有，多数 AI 客户端最低也在 12 左右）；**建议 macOS 14 以上**（ChatGPT / Codex 桌面版要 14，我们在 14 和 27 上实测过，12.3~13 没实测）。Apple 芯片和 Intel 芯片都能用 : macOS 27 是在 Apple 芯片的 Mac 上测的，macOS 14 是在 Intel 芯片的虚拟机里测的，Intel 真机还没测。没测过的不保证能完整使用（但代码和相关逻辑全部开源，欢迎尝试和折腾）。
+  - **设备要求**：最低 macOS 12.3（SeeU 用到的部分苹果官方接口从这一版起才有，多数 AI 客户端最低也在 12 左右）；**建议 macOS 14 以上**（ChatGPT / Codex 桌面版要 14，我们在 14 和 27 上实测过，12.3~13 没实测）。Apple 芯片和 Intel 芯片都能用 : macOS 27 是在 Apple 芯片的 Mac 上测的，macOS 14 是在 Intel 芯片的虚拟机里测的，Intel 真机测过安装、看画面和点击，打字还没测。没测过的不保证能完整使用（但代码和相关逻辑全部开源，欢迎尝试和折腾）。
   - **iPhone 镜像**：macOS 15 及以上（功能为系统自带，只有系统达到该版本及以上时才有）。
   - **能接入的 AI 客户端**：通过 MCP 和 Skill 接入，安装、移除各只要一条命令。目前实测通过的有 Claude（Code 和桌面版聊天页）、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问（WorkBuddy、豆包和千问要手动接）。
 - **SeeU For Windows**（预览版）
-  - **设备要求**：Windows 10 或 11，需要 Python 3.10 以上。目前只在 Windows 10 x64 和 Windows 11 ARM 的虚拟机上测试过，多品牌实体电脑和多显示器暂无更多测试数据。
+  - **设备要求**：Windows 10 或 11，需要 Python 3.10 以上。目前在 Windows 10 x64 和 Windows 11 ARM 的虚拟机上测试过，Windows 11 x64 真机只测过安装、看画面和打字，多品牌实体电脑和多显示器暂无更多测试数据。
   - **能做什么**：常规功能都能用：后台看窗口、点击、打字、按键、滚动、长按、拖动（先试后台，不行再借鼠标几秒），网页走 SeeU 的后台浏览器（Chrome 或 Edge），屏幕上有悬浮标、代理光标和提示条。比 Mac 版少几样（比如没有 iPhone 镜像，用网页技术做的 App 不能藏着另开一份）。
   - **系统授权**：不用像 Mac 那样单独开辅助功能、屏幕录制。
   - **能接入的 AI 客户端**：目前实测通过的有 Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问（WorkBuddy、豆包和千问要手动接；豆包请装 x64 版，千问要先升到有「工作」页的新版）；Claude 能一键接入，但还没实际用过。

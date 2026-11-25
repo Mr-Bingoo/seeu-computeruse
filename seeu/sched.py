@@ -1009,7 +1009,7 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                         # 复查 11-17(C-2.7):真动过手才记「最后动过焦点」(被拦下、防过时没点、出错没做的不算,
                         # 不然别的任务的插队保护会被它顶掉)
                         release(app, key=info.get("key"), focus=bool(focus) and isinstance(r, dict)
-                                and (_acted(r) or r.get("code") == "wrong_window")
+                                and (_acted(r) or r.get("code") in ("wrong_window", "no_reply"))
                                 and r.get("code") not in ("focus_moved", "stale"),
                                 keep=not (isinstance(r, dict) and r.get("code") in ("focus_moved", "stale")))
             finally:

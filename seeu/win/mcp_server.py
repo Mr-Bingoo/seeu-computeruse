@@ -385,6 +385,19 @@ def _target(a, need=True):
     return int(t) if isinstance(t, (int, float)) or str(t).isdigit() else str(t)
 
 
+def _tell(r):
+    """11-24 C-4.1:借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
+    try:
+        from seeu import i18n
+        from seeu.win import act
+        return i18n.tell_lines(r, _CALL.get("app"), act.real_mode())
+    except Exception:   # noqa: BLE001
+        return []
+
+
+_CALL = {}       # 这一次调用的 App 名(tools/call 进来时记,只给 _tell 用)
+
+
 def _result(r):
     lines = [f"outcome: {r.get('outcome')}"]
     for k, label in (("route", "route"), ("code", "code"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("xy", "clicked at"),
@@ -394,6 +407,7 @@ def _result(r):
     if r.get("borrow"):
         b = r["borrow"]
         lines.append(f"borrowed: held ~{b.get('held_ms', '?')} ms, given back: {b.get('back', True)}")
+    lines += _tell(r)
     return "\n".join(lines)
 
 
@@ -781,6 +795,7 @@ def call_tool(name, a):
         return {"content": [{"type": "text", "text": wait}], "isError": False}
     t0 = time.time()
     _show_float(name, a)
+    _CALL["app"] = a.get("app")
     try:
         parts, err = fn(a)
     except (Exception, SystemExit) as ex:
@@ -790,7 +805,7 @@ def call_tool(name, a):
         why = (f"a value SeeU needed was missing ({ex}) — check this call's parameters, then call seeu_see and try again"
                if isinstance(ex, KeyError) else str(ex))
         code = "\ncode: stale" if type(ex).__name__ == "Stale" else ""      # 11-23 C-3.9 整体复查:画面 / 窗口变了,给 AI 明确的代码(说明里写了 stale = 先 see)
-        parts, err = [f"outcome: {out}{code}\nreason: {en(why)}"], True
+        parts, err = [f"outcome: {out}{code}\nreason: {en(why)}" + "".join("\n" + x for x in _tell({"outcome": out, "reason": why}))], True
         note = f"{type(ex).__name__}: {why}"
     else:
         # 11-12:结果(delivered / ineffective / …)也记下来;以前只记 ok,Codex 点错标签页那次事后分不清是谁错

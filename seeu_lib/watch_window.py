@@ -2312,8 +2312,8 @@ def serve():
     def alive_tasks(now):
         out = []
         for k, t in list(tasks.items()):
-            idle = now - t["last"]
             stuck_ = t["stuck"] and not t["stuck"].get("ack")      # ack = 你已经点过收起(或留满 1 小时):不再当卡住留着
+            idle = now - (max(t["last"], st["last_touch"]) if stuck_ else t["last"])   # 11-25:碰一下重新数 1 小时(三端统一)
             if idle > (STUCK_KEEP_S if stuck_ else IDLE_EXIT_S):
                 del tasks[k]
             elif idle < HIDE_AFTER_S or stuck_:     # 卡住的留着(等人处理),最多 STUCK_KEEP_S
@@ -2583,6 +2583,15 @@ def serve():
                     view.setNeedsDisplay_(True)
                     if in_browser() and st["stream"] is None and st["b_expanded"]:
                         place_card()                   # 卡片高度跟着 I See 那行变
+            if st.get("multi"):                        # 多任务岛上鼠标挪动 / 按着也算碰过(停着不动的不算)
+                mp_, fr_ = isl.NSEvent.mouseLocation(), isl.frame()      # 这个函数里别处有 import NSEvent(算局部变量),借岛那边的
+                mp_ = (mp_.x, mp_.y)
+                if fr_ and fr_[0] <= mp_[0] <= fr_[0] + fr_[2] and fr_[1] <= mp_[1] <= fr_[1] + fr_[3] and \
+                        st.get("isl_mouse") and (mp_ != st["isl_mouse"] or isl.NSEvent.pressedMouseButtons()):
+                    touch()
+                st["isl_mouse"] = mp_
+            else:
+                st["isl_mouse"] = None
             alive = alive_tasks(now)
             if st.get("solo") and not any(t["key"] == st["solo"] for t in alive):
                 st["solo"] = None

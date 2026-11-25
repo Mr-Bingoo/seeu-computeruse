@@ -308,14 +308,30 @@ def _allow_hint(r):
             f"call seeu_allow_site with url=\"{m.group(1)}\" and their reply as user_said, then retry.")
 
 
+def _tell(r):
+    """11-24 C-4.1:借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
+    try:
+        from seeu import i18n
+        from seeu import act
+        return i18n.tell_lines(r, _CALL.get("app"), act.real_mode())
+    except Exception:   # noqa: BLE001
+        return []
+
+
+_CALL = {}       # 这一次调用的 App 名(tools/call 进来时记,只给 _tell 用)
+
+
 def _result_text(r):
     lines = [f"outcome: {r.get('outcome')}"]
     for k, label in (("route", "route"), ("code", "code"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("step", "stuck at"),
                      ("xy", "clicked at"), ("state", "page state")):
         if r.get(k):
             lines.append(f"{label}: {to_en(str(r[k]))}")
+    if r.get("enter") == "skipped":
+        lines.append("enter: skipped (Return was NOT pressed)")
     if r.get("texts"):
         lines.append("text on screen: " + " / ".join(map(str, r["texts"][:12])))
+    lines += _tell(r)
     return "\n".join(lines) + _allow_hint(r)
 
 
@@ -455,7 +471,8 @@ def do_scroll(a):
 
 def do_press(a):
     import seeu
-    r = seeu.press(a["app"], a["key"], *(a.get("mods") or []))
+    win = a.pop("_window", None)
+    r = seeu.press(a["app"], a["key"], *(a.get("mods") or []), window=win)
     return [_result_text(r)], r.get("outcome") in ("failed", "refused")
 
 
@@ -732,6 +749,12 @@ def call_tool(name, a):
     if wait:
         return {"content": [{"type": "text", "text": wait}], "isError": False}
     if isinstance(a.get("app"), str):       # 11-06 二次复查:浏览器的别的写法(「标题」、包名、进程号)先归一,别绕开网页层
+        if name == "seeu_press":            # 11-25:浏览器归一会去掉「标题」,按键(⌘W 这类)要拿它核对窗口
+            try:
+                from seeu import ax
+                a["_window"] = ax.split_window(a["app"])[1]
+            except Exception:
+                pass
         try:                                # 11-15:别的语言的 App 名(「备忘录」→ Notes)先换成系统现在叫它的名字
             from seeu import ax
             a["app"] = ax.canon_name(a["app"])
@@ -743,6 +766,7 @@ def call_tool(name, a):
         except Exception:
             pass
     _show_why(name, a)
+    _CALL["app"] = a.get("app")
     try:
         parts, err = fn(a)
     except (Exception, SystemExit) as ex:   # WebError / AXError / RuntimeError …:原话给 AI(里面常带「卡在…原因…怎么办」)
@@ -759,7 +783,7 @@ def call_tool(name, a):
         why = str(ex)
         if isinstance(ex, KeyError):
             why = f"a value SeeU needed was missing ({why}) — check this call's parameters, then call seeu_see and try again"
-        parts, err = [f"outcome: {out}\nreason: {to_en(why)}" + _allow_hint({"reason": why})], True
+        parts, err = [f"outcome: {out}\nreason: {to_en(why)}" + "".join("\n" + x for x in _tell({"outcome": out, "reason": why})) + _allow_hint({"reason": why})], True
     _log(name, a, not err, time.time() - t0)
     content = [p if isinstance(p, dict) else {"type": "text", "text": str(p)} for p in parts]
     return {"content": content, "isError": bool(err)}

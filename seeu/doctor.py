@@ -219,7 +219,7 @@ def cdp_apps(rows):
         return
     tested = [n for n in ok if n in cdp.TESTED]
     other = [n for n in ok if n not in cdp.TESTED]
-    note = f"本机 {len(ok)} 个网页技术做的 App,测过能藏着用:" + "、".join(tested) + (";没试(有的会禁掉):" + "、".join(other) if other else "")
+    note = f"本机 {len(ok)} 个网页技术做的 App" + (",测过能藏着用:" + "、".join(tested) if tested else "") + (";没试(有的会禁掉):" + "、".join(other) if other else "")
     if len(ok) < len(apps):
         note += ";Claude 不碰"
     _row(rows, OK, "调试端口(网页技术做的 App)", note + ";只用 SeeU 专用那份,你自己开着的不碰")

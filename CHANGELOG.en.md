@@ -4,6 +4,22 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac and Linux, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.6.1 (2026-11-26)
+
+Small fixes: key presses are no longer misreported as "no effect", SeeU tells you what to do when it needs your mouse and keyboard, touching a stuck floating window restarts its timer, the Linux helper can be turned back on after being disabled, and several hints are more accurate.
+
+- **Key presses aren't misreported** (Mac): pressing one letter or Return in a large window changes too little of the picture, so SeeU reported no effect and the AI might press again (typing it twice, sending twice). SeeU now also compares the text, cursor and window: a change means success; when it can't tell, it says so and the AI looks first.
+- **Keys don't land in another window** (Mac): with several windows of one app open, a key meant for one window could go to another. SeeU now checks that the focus is in that window and otherwise doesn't press, asking the AI to tap there first (typing already had this check). Browsers too, so ⌘W doesn't close the wrong window. It also doesn't press when the app is frozen and its windows can't be read; when two windows have exactly the same size and position, it tells them apart by title.
+- **More careful Return after typing** (Mac): before pressing Return after typing, SeeU checks that the cursor hasn't jumped to a password field and, when a window was specified, that it's still in that window; otherwise it only types, doesn't press Return, and tells the AI so.
+- **Clear words when it can't borrow the mouse and keyboard**: when the window is on another desktop or you're using the computer, the AI used to get only "refused". Now it gets a sentence it can pass on to you: move the window or let go first, then reply "ready".
+- **Touching a stuck window restarts the hour**: hovering, moving, clicking or dragging on the expanded floating window restarts the 1-hour countdown on all three systems; a mouse left still on it doesn't count.
+- **Safari setting directions fixed** (Mac): "Allow JavaScript from Apple Events" is under Settings → Developer in newer Safari, not the Develop menu.
+- **The Linux helper can be turned back on**: if the helper had been turned off in Extensions, reinstalling didn't enable it, and SeeU wrongly said the screen was locked. Now check --fix turns it back on without logging in again. Right after a first install, it says you need to log in again instead of saying the screen is locked.
+- **More accurate hints on Linux**: in the Activities overview it now says to press Esc, separate from password prompts; the English hints about the helper no longer mix in Chinese.
+- **BlueStacks isn't mistaken** (Mac): with only its disk cleanup helper running, that used to be taken for BlueStacks.
+- **Tested devices**: the docs now say how far a physical Intel Mac and a physical Windows 11 x64 PC have been tested.
+- **What you need to do**: quit the AI app completely and reopen it after updating. No need to reinstall the Linux helper.
+
 ## v1.6.0 (2026-11-24)
 
 SeeU can now be installed as a plugin: one command in Claude Code or Codex, and it fetches what it needs the first time you use it. We also went through the code for all three systems and fixed a batch of places where it could click or type in the wrong spot or click twice, and filled a few gaps in the safety rules.
