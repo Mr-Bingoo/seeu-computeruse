@@ -168,7 +168,10 @@ def _linux_ext():
     try:
         from seeu.linux import shell
         if shell.is_gnome() and shell.installed():   # 11-21 C-3.5(复查):用户已全部移除、小插件删了的,更新不再装回
-            shell.install()
+            r = shell.install(touch_master=False)      # 用户 11-26 定:更新不替用户打开「扩展」总开关
+            if r.get("all_off"):
+                from seeu.linux import lang
+                lang.say(shell.ALL_OFF_NOTE)
             print(T("upd.linux_ext"))
     except Exception as e:   # noqa: BLE001
         print(T("upd.linux_ext_fail", err=e))

@@ -4,6 +4,22 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac and Linux, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.6.2 (2026-11-26)
+
+A safety fix release: password fields in Safari are caught while Safari is in the background, apps like VS Code no longer get text typed into another window or typed twice, and the iPhone Mirroring window no longer drifts with your mouse.
+
+- **Safari password fields are caught in the background** (Mac): when Safari wasn't in front, SeeU couldn't tell the cursor was in a password field and typed or pressed keys into it anyway. Now it recognizes the field and refuses to type or press keys there, asking you to do it yourself. Chrome was already covered; it gets the same extra check too.
+- **Apps like VS Code don't get text in another window** (Mac): right after VS Code opened with two windows, text could go into the window you didn't name. SeeU now checks first and doesn't type if it's the wrong one, asking the AI to tap there first.
+- **Apps like VS Code don't get text twice** (Mac): their text boxes can't be read, so text that did go in looked like it didn't, and SeeU typed it again with your keyboard, leaving it twice. Now it checks the text on screen instead; if it can't tell, the AI looks first instead of retyping. Apps whose text boxes can be read, like Slack, work as before.
+- **No typing into password prompts in VS Code-style editors** (Mac): when VS Code, Cursor or Trae showed a password or token prompt in the background, SeeU didn't recognize it and typed into it anyway. Now it recognizes it from the text on screen and won't type or press keys there, asking you to do it yourself. In other apps, seeing words like "password" makes SeeU remind the AI to look first.
+- **One more password check right before typing** (Mac): if SeeU has to wait for another task to finish typing, or for you to stop typing, the cursor may move into a password field meanwhile; now it checks again right before it starts.
+- **The iPhone Mirroring window doesn't follow your mouse** (Mac): after a background tap in Mirroring, the window sometimes moved along with your mouse. Not anymore.
+- **Windows without a name can take keys and text** (Mac): some apps' windows have no readable title, and SeeU used to refuse them all. Now it goes ahead when it can tell which window it is, and still refuses when unsure.
+- **Stops sooner when an app hangs** (Mac): pressing a key in a named window of a hung app used to take ten-odd seconds to report an error. Now it says "the app may be hung" in two or three seconds, and no longer suggests the AI force it through another way.
+- **The floating window's hour only restarts when you touch it** (Windows, Linux): when the floating window was expanded because of a stuck step, the program changing what it shows also restarted the 1-hour countdown. Now only your mouse does, same as on the Mac.
+- **Linux updates no longer turn on the Extensions master switch**: if you turned off the master switch in the Extensions app, updating SeeU used to turn it back on, enabling your other extensions too. Now updates leave it alone and just remind you. To use SeeU, turn the switch on yourself or run check --fix (that does turn it on, and tells you your other extensions will be enabled too).
+- **What you need to do**: quit the AI app completely and reopen it after updating.
+
 ## v1.6.1 (2026-11-26)
 
 Small fixes: key presses are no longer misreported as "no effect", SeeU tells you what to do when it needs your mouse and keyboard, touching a stuck floating window restarts its timer, the Linux helper can be turned back on after being disabled, and several hints are more accurate.

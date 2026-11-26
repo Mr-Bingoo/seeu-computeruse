@@ -1611,7 +1611,8 @@ def serve():
             u.ShowWindow(glow["hwnd"], 4)
 
     def on_hit(hwnd, name, real=False):
-        stuck_touch(st, tasks, time.time())
+        if real:                                   # 11-26 C-4.3:程序发来的(命令行换画面 / 灯光)不算你碰过
+            stuck_touch(st, tasks, time.time())
         if name == "isee":
             isee_click(real)
         elif name == "collapse":

@@ -333,13 +333,14 @@ def type_physical(pid, text, auth=True, step=None):
 
 def type_to(app_name, text, enter=False, prime=None, check=None):
     """推荐入口:后台往 App 当前焦点输入框打字(中英文都行,走 unicode),可选最后回车。
-    先聚焦 + 标题栏垫一下(同 bgclick.tap)。10-13 镜像 Spotlight 实测:中英文、回车开 App 都通,前台不变。
+    先聚焦 + 垫一下(同 bgclick.tap)。10-13 镜像 Spotlight 实测:中英文、回车开 App 都通,前台不变。
     check(pid):聚焦之后、打字之前调一下,抛异常就不打(11-17 C-2.5:SeeU 用来核对焦点在不在指定窗口)。老调用不传,行为不变。"""
     g = bg.main_window(app_name)
     if not g:
         raise RuntimeError(f"找不到 {app_name} 的窗口")
     pid, _wid, _xy = bg._prepare(app_name, g["x"] + g["w"] / 2, g["y"] + g["h"] / 2, prime)
     if check:
+        _wait_user_keys()      # 11-26 C-4.4:等用户停手放在核对前面,免得核对完又等几秒、焦点已经换了(type_unicode 里那次通常马上过)
         check(pid)
     type_unicode(pid, text)
     if enter:

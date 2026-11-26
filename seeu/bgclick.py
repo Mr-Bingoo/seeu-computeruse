@@ -9,7 +9,7 @@
   窗口内坐标(CGEventSetWindowLocation)、f1 点击次数、f3 按键号、f7 子类型、f51/f91/f92 窗口号、f58 点击组号、f40 目标 pid,
 再用 SLEventPostToPid 投给目标进程。可选:附"事件认证"(auth)、先发"只聚焦不置前"记录(focus)。
 
-用法:python3 -m seeu.bgclick <App 名> <屏幕x> <屏幕y> [--auth] [--raw]   (默认走 tap():聚焦 + 标题栏垫一下 + 点)
+用法:python3 -m seeu.bgclick <App 名> <屏幕x> <屏幕y> [--auth] [--raw]   (默认走 tap():聚焦 + 窗口外垫一下 + 点)
 """
 import ctypes
 import re
@@ -503,7 +503,7 @@ def tap(app_name, sx, sy, prime=None, auth=False, step=None, verify=False, settl
     🔴 页面慢到超时才动的,退回系统鼠标会再点一下,点第二下有害的地方别开。截不到图就不核实(照旧当成功)。
     settle(10-30 实测:刚关完弹窗/面板马上点,两次「假成功」):点前每 SETTLE_GAP_S 截一张,前后两张几乎一样(< SETTLE_STILL)
     才点;最多等 SETTLE_MAX_S 秒,一直在动(转盘灯、视频)也照点。给「刚关弹窗、页面还在收」的那一下开。截不到图就直接点。
-    prime(默认按 PRIME_APPS 定):先"只聚焦不置前" + 在标题栏(窗口顶部正中,内容区外)垫一下,吃掉"激活点击",再点目标。
+    prime(默认按 PRIME_APPS 定):先"只聚焦不置前" + 在窗口左上角外面垫一下(11-26 前垫在标题栏),吃掉"激活点击",再点目标。
     10-13 实测 iPhone 镜像:不垫的话聚焦后第一下点击会被吃掉(跟真鼠标点没激活的窗口一样);垫了之后 3/3 一次点进。
     auth 实测对镜像点击不需要。返回 (pid, wid)。"""
     if step:
@@ -641,9 +641,9 @@ def _tap_fail_snap(app_name, pid, wid, sx, sy, before, after, ratio):
 PENDING_TAP = {}            # pid -> (app_name, sx, sy, 时间)
 PENDING_TAP_S = 15.0        # 点完多久内的第一次打字才核实
 
-# 要"标题栏垫一下"的 App:聚焦后第一下点击会被吃掉、且标题栏是空的(点了没副作用)。
+# 要"垫一下"的 App:聚焦后第一下点击会被吃掉(11-26 起垫在窗口左上角外面,以前垫标题栏)。
 # 🔴 普通文档类 App 别垫:「文本编辑」标题栏正中是文档名,点了会弹改名小窗(10-13 踩过);它们只聚焦就够。
-PRIME_APPS = {"iPhone Mirroring"}
+PRIME_APPS = {"iPhone Mirroring"}   # 复查 11-26:只放拖不动尺寸的窗口(垫点在窗口左上角外 1pt,正好是可调尺寸窗口的拉角热区)
 TAPPED_FILE = home("seeu_tapped.json")   # {pid: 最近一次点击时间};有的调用方点/滚各开子进程,标记得落文件
 
 
@@ -688,7 +688,7 @@ def _wait_mouse_up(timeout=3.0):
 
 
 def _prepare(app_name, sx, sy, prime=None):
-    """找窗口 + 聚焦(+ PRIME_APPS 里的再在标题栏垫一下)。返回 (pid, wid, 窗口左上角)。"""
+    """找窗口 + 聚焦(+ PRIME_APPS 里的再在窗口左上角外面垫一下)。返回 (pid, wid, 窗口左上角)。"""
     if prime is None:
         prime = split_target(app_name)[0] in PRIME_APPS
     hit = window_of(app_name, sx, sy)
@@ -700,14 +700,13 @@ def _prepare(app_name, sx, sy, prime=None):
     _watch(wid)
     if prime and not _wait_mouse_up():
         # 🔴 SeeU C-0.4(10-22 用户报:拖悬浮标时镜像窗口被一起拖走):用户按着鼠标 3 秒还没松 = 多半在拖东西,
-        # 这时往标题栏发"按下"会被系统混成"拖标题栏" → 不垫了,只聚焦(第一下点击可能被吃掉,调用方核实会重试)
-        print("[SeeU] 你正按着鼠标,这次不在镜像标题栏垫一下", file=sys.stderr)
+        # 这时垫一下会被系统混成"拖标题栏"(当时垫在标题栏;现在垫在窗口外,照旧保守)→ 不垫了,只聚焦(第一下点击可能被吃掉,调用方核实会重试)
+        print("[SeeU] 你正按着鼠标,这次不在镜像上垫一下", file=sys.stderr)
         prime = False
     if prime:
-        import Quartz
-        b = next(w["kCGWindowBounds"] for w in Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionAll, 0) if int(w["kCGWindowNumber"]) == wid)
-        click(pid, wid, xy, b["X"] + b["Width"] / 2, b["Y"] + 12, focus=True)
+        # 🔴 11-26 C-4.3(用户报、镜像真机对照):垫在标题栏会被系统当成拖标题栏,窗口跟着用户的真鼠标走(6/170,多半是抬起后才开始走,
+        # 等鼠标停、缩短按住都挡不住);垫在窗口左上角外面 0/110,激活点击照样吃得掉(6/6;不垫 0/6)
+        click(pid, wid, xy, xy[0] - 1, xy[1] - 1, focus=True)
         time.sleep(0.3)
     else:
         focus_without_raise(pid, wid)

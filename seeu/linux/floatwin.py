@@ -467,7 +467,8 @@ def serve():
         glow["until"] = 0.0
 
     def on_hit(name, real=False):
-        F.stuck_touch(st, tasks, time.time())
+        if real:                                   # 程序发来的不算你碰过(同 Windows)
+            F.stuck_touch(st, tasks, time.time())
         if name == "isee":
             isee_click(real)
         elif name == "collapse":

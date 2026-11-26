@@ -89,6 +89,8 @@ How to work (look → act → look again):
    target (the field's number) so SeeU taps the field and types in one go; for seeu_press tap the spot first, then press;
    failed with code stale = you waited in the queue and the window moved or changed meanwhile: seeu_see again before tapping;
    failed with code wrong_window = the focused field is in another window of that app: tap the field in the right window first;
+   failed with code no_reply = the app didn't answer (it may be hung), nothing was pressed: wait a few seconds, then seeu_see
+   before trying again; if it keeps happening, tell the user the app may be hung (don't retry with just the app name);
    ineffective with code busy_after_try = the background route was already tried once (it may have worked): seeu_see before
    repeating it. If you work with several sub-agents at once, always
    pass target to seeu_type: sub-agents share one SeeU task and are not queued against each other;

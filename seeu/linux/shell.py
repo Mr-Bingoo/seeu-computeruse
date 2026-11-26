@@ -277,6 +277,19 @@ def _disabled_list():
                                       capture_output=True, text=True, timeout=10).stdout.strip())
 
 
+def _all_off():
+    """「扩展」总开关明确关着才 True;读不出当没关。"""
+    try:
+        return subprocess.run(["gsettings", "get", "org.gnome.shell", "disable-user-extensions"],
+                              capture_output=True, text=True, timeout=10).stdout.strip() == "true"
+    except Exception:   # noqa: BLE001
+        return False
+
+
+ALL_ON_NOTE = "「扩展」总开关原来关着,已经打开(你装的其他扩展也会跟着启用;不想要的在「扩展」App 里单独关)"
+ALL_OFF_NOTE = "「扩展」总开关关着,更新没替你打开(免得把你停掉的其他扩展也启用);要用 SeeU:在「扩展」App 里打开总开关,或运行 python3 -m seeu 检查 --fix"
+
+
 def _turned_off():
     """明确读到「被关掉」才 True(在已停用名单里,或「扩展」总开关关着);读不出当没关。
     11-25 C-4.2:原来只看启用名单,被停用时 enabled() 还是 True → 装了不启用,SeeU 还误报「屏幕锁着」。"""
@@ -309,8 +322,10 @@ def _files():
     return ["metadata.json"] + sorted(n for n in os.listdir(SRC) if n.endswith(".js"))
 
 
-def install():
-    """装进用户自己的扩展目录并加进启用列表(不要管理员密码)。返回 {copied, enabled, relogin}。
+def install(touch_master=False):
+    """装进用户自己的扩展目录并加进启用列表(不要管理员密码)。返回 {copied, enabled, relogin, all_on, all_off}。
+    touch_master:要不要打开「扩展」总开关。用户 11-26 定:只有检查 --fix(用户主动修)才传 True;更新是顺带的,不替用户打开。
+    默认 False:从旧版更新上来时,内存里跑的是旧的 update.py(不带这个参数),也不会去开总开关。
     GNOME 只在登录时扫一遍扩展 → 第一次装 / 换了新版要注销重新登录一次才生效(Wayland 下没法只重启 Shell)。"""
     d = dest_dir()
     same = installed() and _version(d) == _version(SRC) and all(
@@ -324,22 +339,25 @@ def install():
     if cur is not None and UUID not in cur:     # 读不出原来的列表就不写(免得抹掉用户别的扩展);用户可以在「扩展」App 里手动打开
         subprocess.run(["gsettings", "set", "org.gnome.shell", "enabled-extensions", str(cur + [UUID])],
                        capture_output=True, timeout=10, check=True)
+    all_off = _all_off()
     was_off = _turned_off()
     off = _disabled_list()
     if off and UUID in off:                     # 在已停用名单里的话启用名单不管用,要移走(名单里别的扩展照旧)
         subprocess.run(["gsettings", "set", "org.gnome.shell", "disabled-extensions", str([x for x in off if x != UUID])],
                        capture_output=True, timeout=10, check=True)
-    try:   # 用户在「扩展」App 里关过全部扩展的话,这个开关也要打开
-        subprocess.run(["gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false"],
-                       capture_output=True, timeout=10)
-    except Exception:   # noqa: BLE001
-        pass
+    if touch_master:   # 用户在「扩展」App 里关过全部扩展的话,这个开关也要打开
+        try:
+            subprocess.run(["gsettings", "set", "org.gnome.shell", "disable-user-extensions", "false"],
+                           capture_output=True, timeout=10)
+        except Exception:   # noqa: BLE001
+            pass
     if same and was_off:                        # 只是重新打开:GNOME 一两秒内自己启用,不用重新登录
         for _ in range(6):
             if available():
                 break
             time.sleep(0.5)
-    return {"copied": not same, "enabled": cur is not None, "relogin": (not same) or not available()}
+    return {"copied": not same, "enabled": cur is not None, "relogin": (not same) or not available(),
+            "all_on": all_off and not _all_off(), "all_off": bool(_all_off())}
 
 
 def uninstall():
@@ -358,6 +376,9 @@ def why_missing():
     if not installed():
         return "SeeU 的 GNOME 小插件还没装:运行 python3 -m seeu 检查 --fix 装上,然后注销重新登录一次"
     if not enabled():
+        if _all_off():
+            return ("「扩展」总开关关着,SeeU 的 GNOME 小插件没启用:在「扩展」App 里打开总开关(或运行 python3 -m seeu 检查 --fix;"
+                    "打开后你装的其他扩展也会跟着启用)")
         return "SeeU 的 GNOME 小插件被关掉了:在「扩展」App 里把 SeeU 打开(或运行 python3 -m seeu 检查 --fix)"
     if _logind_locked():
         return "屏幕锁着(锁屏时 GNOME 会停用小插件)"

@@ -8,6 +8,14 @@ import re
 
 # (中文片段, 英文)。顺序无所谓,用的时候按中文长度从长到短换。
 PHRASES = [
+    # —— 11-26 C-4.4 晚:网页壳 App 认字看密码框
+    ("画面上有密码输入框(认到「", "A password input box is on screen (read \u201c"),
+    ("」),SeeU 不往里打字(这一步请你自己来)", "\u201d), so SeeU won't type into it (please do this step yourself)"),
+    ("」),SeeU 不往里按键(这一步请你自己来)", "\u201d), so SeeU won't press keys into it (please do this step yourself)"),
+    ("」),SeeU 不往里粘贴(这一步请你自己来)", "\u201d), so SeeU won't paste into it (please do this step yourself)"),
+    ("」这类字样,可能弹着登录 / 密码框;这个 App 查不了光标在不在里面,先 see 看一眼,是密码框就请用户自己来",
+     "\u201d on screen, so a login / password box may be open; SeeU can't tell whether the cursor is in it in this app. See first; if it's a password box, ask the user to do it"),
+    ("画面上有「", "The screen shows \u201c"),
     # —— 11-17 C-2.7 复查后补
     ("键盘焦点不在「", "The keyboard focus isn't in the \u201c"),
     ("」这个窗口里(现在在「", "\u201d window (it is now in \u201c"),
@@ -146,8 +154,8 @@ PHRASES = [
     ("没核实到字打进去,所以没按回车(先 see 看一眼,字在就单独按一次回车)",
      "the text could not be verified, so Return was not pressed (see first; if the text is there, press Return separately)"),
     # —— 11-25 C-4.2 按键核对复查
-    ("」所在 App 的窗口(App 可能正卡着),认不出键会进哪个窗口,SeeU 没按;等几秒先 see 看一眼再试;一直这样就只写 App 名按",
-     "\u201d: its app's windows can't be read (the app may be hanging), so it's unclear which window the key would land in. SeeU didn't press; wait a few seconds, see, then try again; if it stays like this, press with just the app name"),
+    ("」所在 App 的窗口(App 可能正卡着),认不出键会进哪个窗口,SeeU 没按;等几秒先 see 看一眼再试;一直这样就告诉用户这个 App 可能卡住了(别改成只写 App 名按:App 醒过来键会进当时的窗口)",
+     "\u201d: its app's windows can't be read (the app may be hanging), so it's unclear which window the key would land in. SeeU didn't press; wait a few seconds, see, then try again; if it stays like this, tell the user the app may be hung (don't switch to pressing with just the app name: when the app wakes up the key lands in whatever window is focused then)"),
     ("按键前读不到「", "before pressing: \u201c"),
     ("字打进去了,但没按回车:", "the text went in, but Return was not pressed: "),
     ("打完字以后键盘焦点换到别的窗口了,所以没按回车(先 see 看一眼再决定)",

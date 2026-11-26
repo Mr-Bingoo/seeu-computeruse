@@ -1304,6 +1304,16 @@ def scroll(app, dy=0, dx=0, at=None, safe=None):
 
 
 def type(app, text, enter=False, fallback=True, allow=None):
+    """见 _type。复查 11-26 晚:「画面上有密码类字样」的提醒放在这里加,_type 里哪条路先 return 都带得上。"""
+    box = {}
+    r = _type(app, text, enter, fallback, allow, box)
+    scr = box.get("scr")
+    if scr and isinstance(r, dict) and r.get("outcome") != "refused":
+        r["note"] = ((r.get("note") or "") + ";" + SCREEN_SECRET_NOTE.format(line=scr[1])).lstrip(";")
+    return r
+
+
+def _type(app, text, enter=False, fallback=True, allow=None, box=None):
     """先后台打字;画面没变就走 SeeU 兜底:拿桌面锁 → 让路 → 把目标切到前台打 → 还原前台。
     fallback=False 只走后台(调用方自己有退路、不想被抢前台时用)。都不行报 ineffective,交给项目自己的办法。
     🔴 后台那次如果其实打进去了但画面没变(核实不到),兜底会再打一遍,看到重复字就是这种情况。"""
@@ -1324,6 +1334,11 @@ def type(app, text, enter=False, fallback=True, allow=None):
     kind = None if h else _focus_secret(app)
     if kind:
         return dict(outcome="refused", route=None, tried=[], png=None, reason=f"光标在{kind}里,SeeU 不往里打字(这一步请你自己来)")
+    scr = None if h else _shell_screen_secret(app)
+    if box is not None:
+        box["scr"] = scr
+    if scr and scr[0] == "block":
+        return dict(outcome="refused", route=None, tried=[], png=None, reason=SCREEN_SECRET.format(line=scr[1], what="打字"))
     if h:                               # C-1.0:SeeU 专用那份(调试端口)藏着打,回车也走它
         from seeu import cdp
         r = cdp.type(h, text)
@@ -1340,28 +1355,50 @@ def type(app, text, enter=False, fallback=True, allow=None):
     #   C-1.3 Codex:空格后面的字全丢了,截图有变化就报成功,回车照按 → 差点把半句话发出去。
     from seeu import web
     browser = web.is_browser(app)
+    shell = ocr_check = False
+    if not browser and not _is_canvas(app):
+        try:
+            shell = bool(_chromium(_pid(app)))
+        except Exception:   # noqa: BLE001
+            shell = False
+    if shell and not (_focused_text(app) or ""):
+        # 11-26 C-4.4:网页壳 App(VS Code 编辑区)的框读出来一直是空的 / 读不到,「框里文字变没变」永远没变;整窗截图一行字又不到 0.1%
+        #   → 打进去了也报 ineffective,还会借键盘再打一遍(叠字)。改成认字比结尾那几个字打字前后出现了几次
+        factory = _ocr_count_factory(app, text)
+        ocr_check = True
     wcheck = _focus_window_check(app)
+
+    def _check(pid):
+        if wcheck:
+            wcheck(pid)
+        # 复查 11-26:开头那次查密码框之后还要等锁(最多 10 秒)、等用户停手,焦点可能已经挪进密码框;Safari 在后台没有系统密码状态兜底
+        k = _focus_secret(app, pid)
+        if k:
+            raise ax.AXRefused(f"光标在{k}里,SeeU 不往里打字(这一步请你自己来)")
 
     def _bg_type():
         with _TypeLock(app):
-            if wcheck:          # 老的长进程可能 import 了没有 check 参数的 bgkey,没有就照旧打
-                try:
-                    return bk.type_to(app, text, enter=False, check=wcheck)
-                except TypeError as ex:
-                    if "check" not in str(ex):
-                        raise
+            try:                # 老的长进程可能 import 了没有 check 参数的 bgkey,没有就照旧打
+                return bk.type_to(app, text, enter=False, check=_check)
+            except TypeError as ex:
+                if "check" not in str(ex):
+                    raise
             return bk.type_to(app, text, enter=False)
     steps = [("后台打字", _bg_type)]
     # 10-30:浏览器不走前台兜底——藏着/在后面的窗口截图看不出字变,后台其实打进去了也判"没变",
     # 兜底就把浏览器拉到前台(实测抢了用户桌面)、还会叠出重复字。网页填表按编号用 web.type 才核实得了。
     if fallback and not real_allowed(allow):
         fallback = None                  # None = 本来要兜底,按设置没借(结果里写原因 / 「问我」档交给 AI 去问)
-    if fallback and not browser and bg.split_target(app)[0] not in NO_FRONT_TYPING:
+    # 复查 11-26:只在读不到框里字(改用认字核实)时才不借前台;Slack 这类读得到字的网页壳 App,ineffective 可靠,照旧兜底
+    if fallback and not browser and not ocr_check and bg.split_target(app)[0] not in NO_FRONT_TYPING:
         steps.append(("前台打字", _real_mouse(app, lambda ig: _front_type(app, ig, text, False))))
     before_txt = _focused_text(app)
     _TYPED_WIN.pop(app, None)
     r = _ladder(app, steps, min_change=0.001, expect_factory=factory)
-    if browser and r["outcome"] == "ineffective":
+    if ocr_check and r["outcome"] == "ineffective":
+        r.update(outcome="unverified", reason="后台打了,但这个 App 的输入框读不到字、画面上也没认出来(可能已经打进去,也可能没点进输入框)。"
+                 "先 see 看一眼:字在就别重打;不在就先点一下输入框再打")
+    elif browser and r["outcome"] == "ineffective":
         r.update(outcome="unverified", reason="后台打了,但浏览器画面核实不到(可能已经打进去)。"
                  "先 see 看框里的字;网页填表用 seeu.web.type(App, 编号, 文字) 才能核实,别重打")
     elif fallback is None and r["outcome"] == "ineffective":
@@ -1371,7 +1408,7 @@ def type(app, text, enter=False, fallback=True, allow=None):
     # "动了"不等于打全了:读得到框里文字的直接看,读不到的(网页做的框、镜像画面)截图识字,找最后几个字;
     # 找不到 = 只打进一部分 → 报 partial、不按回车、也不兜底重打(重打会叠出重复字)
     if r["outcome"] == "delivered" and tail:
-        if factory is not None:
+        if factory is not None and not ocr_check:
             seen = tail in "".join(c for c in (_focused_text(app) or "") if c.isalnum())
         else:
             seen = _ocr_has_tail(app, text)
@@ -1442,6 +1479,119 @@ def _tail_seen(text, got, n=12):
     return False
 
 
+def _ocr_tail_count(png, tail):
+    """画面上认到 tail 几次(只比字母数字、不分大小写);认不了 None。"""
+    try:
+        from seeu_lib import ocr
+        parts = (str(it[0] if isinstance(it, (list, tuple)) else it.get("text", "")) for it in ocr.ocr(png))
+        # 复查 11-26:每段认字结果分开拼(中间隔开),免得两段首尾凑出假的结尾
+        return "|".join("".join(c.lower() for c in t if c.isalnum()) for t in parts).count(tail.lower())
+    except (Exception, SystemExit):   # seeu_lib.ocr 认不出会 SystemExit
+        return None
+
+
+def _ocr_count_factory(app, text):
+    """打字核实:结尾几个字在画面上出现的次数比打字前多了 = 打进去了。结尾不到 3 个字(ok、12 这类状态栏里到处都有)不核实,返回 None。"""
+    tail = _tail(text)
+    if len(tail) < 3:
+        return None
+
+    def factory():
+        st = {}
+
+        def base():
+            try:
+                st["n"] = _ocr_tail_count(shoot(app), tail)
+            except Exception:   # noqa: BLE001
+                st["n"] = None
+        base()
+
+        def expect(png):
+            n = _ocr_tail_count(png, tail)
+            return st["n"] is not None and n is not None and n > st["n"]
+        expect.rebase = base
+        return expect
+    return factory
+
+
+# 11-26 C-4.4 晚(用户定):网页壳 App 不开「网页结构」开关(会弹读屏提示)→ 后台读不到光标,认不出密码框。改看画面上的字:
+#   同一行有密码类字样 + VS Code 输入框那句「按 Enter 确认、按 Esc 取消」= VS Code / Cursor / Trae 这类编辑器弹着密码框 → 拦;
+#   只有密码类字样(编辑器里改配置文件也会有)→ 不拦,结果里提醒 AI 先看一眼。认字认不出密码框里的点、刚弹出的框也是空的,所以不看点。
+# 复查 11-26 晚:①提示只认 VS Code 原句(原来「确认…取消」太宽,文档里一句说明露在编辑器里就整个 VS Code 打不了字);
+#   ②Git 密码框的「Password for…」写在输入框灰字里、跟提示不在一行 → 也看提示上方紧挨着、横向重叠的几行;
+#   ③提示要在窗口上部、横向居中(输入框弹出的位置);④拦用宽词、提醒用窄词(tokens 这类不提醒);⑤1.5 秒内不重复认字。
+_SECRET_WORDS = re.compile(r"password|passphrase|passcode|token|secret|api\s*key|verification\s*code|密码|口令|验证码|令牌|密钥|私钥", re.I)
+_WARN_WORDS = re.compile(r"\b(password|passphrase|passcode)\b|密码|口令|验证码", re.I)
+_INPUT_HINT = re.compile(r"press\W{0,3}enter\W{0,3}to\s*confirm|按\W{0,3}enter\W{0,3}以\s*确认", re.I)
+SCREEN_SECRET = "画面上有密码输入框(认到「{line}」),SeeU 不往里{what}(这一步请你自己来)"
+SCREEN_SECRET_NOTE = "画面上有「{line}」这类字样,可能弹着登录 / 密码框;这个 App 查不了光标在不在里面,先 see 看一眼,是密码框就请用户自己来"
+SCREEN_SECRET_CACHE_S = 1.5
+_SCR_CACHE = {}           # 进程号 → (时间, 结果):按键前后两次查、打字带回车时,不重复截图认字
+
+
+def _screen_secret_lines(items, size=None):
+    """认字结果 → ("block", 那行) / ("warn", 那行) / None。items:seeu_lib.ocr 的 dict(带 x / y / w),或只给字符串(只比同一行)。
+    size = 截图 (宽, 高),给了才做位置限制。"""
+    its = [it if isinstance(it, dict) else {"text": str(it)} for it in items]
+    W, H = size or (None, None)
+    for h in its:
+        t = str(h.get("text", ""))
+        if not _INPUT_HINT.search(t):
+            continue
+        has_xy = "y" in h and "x" in h
+        if W and H and has_xy and (h["y"] > H * 0.45 or abs(h["x"] - W / 2) > W * 0.3):
+            continue                                   # 不在输入框会弹出的地方(窗口上部、居中)
+        near = [h]
+        if H and has_xy:
+            x0, x1 = h["x"] - h.get("w", 0) / 2, h["x"] + h.get("w", 0) / 2
+            near += [o for o in its if o is not h and "y" in o and 0 < h["y"] - o["y"] <= H * 0.08
+                     and o["x"] + o.get("w", 0) / 2 > x0 and o["x"] - o.get("w", 0) / 2 < x1]
+        for o in near:
+            if _SECRET_WORDS.search(str(o.get("text", ""))):
+                return ("block", str(o.get("text", ""))[:60])
+    for o in its:
+        if _WARN_WORDS.search(str(o.get("text", ""))):
+            return ("warn", str(o.get("text", ""))[:60])
+    return None
+
+
+def _png_size(path):
+    try:
+        import Quartz
+        from Foundation import NSURL
+        src = Quartz.CGImageSourceCreateWithURL(NSURL.fileURLWithPath_(path), None)
+        img = Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
+        return (Quartz.CGImageGetWidth(img), Quartz.CGImageGetHeight(img))
+    except Exception:
+        return None
+
+
+def _shell_screen_secret(app, pid=None):
+    """网页壳 App(不是浏览器、不是画面类)读不到光标时,截图认字看是不是弹着密码框;别的情况、认不了都返回 None。"""
+    try:
+        if _is_canvas(app):
+            return None
+        from seeu import web
+        if web.is_browser(web.canon(bg.split_target(app)[0])):
+            return None
+        pid = pid or _pid(app)
+        if not _chromium(pid):
+            return None
+        el, _ = ax.app_element(pid)
+        if not _focus_vague(ax.attr(el, "AXFocusedUIElement")):
+            return None
+        hit = _SCR_CACHE.get(pid)
+        if hit and time.time() - hit[0] < SCREEN_SECRET_CACHE_S:
+            return hit[1]
+        from seeu_lib import ocr
+        png = shoot(app)
+        r = _screen_secret_lines(ocr.ocr(png), _png_size(png))
+        _SCR_CACHE[pid] = (time.time(), r)
+        return r
+    except (Exception, SystemExit):     # seeu_lib.ocr 认不出会 SystemExit
+        return None
+
+
 def _ocr_has_tail(app, text):
     """截图识字,看 text 的结尾在不在画面上。认不了(识字出错)返回 None = 不确定,按原来的结果走。"""
     try:
@@ -1461,8 +1611,8 @@ _GENERIC_FOCUS = {None, "AXWebArea", "AXGroup", "AXScrollArea", "AXWindow", "AXA
 
 def _is_chromium_browser(pid):
     """Chromium 内核的浏览器(Chrome、Edge、Brave、Arc…):网页里的控件默认不交给辅助功能,要先打开开关才读得到。
-    只认浏览器。Electron 做的 App 不替它开(11-07 第二轮复查:开了以后 VS Code 这类会当成读屏软件接入、可能切模式或弹提示,
-    打字核实的路也会跟着变)—— 那里跟镜像、模拟器一样认不出是什么框,靠 AI 遵守。"""
+    只认浏览器。Electron 做的 App 不替它开(11-07 第二轮复查;11-26 真机又见:开了 VS Code 会弹读屏提示、进读屏模式)
+    —— 那里跟镜像、模拟器一样认不出是什么框,靠 AI 遵守。"""
     try:
         from AppKit import NSRunningApplication
         from seeu import web
@@ -1483,6 +1633,59 @@ def _focus_vague(f):
     return role in _GENERIC_FOCUS
 
 
+FOCUS_SCAN_S = 0.8          # 到窗口里找被选中的框最多这么久 / 这么多个控件,超了不找(当成读不到,跟原来一样)
+FOCUS_SCAN_NODES = 4000
+_FIELD_ROLES = ax.TEXT_ROLES | {"AXSecureTextField"}
+
+
+def _is_browser_pid(pid):
+    try:
+        from AppKit import NSRunningApplication
+        from seeu import web
+        a = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(pid))
+        return bool(a is not None and web._by_bundle(str(a.bundleIdentifier() or "")))
+    except Exception:
+        return False
+
+
+_LAST_FIELD = {}           # 进程号 → 上次找到的被选中的框(先问它还选没选中,几乎不花时间)
+
+
+def _short_timeout(e):
+    try:
+        ax._AX["AXUIElementSetMessagingTimeout"](e, 0.5)     # 网页进程卡住时单次别陪着卡(默认约 6 秒)
+    except Exception:
+        pass
+
+
+def _focused_field(el, title=None, pid=None, root=None):
+    """找 AXFocused 的输入框:先看上次那个;再找 root(给了的话)、焦点窗口、标题窗口。找不到或超时 None。"""
+    last = _LAST_FIELD.get(pid)
+    if last is not None:
+        _short_timeout(last)
+        if ax.attr(last, "AXFocused"):
+            return last
+        _LAST_FIELD.pop(pid, None)
+    roots = [root] if root is not None else []
+    for w in (ax.main_window(el, None), ax.main_window(el, title) if title is not None else None):
+        if w is not None and all(w != r for r in roots):
+            roots.append(w)
+    t0, n = time.time(), 0
+    for r in roots:
+        stack = [r]
+        while stack and n < FOCUS_SCAN_NODES and time.time() - t0 < FOCUS_SCAN_S:
+            e = stack.pop(); n += 1
+            _short_timeout(e)
+            if ax.attr(e, "AXRole") in _FIELD_ROLES:
+                if ax.attr(e, "AXFocused"):
+                    if pid is not None:
+                        _LAST_FIELD[pid] = e
+                    return e
+                continue                     # 输入框里面不用再往下找
+            stack.extend(reversed(ax.attr(e, "AXChildren") or []))
+    return None
+
+
 def _focus_secret(app, pid=None):
     """目标 App 当前焦点是不是密码框 / 新密码框 / 验证码框(是 → 返回叫法,不是或读不到 → None)。
     11-06 体检:原来打字只查系统的「密码输入状态」,验证码框是普通文本框、不触发那个状态,
@@ -1494,7 +1697,10 @@ def _focus_secret(app, pid=None):
     try:
         el, pid = ax.app_element(pid or _pid(app))
         f = ax.attr(el, "AXFocusedUIElement")
-        if _focus_vague(f) and time.time() - _AX_WEB_ON.get(pid, 0) > AX_WEB_RETRY_S and _is_chromium_browser(pid):
+        browser = _is_chromium_browser(pid)
+        # 🔴 11-26 C-4.4 晚撤回:网页壳 App(VS Code 这类)不开这个开关 —— 真机:开了 VS Code 弹「检测到读屏软件」、状态栏进「Screen Reader
+        #   Optimized」模式(改了用户 App 的行为)。用户定撤掉,回到 v1.6.1:这类 App 在后台时认不出密码框,靠 AI 守规矩 + 前台时系统密码状态。
+        if _focus_vague(f) and time.time() - _AX_WEB_ON.get(pid, 0) > AX_WEB_RETRY_S and browser:
             _AX_WEB_ON[pid] = time.time()
             for k in ("AXManualAccessibility", "AXEnhancedUserInterface"):
                 try:
@@ -1507,6 +1713,12 @@ def _focus_secret(app, pid=None):
                 f = ax.attr(el, "AXFocusedUIElement")
                 if not _focus_vague(f):
                     break
+        web_area = f is not None and ax.attr(f, "AXRole") == "AXWebArea"
+        if (_focus_vague(f) or web_area) and _is_browser_pid(pid):
+            # 11-26 C-4.4:Safari 在后台时 App 不说光标在哪(网页框归另一个进程),原来当成「不是密码框」放行 → 真机 3/3 把字打进了密码框;
+            #   框自己会报 AXFocused,到目标窗口里找被选中的那个
+            #   复查 11-26:焦点报成网页区(不是哪个框)时也在这个网页区里找
+            f = _focused_field(el, bg.split_target(app)[1], pid, f if web_area else None) or f
         if f is None:
             return None
         return ax.secret_kind(ax.attr(f, "AXRole"), ax.attr(f, "AXSubrole"), ax.attr(f, "AXTitle"),
@@ -1519,7 +1731,7 @@ WRONG_WINDOW = ("输入框不在「{want}」这个窗口里(现在焦点在「{g
                 "SeeU 没打,免得写进别的窗口;先点一下「{want}」里的输入框再打")
 WRONG_WINDOW_KEY = ("键盘焦点不在「{want}」这个窗口里(现在在「{got}」),SeeU 没按,免得按到别的窗口;"
                     "先点一下「{want}」里要按键的地方再按;要按的是对话框的话,先 see 确认是它,再只写 App 名按")
-KEY_NO_REPLY = ("按键前读不到「{want}」所在 App 的窗口(App 可能正卡着),认不出键会进哪个窗口,SeeU 没按;等几秒先 see 看一眼再试;一直这样就只写 App 名按")
+KEY_NO_REPLY = ("按键前读不到「{want}」所在 App 的窗口(App 可能正卡着),认不出键会进哪个窗口,SeeU 没按;等几秒先 see 看一眼再试;一直这样就告诉用户这个 App 可能卡住了(别改成只写 App 名按:App 醒过来键会进当时的窗口)")
 KEY_REPLY_S = 1.5          # 读一次窗口超过这么久还什么都没有 = App 卡住没回话(单次上限 ax.MSG_TIMEOUT 2 秒)
 ENTER_MOVED = "打完字以后键盘焦点换到别的窗口了,所以没按回车(先 see 看一眼再决定)"
 TYPE_LOCK_WAIT_S = 10      # 等别的任务往同一个 App 打完字最多这么久,超时报忙(不无限等)
@@ -1532,12 +1744,17 @@ def _focus_window_check(app):
     title = bg.split_target(app)[1]
     if title is None or _is_canvas(app):
         return None
+    from seeu import web as _web
+    is_web = _web.is_browser(_web.canon(bg.split_target(app)[0]))   # 复查 11-26:浏览器不走窗口表认法(同按键)
 
     def focus_title(el):
         f = ax.attr(el, "AXFocusedUIElement")
         w = ax.attr(f, "AXWindow") if f is not None else None
+        if w is None:            # 11-26 C-4.4:VS Code 这类刚启动时光标一直读不到,原来直接放行 → 字进了同 App 当前的窗口(真机 2/2);焦点窗口读得到,看它
+            w = _key_window(el)
         seen[0] = w              # 核对的和记下来的是同一次读数
-        return ax.attr(w, "AXTitle") if w is not None else None
+        t = ax.attr(w, "AXTitle") if w is not None else None
+        return title if t == "" and not is_web and _titled_by_table(el, w, title) else t
     seen = [None]
 
     def check(pid):
@@ -1613,6 +1830,16 @@ def _sheet_owner(w):
     return w
 
 
+def _no_reply(app):
+    """App 现在回不回话(只问一次,最多等 ax.MSG_TIMEOUT 秒)。问了很久还是空 = 卡着;自绘界面没控件但回得快,不算。"""
+    try:
+        el, _ = ax.app_element(_pid(app))
+        t0 = time.time()
+        return ax.attr(el, "AXRole") is None and time.time() - t0 >= KEY_REPLY_S
+    except Exception:
+        return False
+
+
 def _other_titled_window(pid, title):
     """这个进程在屏幕上还有没有别的、有标题的普通窗口(辅助功能什么都读不到时用窗口表数)。查不了算有。"""
     try:
@@ -1625,6 +1852,30 @@ def _other_titled_window(pid, title):
         return False
     except Exception:
         return True
+
+
+def _titled_by_table(el, w, title):
+    """11-26 C-4.3:有的窗口辅助功能里标题是空串、窗口表里才有名字(see 列出来、AI 照着写的是窗口表那个),原来指明它一律拒。
+    只在认得准时才算:这个进程叫这个名的窗口恰好一个、位置大小跟焦点窗口一样、没有第二个窗口跟它同框,
+    辅助功能里也没有别的窗口真叫这个名。拿不准一律 False(照旧拒)。"""
+    try:
+        import Quartz
+        f = ax.frame(w)
+        pid = ax.element_pid(w)
+        if not f or not pid or not title or any(ax.attr(x, "AXTitle") == title for x in ax.attr(el, "AXWindows") or []):
+            return False
+        named, same = 0, []
+        for x in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, 0) or []:
+            if x.get("kCGWindowOwnerPID") != pid or x.get("kCGWindowLayer", 0) != 0:
+                continue
+            b = x.get("kCGWindowBounds") or {}
+            hit = (x.get("kCGWindowName") or "") == title
+            named += hit
+            if tuple(round(b.get(k, -1)) for k in ("X", "Y", "Width", "Height")) == tuple(round(v) for v in f):
+                same.append(hit)
+        return named == 1 and same == [True]
+    except Exception:
+        return False
 
 
 def _browser_title(t):
@@ -1643,6 +1894,8 @@ def _key_window_check(app, window=None):
     if title is None or _is_canvas(app):
         return None
     browser = bool(window) and not bg.split_target(app)[1]
+    from seeu import web as _web
+    is_web = browser or _web.is_browser(_web.canon(bg.split_target(app)[0]))   # 复查 11-26:写成「Chrome「标题」」也算浏览器
 
     def targets(ws, part=True):
         t = [(w, str(ax.attr(w, "AXTitle") or "")) for w in ws]
@@ -1663,6 +1916,8 @@ def _key_window_check(app, window=None):
         for n in range(3):
             t0 = time.time()
             ws = list(ax.attr(el, "AXWindows") or [])
+            if not ws and time.time() - t0 >= KEY_REPLY_S:      # 第一次读就等到超时:App 卡着,不再一项项接着等(每项 2 秒)
+                raise ax.AXRetry(KEY_NO_REPLY.format(want=title), "failed", "no_reply")
             w = _key_window(el)
             slow = time.time() - t0 >= KEY_REPLY_S
             if w is not None:
@@ -1671,6 +1926,8 @@ def _key_window_check(app, window=None):
                     return
                 # 窗口名单没读全(别的桌面上的不在名单里):焦点窗口自己就叫这个名也算;「包含」的认法不在这里用
                 if not any(w == x for x in ws) and targets([w], part=False):
+                    return
+                if got == "" and not is_web and _titled_by_table(el, w, title):
                     return
                 if got is not None:
                     break
@@ -2025,6 +2282,9 @@ def _secret_block(app, what, pid=None):
     if kind:
         return dict(outcome="refused", route=None, tried=[], png=None,
                     reason=f"光标在{kind}里,SeeU 不往里{what}(这一步请你自己来)")
+    scr = _shell_screen_secret(app, pid)
+    if scr and scr[0] == "block":
+        return dict(outcome="refused", route=None, tried=[], png=None, reason=SCREEN_SECRET.format(line=scr[1], what=what))
     return None
 
 
@@ -2038,7 +2298,10 @@ def _key_state(app):
         return None
     try:
         app_el = ax.app_element(_pid(app))[0]
+        t0 = time.time()
         f = ax.attr(app_el, "AXFocusedUIElement")
+        if f is None and time.time() - t0 >= KEY_REPLY_S:      # App 卡着没回话:不再接着等
+            return None
         w = ax.attr(app_el, "AXFocusedWindow")
         v = ax.attr(f, "AXValue") if f is not None else None
         sel = ax.attr(f, "AXSelectedTextRange") if f is not None else None
@@ -2129,6 +2392,10 @@ def press(app, key, *mods, window=None):
         from seeu import cdp
         return cdp.key(h, key, *mods)
     # 11-06 C-1.1.3(二次复查第 5 条):原来只有 type() 查密码框 / 验证码框,逐个按键或 ⌘V 粘贴能绕过去
+    box, check = {}, _key_window_check(app, window)
+    if check and _no_reply(app):      # 11-26 C-4.3:App 卡着时截图、找窗口每一步都要等满 2 秒(实测 11 秒),最后反正不按 → 先问一句
+        want = bg.split_target(app)[1] or window   # 复查 11-26:放在密码框检查前面,不然卡着时那几步先各等 2 秒
+        return dict(outcome="failed", code="no_reply", route=None, tried=[], png=None, reason=KEY_NO_REPLY.format(want=want))
     what = "按键"
     if _key_enters(key, mods):
         paste = safety.norm_key(key) in ("v", "y") and {"cmd", "ctrl"} & set(safety.norm_mods(mods))
@@ -2172,7 +2439,6 @@ def press(app, key, *mods, window=None):
         if check:
             check(pid)                    # 紧贴着发键再核一次
         bk.press(pid, key, mods)
-    box, check = {}, _key_window_check(app, window)
     r = _ladder(app, [("后台按键", act)], min_change=0.001, expect_factory=_fine_expect(app, min_change=0.001))
     try:
         return _key_verify(app, r, box.get("before"), nk, mods)

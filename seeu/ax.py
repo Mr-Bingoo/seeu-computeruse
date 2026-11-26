@@ -124,6 +124,14 @@ def element_at(app_el, x, y):
     return el if not err else None
 
 
+def element_pid(el):
+    """控件 / 窗口属于哪个进程;问不到 None。"""
+    if "AXUIElementGetPid" not in _AX or el is None:
+        return None
+    err, pid = _AX["AXUIElementGetPid"](el, None)
+    return None if err else pid
+
+
 def attr_names(el):
     err, v = _AX["AXUIElementCopyAttributeNames"](el, None)
     return list(v) if err == 0 and v else []

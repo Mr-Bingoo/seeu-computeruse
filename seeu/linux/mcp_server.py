@@ -330,6 +330,8 @@ LINUX_PHRASES = [
     ("剪贴板里是图片或文件,SeeU 不动它", "the clipboard holds an image or file; SeeU won't touch it"),
     ("SeeU 的 GNOME 小插件还没装:运行 python3 -m seeu 检查 --fix 装上,然后注销重新登录一次",
      "the SeeU GNOME helper isn't installed: the user should run python3 -m seeu check --fix, then log out and back in once"),
+    ("「扩展」总开关关着,SeeU 的 GNOME 小插件没启用:在「扩展」App 里打开总开关(或运行 python3 -m seeu 检查 --fix;打开后你装的其他扩展也会跟着启用)",
+     "the Extensions master switch is off, so SeeU's GNOME helper isn't enabled: turn the switch on in the Extensions app (or run python3 -m seeu check --fix; your other extensions will be enabled too)"),
     ("SeeU 的 GNOME 小插件被关掉了:在「扩展」App 里把 SeeU 打开(或运行 python3 -m seeu 检查 --fix)",
      "the SeeU GNOME helper is turned off: turn SeeU on in the Extensions app (or run python3 -m seeu check --fix)"),
     ("SeeU 的 GNOME 小插件还没加载:装好后要注销重新登录一次;已经重新登录过的话,看「扩展」App 里它有没有报错",

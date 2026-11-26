@@ -87,15 +87,17 @@ def main(argv=()):
         good &= _line(False, "GNOME 小插件", "现在不是 GNOME 桌面,第一版只支持 GNOME")
     else:
         if fix and (not shell.installed() or not shell.enabled()):
-            r = shell.install()
+            r = shell.install(touch_master=True)      # 用户主动 --fix:总开关关着也打开(会提示别的扩展跟着启用)
             print("     已装好 SeeU 的 GNOME 小插件" + (";🔴 要注销重新登录一次才生效" if r["relogin"] else ""))
+            if r.get("all_on"):
+                print("     " + shell.ALL_ON_NOTE)
         if shell.available():
             p = shell.ping()
             old = int(p.get("api") or 1) < shell.NEED_API
             good &= _line(None if old else True, "GNOME 小插件", f"在跑(GNOME {p.get('shell')},小插件第 {p.get('version')} 版)"
                           + (";是旧版,借鼠标和代理光标要新版:运行 python3 -m seeu 检查 --fix,再注销重新登录一次" if old else ""))
         else:
-            good &= _line(False, "GNOME 小插件", shell.why_missing() + ("" if fix else "(运行 python3 -m seeu 检查 --fix)"))
+            good &= _line(False, "GNOME 小插件", shell.why_missing() + ("" if fix or "--fix" in shell.why_missing() else "(运行 python3 -m seeu 检查 --fix)"))
     # 11-21 C-3.4:Debian 13 默认没装 Pillow,截完图裁不了 → 看画面只有清单没有截图、按位置点全报「还没截图」
     try:
         import PIL   # noqa: F401
