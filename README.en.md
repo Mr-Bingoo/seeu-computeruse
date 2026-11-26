@@ -168,6 +168,19 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 - Windows only: the installer on Qwen's site (as of November 2026) is an older build without the "Work" page. After installing, click "New version" (新版本) at the top right to update (possibly twice), then restart Qwen until "Daily / Work" (日常 / 工作) appears at the top left.
 - Qwen asks you to click "Allow" every time it opens an app itself, so in Qwen SeeU adds one more tool that opens apps in the background: the app opens behind your current window and the app you are using stays in front. Terminals, script apps, password apps, System Settings, browsers (use SeeU's web tools for pages), other AI clients and remote-access apps are not opened for you.
 
+**Other clients that take a standard config (Mac / Windows only)**: some clients and MCP directories only accept a standard config like the one below. Do step 1 of Qwen above to install SeeU, install [Node.js](https://nodejs.org), then paste this in (it doesn't work on Linux; use `python3 -m seeu mcp` above instead):
+
+```json
+{
+  "mcpServers": {
+    "seeu": {
+      "command": "npx",
+      "args": ["-y", "seeu-computeruse@latest"]
+    }
+  }
+}
+```
+
 ## Update and remove
 
 - **Update**: just tell the AI to "update SeeU". To do it yourself, run `python3 -m seeu update` (on Windows, install [Git for Windows](https://git-scm.com) first); if you installed with `npx skills`, run `npx skills update seeu`. If you installed the plugin: in Claude Code run `claude plugin update seeu`, in Codex run `codex plugin marketplace upgrade seeu-computeruse`, then start a new session; your settings are kept. On Linux, if a new version changes the GNOME extension, it is installed for you and you're reminded to log out and back in once. See the [changelog](CHANGELOG.en.md) for what changed in each release.

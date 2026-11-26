@@ -182,6 +182,19 @@ Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME �
 - 仅 Windows : 千问官网(2026 年 11 月)给的安装包版本较旧，没有「工作」页。装好后要在右上角点「新版本」升级(可能要升两次)，升完重启千问，直到左上角出现「日常 / 工作」。
 - 千问自己打开 App 每次都要你点「允许」，所以在千问里 SeeU 多一个「后台打开 App」的工具 : App 开在你当前窗口后面，不切走你正在用的程序；终端、能跑脚本的 App、密码类 App、系统设置、浏览器(开网页请用 SeeU 的网页工具)、别的 AI 客户端和远程协助程序不替你打开。
 
+**其他用标准配置的客户端(仅 Mac / Windows)** : 有的客户端或 MCP 广场只收下面这种标准配置。照千问的第 1 步装好 SeeU，再装好 [Node.js](https://nodejs.org)，把这段填进去就行(Linux 上用不了，请用上面的 `python3 -m seeu mcp`) :
+
+```json
+{
+  "mcpServers": {
+    "seeu": {
+      "command": "npx",
+      "args": ["-y", "seeu-computeruse@latest"]
+    }
+  }
+}
+```
+
 ## 更新和移除
 
 - **更新** : 跟 AI 说「更新 SeeU」就行；自己动手就运行 `python3 -m seeu update`(Windows 上要先装 [Git for Windows](https://git-scm.com))，用 `npx skills` 装的运行 `npx skills update seeu`。用插件装的 : Claude Code 运行 `claude plugin update seeu`，Codex 运行 `codex plugin marketplace upgrade seeu-computeruse`，再新开一个会话；你改过的设置会保留。Linux 上新版要是改了 GNOME 小插件，会自动装上并提醒你注销重新登录一次。每版改了什么见[更新说明](CHANGELOG.md)。
