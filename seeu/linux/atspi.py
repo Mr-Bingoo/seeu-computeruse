@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """SeeU Linux 版 · AT-SPI(Linux 的辅助功能接口):读控件、按控件、往输入框里写字。全部不动鼠标键盘、不抢前台。
 
-坐标:GNOME + Wayland 下控件报的「屏幕坐标」全是 0(拿不到),要用「窗口内坐标」+ 小插件报的窗口外框位置(GTK4 实测,11-18)。
+坐标:GNOME + Wayland 下控件报的「屏幕坐标」全是 0(拿不到),要用「窗口内坐标」+ 小插件报的窗口外框位置(GTK4 实测)。
 """
 import time
 
@@ -53,7 +53,7 @@ def apps():
 
 
 def apps_of(pid):
-    """同一个进程可能登记好几条(Qt 程序 11-18 实测:一条空的 featherpad + 一条带窗口的 FeatherPad)。"""
+    """同一个进程可能登记好几条(Qt 程序实测:一条空的 featherpad + 一条带窗口的 FeatherPad)。"""
     return [a for a, name, p in apps() if p == pid]
 
 
@@ -94,7 +94,7 @@ def _fits(t, win):
 
 def pick_same_title(cands, win):
     """几个同名顶层里挑出小插件说的那个:先比大小,再看是不是当前窗口。挑不出唯一一个 → Ambiguous。
-    (11-20 x86 实测:两个都叫「新建文档 (草稿)」的文本编辑器窗口,原来按标题对上第一个 → 看的是新窗口、字写进了旧窗口)"""
+    (x86 实测:两个都叫「新建文档 (草稿)」的文本编辑器窗口,原来按标题对上第一个 → 看的是新窗口、字写进了旧窗口)"""
     if len(cands) == 1:
         return cands[0]
     sized = [t for t in cands if _fits(t, win)]
@@ -126,13 +126,13 @@ def frame_for(win):
         return pick_same_title(same, win)
     if len(tops) == 1:
         return tops[0]
-    # 11-20 复查:标题对不上(刚改名、未保存加了 *)又有好几个窗口时,原来随手挑「当前的 / 第一个看得见的」可能对到别的窗口上
+    # 标题对不上(刚改名、未保存加了 *)又有好几个窗口时,原来随手挑「当前的 / 第一个看得见的」可能对到别的窗口上
     # → 跟同名那条一样比大小、再看是不是当前窗口;挑不出唯一一个就报 Ambiguous,不乱挑
     showing = [t for t in tops if _has(_states(t), Atspi.StateType.SHOWING)] or tops
     return pick_same_title(showing, win)
 
 
-# 🔴 一律用「接口名.方法(控件, …)」显式调:控件对象上有同名方法会盖掉接口的(11-18 栽过:acc.get_text 是「取文字接口」,
+# 🔴 一律用「接口名.方法(控件, …)」显式调:控件对象上有同名方法会盖掉接口的(栽过:acc.get_text 是「取文字接口」,
 #    带参数调直接报错,又落到 Value 接口读出一串乱数字)。先看控件支持哪些接口再调。
 def ifaces(acc):
     try:
@@ -172,7 +172,7 @@ def text_of(acc, limit=20000):
 
 def rect(acc, origin, thin=False):
     """屏幕上的 (x, y, w, h)。origin = 窗口外框左上角。读不到返回 None。
-    thin=True:宽或高是 0 的也收下(按 2 像素算)—— VS Code 这类自己画编辑器的,收键盘的是一个宽 0 的隐形输入框(11-18 实测)。"""
+    thin=True:宽或高是 0 的也收下(按 2 像素算)—— VS Code 这类自己画编辑器的,收键盘的是一个宽 0 的隐形输入框。"""
     try:
         e = acc.get_extents(Atspi.CoordType.WINDOW)
     except Exception:   # noqa: BLE001
@@ -227,7 +227,7 @@ def elements(frame, origin, budget=WALK_BUDGET):
             val = None
             if editable or role in ("text", "entry", "spin button", "slider", "combo box", "document text"):
                 val = text_of(acc, 2000)
-            want = pressable or editable or (name and role in TEXT_ROLES) or role == "terminal"   # 第二轮复查:终端一律列出来,好拦
+            want = pressable or editable or (name and role in TEXT_ROLES) or role == "terminal"   # 终端一律列出来,好拦
             if want and role not in SKIP_ROLES:
                 r = rect(acc, origin, thin=editable)
                 if r is not None:
@@ -237,7 +237,7 @@ def elements(frame, origin, budget=WALK_BUDGET):
                                     enabled=_has(st, Atspi.StateType.ENABLED) or _has(st, Atspi.StateType.SENSITIVE),
                                     rect=r, acc=acc, path=path))
             # 文字类控件下面通常只剩一堆字块,不往下走(网页段落里的链接例外)
-            # 11-18:没名字的 label / static 其实是个容器(VS Code 的编辑区就夹在这么一层下面),照常往下走
+            # 没名字的 label / static 其实是个容器(VS Code 的编辑区就夹在这么一层下面),照常往下走
             if role in ("text", "entry", "password text", "terminal") or (role in ("label", "static") and name):
                 continue
         try:
@@ -294,7 +294,7 @@ def _toolkit(acc):
 
 
 def _insert_raw(acc, pos, text):
-    """插入并核对字数。「长度」各家理解不一样(11-18 实测):GTK4 按 UTF-8 字节、Qt 按字符;
+    """插入并核对字数。「长度」各家理解不一样:GTK4 按 UTF-8 字节、Qt 按字符;
     给错了 GTK 会整段不写(中文一个字 3 字节)。先按界面库猜,字数没变就换另一种再试一次。"""
     nbytes, nchars = len(text.encode("utf-8")), len(text)
     order = [nbytes, nchars] if "gtk" in _toolkit(acc) else [nchars, nbytes]
@@ -322,7 +322,7 @@ def selected(acc):
 
 def insert(acc, text):
     """在光标处插入文字(光标读不到就加在末尾)。不经过键盘,不抢前台。返回插入的位置。
-    框里有选中的字 → 先删掉再插,跟真键盘打字一样「替换选中的」(11-20:Codex 先 Ctrl+A 再写,原来是插在前面、旧字还在)。"""
+    框里有选中的字 → 先删掉再插,跟真键盘打字一样「替换选中的」(Codex 先 Ctrl+A 再写,原来是插在前面、旧字还在)。"""
     pos = caret(acc)
     sel = selected(acc)
     if sel:

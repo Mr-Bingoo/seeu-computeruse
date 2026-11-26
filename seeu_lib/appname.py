@@ -1,8 +1,8 @@
-"""App 名字跟系统语言走:英文名 ⇄ 系统现在显示的名字(11-23 建)。
+"""App 名字跟系统语言走:英文名 ⇄ 系统现在显示的名字。
 
 中文 macOS 上,正在运行的 App 和窗口进程名(NSRunningApplication.localizedName / kCGWindowOwnerName)会变成中文:
 TextEdit → 文本编辑、Safari → Safari浏览器、iPhone Mirroring → iPhone镜像(繁体 iPhone鏡像輸出)、Dock → 程序坞。
-seeu_lib 各处调用方传的都是英文名,直接 == 比对在中文系统上会对不上(11-22 SeeU 在朋友的中文 Intel Mac 上实测)。
+seeu_lib 各处调用方传的都是英文名,直接 == 比对在中文系统上会对不上(SeeU 在朋友的中文 Intel Mac 上实测)。
 做法照 SeeU 的 seeu/ax.py(local_name / same_app):按 App 包文件名、Info.plist 的 CFBundleName / CFBundleExecutable
 这些不随语言变的名字,对回当前显示名;另外读包里各语言的显示名(InfoPlist.loctable / *.lproj/InfoPlist.strings)。
 
@@ -21,7 +21,7 @@ import sys
 import time
 
 CACHE_S = 2.0        # 对上了记 2 秒
-MISS_CACHE_S = 0.3   # 没对上只记 0.3 秒(App 刚启动那会儿别一直认不出;11-23 SeeU 复查)
+MISS_CACHE_S = 0.3   # 没对上只记 0.3 秒(App 刚启动那会儿别一直认不出)
 APPS_CACHE_S = 0.3   # 正在运行的 App 名单共用一份,几个名字一起查只转一次事件循环
 _names_cache = {}   # 名字 -> (时间, 名字集合)
 _base_cache = {}    # App 包路径 -> 不随语言变的名字
@@ -31,7 +31,7 @@ _ui_english = None  # 系统界面语言是不是英文(None = 还没查);测试
 
 
 def _is_english_ui():
-    """系统第一语言是英文:App 显示名就是英文名,不用换名,直接跳过(英文系统零开销;11-23 SeeU 复查)。"""
+    """系统第一语言是英文:App 显示名就是英文名,不用换名,直接跳过(英文系统零开销)。"""
     global _ui_english
     if _ui_english is None:
         try:
@@ -45,7 +45,7 @@ def _is_english_ui():
 
 def _running_apps():
     """正在运行的、有界面的 App(activationPolicy == 0,跟 seeu/ax.py 一样)。
-    不过滤的话会认到后台进程上(Shortcuts → ShortcutsViewService、Electron 的 Helper 进程,11-23 SeeU 复查实测)。
+    不过滤的话会认到后台进程上(Shortcuts → ShortcutsViewService、Electron 的 Helper 进程,实测)。
     没有事件循环的进程里名单会停在第一次,先转 20ms。"""
     from AppKit import NSWorkspace
     from Foundation import NSRunLoop, NSDate
@@ -124,7 +124,7 @@ def _local_names(path):
 
 def names(name):
     """这个 App 可能叫的名字:{原名, 系统现在的显示名}。对不上任何正在运行的 App、或系统是英文界面时只返回 {原名}。
-    找法(11-23 按 SeeU 复查改):先整份名单找「显示名完全相等」,没有再按包名(包文件名、CFBundleName、可执行文件名)找,
+    找法:先整份名单找「显示名完全相等」,没有再按包名(包文件名、CFBundleName、可执行文件名)找,
     还没有才翻包里各语言的显示名;只并进命中那个 App 的显示名,不把它的包名全并进来。"""
     owner = str(name or "")
     if not owner:

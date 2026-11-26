@@ -5,7 +5,7 @@ wait.py —— "等到某个画面状态出现"的通用工具,全部自带硬�
 
 截图怎么截由调用方决定:传一个 shoot() 函数进来,每次调用返回一张新截图的路径
 (比如 Mac 窗口用 sck_capture 画面流,安卓设备用 adb screencap),本模块只负责反复看、到点报错。
-2026-10-01 新建:各项目原来都是手写 `for i in range(N): sleep; shot; ocr; 找字` 的循环。
+各项目原来都是手写 `for i in range(N): sleep; shot; ocr; 找字` 的循环。
 
     from seeu_lib import wait
     r = wait.wait_text(shoot, ["一键收取", "收取"], timeout=8)   # 返回 {hit, png, entries}
@@ -14,7 +14,7 @@ wait.py —— "等到某个画面状态出现"的通用工具,全部自带硬�
     wait.wait_stable(shoot, timeout=6)                            # 画面不再变化,返回最后一张图
     wait.wait_until(lambda: 某个检查(), timeout=10, what="xx")    # 通用版
     r = wait.act_and_verify(shoot, lambda: 点击(), box=(0,60,w,h))  # 做动作并核实有没有反应
-    if r["outcome"] == "ineffective": ...                           # 没反应:重试/换办法/交给 LLM(10-06 加)
+    if r["outcome"] == "ineffective": ...                           # 没反应:重试/换办法/交给 LLM
 
 上限:timeout 秒和 tries 次,哪个先到就停,抛 WaitTimeout(带最后一张截图路径,方便交给 LLM 看)。
 """

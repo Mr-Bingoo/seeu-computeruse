@@ -1,4 +1,4 @@
-"""SeeU 装在哪、设置文件放哪(11-22 C-3.7,做插件版)。只用标准库:Mac / Windows / Linux、哪个进程都能 import。
+"""SeeU 装在哪、设置文件放哪(做插件版)。只用标准库:Mac / Windows / Linux、哪个进程都能 import。
 
 插件版 = 用户在 Claude Code / Codex 里从插件市场装的那份:代码被拷进客户端自己的插件文件夹
 (~/.claude/plugins/cache/…、~/.codex/plugins/cache/…),**插件一更新整个文件夹就换掉**。

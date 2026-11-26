@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 出事时一键取证(11-14,照 Mac 版 seeu/evidence.py):觉得被抢键盘、打字跑错地方、窗口乱跳时马上跑一下,记下现场。
+"""SeeU Windows 版 · 出事时一键取证(照 Mac 版 seeu/evidence.py):觉得被抢键盘、打字跑错地方、窗口乱跳时马上跑一下,记下现场。
 
     python -m seeu 取证            # 记文字现场(几秒)
     python -m seeu 取证 --shot     # 再截一张前台窗口(安全底线不让碰的窗口不截)
@@ -106,7 +106,7 @@ def keyboard():
 
 def _short_cmd(cmd):
     """命令行只留「哪个模块 / 文件 + 子命令」(seeu type "打的字" 这种,后面的参数不记)。
-    按词找:-m 后面那个带关键字的词,或文件名带关键字的 .py;安装文件夹名里带 seeu 不算(11-14 复查)。"""
+    按词找:-m 后面那个带关键字的词,或文件名带关键字的 .py;安装文件夹名里带 seeu 不算。"""
     ws = cmd.split()
     base = lambda w: w.strip('"').replace("/", "\\").rsplit("\\", 1)[-1]      # noqa: E731
     for j, w in enumerate(ws):
@@ -123,7 +123,7 @@ def seeu_procs():
     ps = ("Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | "
           "ForEach-Object { \"$($_.ProcessId)`t$($_.ParentProcessId)`t$($_.CommandLine)\" }")
     try:
-        from seeu.win import ocr as _ocr      # 11-23 C-3.9 整体复查:powershell 用全路径(别被当前目录里同名程序顶替)
+        from seeu.win import ocr as _ocr      # powershell 用全路径(别被当前目录里同名程序顶替)
         r = subprocess.run([_ocr._powershell(), "-NoProfile", "-NonInteractive", "-Command",
                             "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + ps],
                            capture_output=True, timeout=PS_TIMEOUT_S, creationflags=0x08000000)
@@ -185,11 +185,11 @@ def settings():
 
 
 def _isee_on(isee):
-    """I See 现在算不算开着。🔴 自己读文件判断、不落盘:isee.active() 发现过期会顺手改设置文件、弹提示(11-14 复查),取证不能改东西。"""
+    """I See 现在算不算开着。🔴 自己读文件判断、不落盘:isee.active() 发现过期会顺手改设置文件、弹提示,取证不能改东西。"""
     env = os.environ.get("SEEU_ISEE", "").strip().lower()
     if env in ("0", "off", "关", "false"):
         return False
-    return isee.file_on(isee._load())      # 11-16:凭证对得上、没过期才算(只读)
+    return isee.file_on(isee._load())      # 凭证对得上、没过期才算(只读)
 
 
 def shot():

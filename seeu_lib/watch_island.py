@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-watch_island.py —— 多任务「灵动岛」悬浮标(SeeU C-0.8,10-24)。由 watch_window.serve() 在 ≥2 个任务同时在跑时接管显示;
-只有一个任务时不出现,照旧是原来的悬浮窗/悬浮标。界面是用户在桌面样品里定稿的(seeu/参考/灵动岛悬浮标/island_sample.py),规则见
-seeu/SeeU-相关要点.md「灵动岛」节:
-  收起胶囊 = 只写「SeeU」(10-27 用户定,不写个数;圆点用最活跃任务的颜色;借鼠标 / 卡住自动展开说);展开 = 顶栏「SeeU · N 个任务(· 排队 N)」+ 最活跃任务大卡片 + 下面一行一个(最多 3 条,更多的叠放);
+watch_island.py —— 多任务「灵动岛」悬浮标。由 watch_window.serve() 在 ≥2 个任务同时在跑时接管显示;
+只有一个任务时不出现,照旧是原来的悬浮窗/悬浮标。规则:
+  收起胶囊 = 只写「SeeU」(不写个数;圆点用最活跃任务的颜色;借鼠标 / 卡住自动展开说);展开 = 顶栏「SeeU · N 个任务(· 排队 N)」+ 最活跃任务大卡片 + 下面一行一个(最多 3 条,更多的叠放);
   借鼠标永远第一,卡住自动展开(红),鼠标离开 3 秒自动收;颜色跟系统深浅色。
 接口(watch_window 里用):
   init(hooks)                 一次;hooks = dict(tr, isee_get, isee_toggle, light_get, light_set, solo, log)
@@ -25,19 +24,19 @@ from AppKit import (NSApp, NSApplication, NSAppearance, NSAppearanceNameAqua, NS
                     NSWindowCollectionBehaviorCanJoinAllSpaces, NSWindowStyleMaskBorderless,
                     NSWindowStyleMaskNonactivatingPanel)
 from Foundation import NSMakeRect, NSObject, NSRunLoop, NSRunLoopCommonModes, NSTimer
-try:      # 11-23 C-3.9 整体复查:液态玻璃是 macOS 26 才有的类,老系统上直接 import 会让整个悬浮窗进程起不来 → 没有就用深色底(见 _PlainGlass)
+try:      # 液态玻璃是 macOS 26 才有的类,老系统上直接 import 会让整个悬浮窗进程起不来 → 没有就用深色底(见 _PlainGlass)
     from AppKit import NSGlassEffectView
 except ImportError:
     NSGlassEffectView = None
 try:
-    from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+    from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 except ImportError:          # 当独立程序跑(python3 …/watch_window.py serve)时找不到 seeu_lib 包:同一取法兜底
     home = lambda *p: os.path.join(os.environ.get("SEEU_HOME") or os.path.expanduser("~/.seeu"), *p)   # noqa: E731
 
 PURPLE, ORANGE, RED = (0.498, 0.467, 0.867), (1.0, 0.62, 0.18), (1.0, 0.35, 0.31)
 DARK = (26 / 255, 28 / 255, 31 / 255)
-OPEN_W = 320          # 10-27 用户:里面的顶卡 300 = 单任务卡片宽(原 330)
-MAX_ROWS = 2              # 展开后顶卡下面最多列几行(连顶卡共 3 条,10-24 用户定);更多的叠在下面
+OPEN_W = 320          # 里面的顶卡 300 = 单任务卡片宽(原 330)
+MAX_ROWS = 2              # 展开后顶卡下面最多列几行(连顶卡共 3 条);更多的叠在下面
 HOLD_S = 8                # 顶上至少停几秒(展开期间不换)
 LEAVE_S = 3               # 鼠标离开后几秒自动收(有借鼠标/卡住不收)
 ISEE_LIVE = home("seeu_isee_live.json")
@@ -45,7 +44,7 @@ POS_FILE = home("watch_island.json")
 ICON_R, TB_H, TB_FONT = 7, 28, 13
 LIGHTS = ["off", "real", "bg"]
 LIGHT_NAME = {"off": "关", "real": "抢占", "bg": "被控"}
-MORPH_T, MORPH_BOUNCE, MORPH_FPS = 0.5, 0.2, 60     # 同真悬浮窗(10-20 用户在预览里定)
+MORPH_T, MORPH_BOUNCE, MORPH_FPS = 0.5, 0.2, 60     # 同真悬浮窗
 OPEN_R = 18
 
 H = {}                    # init 传进来的 hooks
@@ -89,11 +88,11 @@ def stuck(t):
 
 
 def queued(t):
-    """11-17 C-2.5 多任务调度:在排队等别的任务用完同一个 App(借鼠标 / 卡住优先,不算排队)。"""
+    """多任务调度:在排队等别的任务用完同一个 App(借鼠标 / 卡住优先,不算排队)。"""
     return bool(t.get("queued")) and not borrow(t) and not stuck(t)
 
 
-Q_ALPHA = 0.55       # 排队那几行整体的淡度(用户 11-17 在小样里定)
+Q_ALPHA = 0.55       # 排队那几行整体的淡度
 Q_FOLD = 2           # 排队超过这么多行就折成「还有 N 个在排队」
 
 
@@ -106,14 +105,14 @@ def ordered(now):
             and not pick_top > st["pick"].get(cur["key"], 0):
         a.remove(cur)
         a.insert(0, cur)
-    a.sort(key=lambda t: (not borrow(t), not stuck(t), queued(t)))   # 借鼠标 > 卡住 > 最近有动作 > 排队中(11-17:排队的永远不上顶)
+    a.sort(key=lambda t: (not borrow(t), not stuck(t), queued(t)))   # 借鼠标 > 卡住 > 最近有动作 > 排队中(排队的永远不上顶)
     if a and a[0]["key"] != st["top"]:
         st["top"], st["top_since"] = a[0]["key"], now
     return a
 
 
 def color(t):
-    # 10-27:卡住不靠红色(颜色用户自定,红可能撞色),靠文字说;11-17:圆点用任务光标色(跟屏幕上那只光标对得上)
+    # 卡住不靠红色(颜色用户自定,红可能撞色),靠文字说;圆点用任务光标色(跟屏幕上那只光标对得上)
     return ORANGE if borrow(t) else (t.get("color") or PURPLE)
 
 
@@ -122,7 +121,7 @@ def title(t):
 
 
 def idle(t):
-    """镜像 / 普通 App 任务:3 秒没点就是等下一步(10-27:不再写「操作 BlueStacks」)。"""
+    """镜像 / 普通 App 任务:3 秒没点就是等下一步(不再写「操作 BlueStacks」)。"""
     return t.get("kind") != "browser" and time.time() - t.get("mark_t", 0) > 3
 
 
@@ -141,7 +140,7 @@ def verb(t):
 
 def headline(t):
     """顶卡大字:动作前面加「正在」;借鼠标 / 卡住 / 等下一步原样。"""
-    if queued(t):            # 11-17:全都在排队时顶卡写清楚排第几、等谁
+    if queued(t):            # 全都在排队时顶卡写清楚排第几、等谁
         q = t["queued"]
         return _tr("card.queued", "排队中 · 第 {n} · 等 {app}", n=q.get("pos", 1), app=q.get("app", ""))
     v = verb(t)
@@ -246,7 +245,7 @@ def light_icon(root, cx, cy, lvl):
         _shape(root, _circle(cx, cy, ICON_R + 0.75), fill=(ORANGE if lvl == "real" else PURPLE, 1))
     ring(root, cx, cy, 0.88)
     c = ((1, 1, 1), 1) if lvl != "off" else (ink(), 0.55)
-    d, L = 2.8, 1.6        # 10-30 用户:四个角别贴着圆(原 3.3, 2.1),跟悬浮窗一起改
+    d, L = 2.8, 1.6        # 四个角别贴着圆(原 3.3, 2.1),跟悬浮窗一起改
     p = Quartz.CGPathCreateMutable()
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -314,7 +313,7 @@ class WatchIslandView(NSView):
 
     def mouseUp_(self, ev):
         now = time.time()
-        st["hand"] = hand_event(ev)          # 11-23 C-3.9:这一下是不是亲手点的(开 I See 要看)
+        st["hand"] = hand_event(ev)          # 这一下是不是亲手点的(开 I See 要看)
         if st.get("drag") and st["drag"][2]:
             st["drag"] = None
             _save_pos()
@@ -365,7 +364,7 @@ def _save_pos():
 
 
 def set_anchor(pt, save=True):
-    """10-27:跟单任务悬浮标共用一个位置(右上角)。岛出现时从悬浮标那里长出来,不再跳回自己记的老位置。"""
+    """跟单任务悬浮标共用一个位置(右上角)。岛出现时从悬浮标那里长出来,不再跳回自己记的老位置。"""
     st["anchor"] = (float(pt[0]), float(pt[1]))
     st["last_frame"] = None
     if save:
@@ -430,7 +429,7 @@ def _draw(now, force=False):
     lead = a[0]
     # ---- 收起胶囊 ----
     lroot = proot
-    s = "SeeU"         # 10-27 用户定:悬浮标只写 SeeU,多任务也不写个数;借鼠标 / 卡住自动展开说
+    s = "SeeU"         # 悬浮标只写 SeeU,多任务也不写个数;借鼠标 / 卡住自动展开说
     w, h = 29 + text_w(s, 14.5, True) + 14, 32
     st["psize"] = (w, h)
     dot(lroot, 16, h / 2, 5, color(lead))
@@ -456,7 +455,7 @@ def _draw(now, force=False):
     steps_h = 18 * len(steps)
     card_h = 14 + 16 + 28 + 20 * len(notes) + (steps_h + 8 if steps_h else 0) + 8
     W = OPEN_W
-    qrest = sorted((r for r in rest if queued(r)), key=lambda r: r["queued"].get("t", 0))   # 11-17:排队的放下段,先排的在前
+    qrest = sorted((r for r in rest if queued(r)), key=lambda r: r["queued"].get("t", 0))   # 排队的放下段,先排的在前
     rest = [r for r in rest if not queued(r)]
     fold = len(rest) > MAX_ROWS and not st.get("more")
     shown = rest[:MAX_ROWS] if fold else rest
@@ -469,7 +468,7 @@ def _draw(now, force=False):
     sub = 0.72 if look_dark() else 0.6
     topbar(HH, W, t, len(a), isee, light, sum(1 for x in a if queued(x)))
     cy0 = HH - TB_H - card_h
-    # 10-27 用户:顶卡排版照单任务卡片(卡片左边 10 起算:圆点 22、小字 34、大字 18、右边留 18、圆角 18),不加橙/红边
+    # 顶卡排版照单任务卡片(卡片左边 10 起算:圆点 22、小字 34、大字 18、右边留 18、圆角 18),不加橙/红边
     L, CW = 10, W - 20
     box(lroot, L, cy0, CW, card_h, 18, 0.10 if look_dark() else 0.35)
     y = HH - TB_H - 14 - 7
@@ -489,7 +488,7 @@ def _draw(now, force=False):
     # 其余一行一个
     ry = cy0 - 6
     row_a = 0.08 if look_dark() else 0.3
-    if more_row and not fold:      # 展开全部:右上一个小「折叠」胶囊(用户定叫折叠;收起 = 整个岛缩回浮标)
+    if more_row and not fold:      # 展开全部:右上一个小「折叠」胶囊(叫折叠;收起 = 整个岛缩回浮标)
         lab = _tr("island.fold", "折叠 ⌃")
         bw = text_w(lab, 11, True) + 18
         box(lroot, W - 10 - bw, ry - 22, bw, 20, 10, row_a * 1.6)
@@ -519,7 +518,7 @@ def _draw(now, force=False):
 
 
 def draw_queue(qshown, qfold, nq, ry, W, now, sub, row_a):
-    """11-17 C-2.5 灵动岛下段「排队中」(用户在小样里定):分隔线 + 一行一个,整行变暗;
+    """灵动岛下段「排队中」:分隔线 + 一行一个,整行变暗;
     最右边(正在做的行写「刚刚」的那一栏)写 zZ,3 秒轻轻一亮一暗;超过 Q_FOLD 个折成「还有 N 个在排队」,点开看全部。"""
     lab = _tr("island.queued", "排队中")
     lw = text_w(lab, 10.5, False)
@@ -543,16 +542,16 @@ def draw_queue(qshown, qfold, nq, ry, W, now, sub, row_a):
         q = r["queued"]
         detail = _tr("island.queue_at", "第 {n} · 等 {app}", n=q.get("pos", 1), app=q.get("app", ""))
         dx = 34 + nw + 8 + vw + 8
-        text(lroot, detail, 11.5, False, dx, m, max(0, W - dx - 58), sub * qa)   # 太长截成「…」,右边留给 zZ(用户 11-17 问过)
+        text(lroot, detail, 11.5, False, dx, m, max(0, W - dx - 58), sub * qa)   # 太长截成「…」,右边留给 zZ
         z = text(lroot, "zZ", 11, True, W - 50, m, 26, sub * 0.8, right=True)
         an = Quartz.CABasicAnimation.animationWithKeyPath_("opacity")
         an.setFromValue_(1.0); an.setToValue_(0.4); an.setDuration_(1.5); an.setAutoreverses_(True); an.setRepeatCount_(1e9)
         an.setTimingFunction_(Quartz.CAMediaTimingFunction.functionWithName_("easeInEaseOut"))
-        an.setTimeOffset_(Quartz.CACurrentMediaTime() % 3.0)   # 复查 11-17:整岛每秒重画,按绝对时间接上,不从头播(不然一闪一闪)
+        an.setTimeOffset_(Quartz.CACurrentMediaTime() % 3.0)   # 整岛每秒重画,按绝对时间接上,不从头播(不然一闪一闪)
         z.addAnimation_forKey_(an, "zz")
         hits.append((0, W, ry - 32, ry, r["key"]))
         ry -= 36
-    if not qfold and nq > Q_FOLD:            # 复查 11-17:点开后要能收回
+    if not qfold and nq > Q_FOLD:            # 点开后要能收回
         fl = _tr("island.fold", "折叠 ⌃")
         bw = text_w(fl, 11, True) + 18
         box(lroot, W - 10 - bw, ry - 22, bw, 20, 10, row_a * 1.6)
@@ -583,7 +582,7 @@ def topbar(HH, W, t, n, isee, light, nq=0):
                 isee_icon(lroot, x, cy, True)
         return
     x = 8
-    # 10-24 用户定:灯光第一位(固定),I See 第二,只在顶卡是浏览器任务时出现
+    # 灯光第一位(固定),I See 第二,只在顶卡是浏览器任务时出现
     btns = [("tb_light", _tr("btn.light", "灯光"), lambda cx: light_icon(lroot, cx, cy, light))]
     if t.get("kind") == "browser":
         btns.append(("tb_isee", "I See", lambda cx: isee_icon(lroot, cx, cy, isee)))
@@ -710,7 +709,7 @@ def render(now, force=False):
 
 # ---------------------------------------------------------------- 窗口
 class WatchIslandPanel(NSPanel):
-    def canBecomeKeyWindow(self):      # 🔴 纯显示浮窗不抢键盘(10-15 坑)
+    def canBecomeKeyWindow(self):      # 🔴 纯显示浮窗不抢键盘
         return False
 
     def canBecomeMainWindow(self):
@@ -721,7 +720,7 @@ class WatchIslandPanel(NSPanel):
 
 
 class _PlainGlass(NSView):
-    """macOS 26 以前没有液态玻璃时的替身:一块深色半透明圆角底,接口照岛里用到的那几个(11-23 C-3.9)。"""
+    """macOS 26 以前没有液态玻璃时的替身:一块深色半透明圆角底,接口照岛里用到的那几个。"""
 
     def setTintColor_(self, c):
         pass
@@ -734,8 +733,8 @@ class _PlainGlass(NSView):
 
 
 def hand_event(ev):
-    """这次鼠标事件是不是硬件来的(= 用户亲手点)。11-23 C-3.9 整体复查:I See 只能用户亲手开,
-    程序发的点击(CGEventPost、别家的电脑操作工具)会带着发送方的进程号,硬件来的是 0(11-23 本机实测程序发的 = 发送方进程号)。
+    """这次鼠标事件是不是硬件来的(= 用户亲手点)。I See 只能用户亲手开,
+    程序发的点击(CGEventPost、别家的电脑操作工具)会带着发送方的进程号,硬件来的是 0(本机实测程序发的 = 发送方进程号)。
     读不到一律当「不是」。"""
     try:
         cg = ev.CGEvent()
@@ -817,7 +816,7 @@ def frame():
 
 
 def sync(task_list, now):
-    """每个 tick 调一次。10-27 用户定:点开后一直开着,点「收起」才收(去掉鼠标离开自动收);
+    """每个 tick 调一次。点开后一直开着,点「收起」才收(去掉鼠标离开自动收);
     新卡住 / 新借鼠标 → 自动展开;借鼠标弹开的,借完自动收回(卡住弹开的一直开着等处理)。"""
     global tasks
     was_stuck = {t["key"] for t in tasks if stuck(t)}

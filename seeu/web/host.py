@@ -1,10 +1,10 @@
-"""SeeU 浏览器助手 · 本机中转程序(C-1.4,10-20)
+"""SeeU 浏览器助手 · 本机中转程序
 
 Chrome(及同内核浏览器)在插件连上来时自动启动本程序:标准输入/输出走 Chrome「本机消息」格式
 (4 字节长度 + JSON),同时在 ~/.seeu/seeu_web/<浏览器>.sock 开一个本机 socket 给 SeeU(seeu/web.py)用。
 SeeU 发一行 JSON 请求 → 转给插件 → 插件回包 → 按 id 回给 SeeU。不联网;只用标准库(Chrome 用 -I 启动)。
 浏览器关了 / 插件断开 → 标准输入读到头 → 删 socket 退出。
-C-0.5(SeeU,10-22):网站允许名单合成一份 = ~/.seeu/seeu_web/allow.json(开关那条路 aejs.py 用的同一个文件)。
+网站允许名单合成一份 = ~/.seeu/seeu_web/allow.json(开关那条路 aejs.py 用的同一个文件)。
   转给插件的每个请求都带上当前名单(allow 字段),插件「Chrome 授权了 且 在名单里」才碰;
   插件发来 {list: get|add|remove, origin, qid} → 改/读名单,回 {qid, list}。
 """
@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 
-DIR = os.path.expanduser("~/.seeu/seeu_web")   # 不跟 SEEU_HOME:中转程序是浏览器拉起的,读不到用户的环境变量,三处要对得上就都写死(11-01)
+DIR = os.path.expanduser("~/.seeu/seeu_web")   # 不跟 SEEU_HOME:中转程序是浏览器拉起的,读不到用户的环境变量,三处要对得上就都写死
 BROWSERS = {"Google Chrome": "chrome", "Microsoft Edge": "edge", "Brave Browser": "brave", "Arc": "arc",
             "Chromium": "chromium", "Vivaldi": "vivaldi"}
 TIMEOUT_MAX = 120

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 认字(第 2 段,11-11):读不到控件的程序(模拟器、游戏、自绘界面)靠截图认字出清单。
+"""SeeU Windows 版 · 认字(第 2 段):读不到控件的程序(模拟器、游戏、自绘界面)靠截图认字出清单。
 
 用 Windows 自带的文字识别(Windows.Media.Ocr,经同目录 ocr.ps1 调,不用装 Python 包)。
-⚠️ 要装了对应语言的「识别语言包」才能用(11-11 虚拟机里一个都没有)。没有就返回 available=False 和怎么装,不报错、不瞎猜。
+⚠️ 要装了对应语言的「识别语言包」才能用(虚拟机里一个都没有)。没有就返回 available=False 和怎么装,不报错、不瞎猜。
 装法(要管理员,用户自己做):设置 → 时间和语言 → 语言和区域 → 中文(简体)→ 语言选项 → 装「光学字符识别」;
 或管理员 PowerShell:Add-WindowsCapability -Online -Name "Language.OCR~~~zh-CN~0.0.1.0"
 """
@@ -23,7 +23,7 @@ ASK_RETRY_S = 60        # 问失败后隔这么久再问
 
 
 def _powershell():
-    """11-23 C-3.9 整体复查(照 openapp._powershell):用全路径,别被当前目录里同名程序顶替。"""
+    """照 openapp._powershell:用全路径,别被当前目录里同名程序顶替。"""
     root = os.environ.get("SystemRoot") or r"C:\Windows"
     p = os.path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
     return p if os.path.exists(p) else "powershell"
@@ -37,7 +37,7 @@ def _run(args, timeout=30):
 
 
 def langs():
-    """能用的识别语言(问成了才记住)。11-23 C-3.9 整体复查:原来第一次问失败(PowerShell 超时、机器忙)就永久记成没装,
+    """能用的识别语言(问成了才记住)。原来第一次问失败(PowerShell 超时、机器忙)就永久记成没装,
     这个进程此后一直认不了字;现在问失败返回空、下次再问。问成了但确实一个都没装,也记住(不用每次再等 PowerShell)。"""
     if not _LANGS:
         if time.time() - _ASK_FAIL[0] < ASK_RETRY_S:         # 刚问失败过:先当没有,过一会儿再问(别每次 see 都白等一次 PowerShell)
@@ -91,7 +91,7 @@ _CJK = r"[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]"
 
 
 def tidy(text):
-    """Windows 中文识别把每个汉字当一个词、用空格连(「画 笔」「6 个 字 符 , 共 6 个」,11-12 虚拟机实测),按名字点就对不上。
+    """Windows 中文识别把每个汉字当一个词、用空格连(「画 笔」「6 个 字 符 , 共 6 个」,虚拟机实测),按名字点就对不上。
     去掉挨着汉字 / 中文标点那一侧的空格;英文单词之间的空格照留。"""
     import re
     t = re.sub(rf"(?<={_CJK}) +| +(?={_CJK})", "", str(text))

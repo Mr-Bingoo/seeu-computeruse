@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 探一下某个程序能不能用 SeeU 自动化(11-12,照 Mac 版 seeu/probe.py 的思路):
+"""SeeU Windows 版 · 探一下某个程序能不能用 SeeU 自动化(照 Mac 版 seeu/probe.py 的思路):
     python -m seeu 探一下 Notepad      (英文 probe;MCP 工具 seeu_probe)
 
 只读:不点、不打字、不切前台。程序要开着(Windows 上按名字找没装的程序不可靠,没开就说先打开)。一次看完:

@@ -9,7 +9,7 @@ cursor_overlay.py —— "代理光标":纯显示的透明小窗口。
 适用场景:跟 seeu_lib.sck_capture 一样,只适合"点击要对着 Mac 窗口走真实鼠标"的情形
 (比如 iPhone 镜像,后台点击破解不了,只能真实鼠标点),让人看得出脚本在点哪里。
 ADB 场景点击是直接发指令给设备、不挪 Mac 上的真实鼠标,不需要这个。
-2026-09-29 从最早用它的项目里搬进来(项目专属的 demo 留在原项目,不属于公共库)。
+从最早用它的项目里搬进来(项目专属的 demo 留在原项目,不属于公共库)。
 
 名牌文字/颜色是项目相关的,库里只给不带个人信息的默认值,调用方通过
 `main(argv, label=..., color=...)` 或环境变量 CURSOR_OVERLAY_LABEL /
@@ -35,24 +35,24 @@ import time
 from urllib.parse import quote, unquote
 
 PORT = 47831
-WIN_W, WIN_H = 150, 90   # 窗口尺寸(点);C-1.3 加光晕后放大一圈
+WIN_W, WIN_H = 150, 90   # 窗口尺寸(点);加光晕后放大一圈
 TIP = (40, 40)           # 光标尖端在窗口里的位置(左边/上边留出点击波纹、光晕的空间)
 DEFAULT_LABEL = "Claude"           # 名牌文字默认值,调用方一般会覆盖成用户名
 DEFAULT_COLOR = (0.50, 0.47, 0.87)  # 光标+名牌颜色默认值(紫,#7F77DD)
-MOVE_S = 0.28        # 移动动画时长(老调用方等这么久;C-1.3 起按距离算,见 travel_s,最短约 0.22)
-MOVE_MAX_S = 0.65    # C-1.3:离得越远走越久,最长这么多秒
+MOVE_S = 0.28        # 移动动画时长(老调用方等这么久;按距离算,见 travel_s,最短约 0.22)
+MOVE_MAX_S = 0.65    # 离得越远走越久,最长这么多秒
 RING_S = 0.45        # 点击波纹时长
-FADE_AFTER_S = 60    # 多久没动作开始淡出(C-1.3 用户:8 → 60,跟悬浮窗一致;等待期间原地呼吸)
-# ---- C-1.3 动效(用户在预览里定"五种全开 + Codex 同款原地摆")
+FADE_AFTER_S = 60    # 多久没动作开始淡出(8 → 60,跟悬浮窗一致;等待期间原地呼吸)
+# ---- 动效("五种全开 + Codex 同款原地摆")
 ARC_K, ARC_MAX = 0.22, 90.0   # 弧线:控制点偏离直线 = 距离 × ARC_K,最多 ARC_MAX 点
 OVERSHOOT = 1.25              # 惯性:到点冲过一点再回(easeOutBack 系数,0 = 不冲)
 TILT_K, TILT_MAX = 0.04, 0.35 # 倾斜:每帧位移(点)× TILT_K 弧度,最多约 20°
 GLOW_R = 30                   # 光晕半径(点)
 PRESS_S = (0.09, 0.17)        # 点击按下:缩到 0.82 用时、弹回用时
-# C-1.4 待机动作改成 SeeU 自己的(用户在预览里定,替掉 C-1.3 学 Codex 的原地摆):
+# 待机动作改成 SeeU 自己的(替掉学 Codex 的原地摆):
 # 停下 IDLE_AFTER_S 秒后箭头以尖端为中心呼吸(放大 BREATH_AMP、BREATH_S 秒一呼一吸,光晕同步);
 # 每 FOCUS_EVERY 次呼吸,在缩回原大小的那 FOCUS_S 秒里,一道反光从尾部扫向尖端,回到原大小那一刻尖端闪一下。
-IDLE_AFTER_S = 5.0            # 停下多久开始呼吸(C-1.3 原地摆是 1 秒,调用方约每秒点一下时两下之间总在晃)
+IDLE_AFTER_S = 5.0            # 停下多久开始呼吸(原地摆是 1 秒,调用方约每秒点一下时两下之间总在晃)
 BREATH_AMP, BREATH_S = 0.18, 2.8
 FOCUS_EVERY, FOCUS_S = 3, 1.0
 SHINE_TAIL, SHINE_TIP, SHINE_W = (12.5, 16.5), (0.8, 0.6), 5.0   # 反光起止点(相对尖端)、光带半宽
@@ -73,7 +73,7 @@ GLOW_BREATH = 0.55      # 呼吸幅度:最暗时 = 1 - 0.55
 OCCLUDE_CHECK_S = 0.2   # 带 owner 的光标多久查一次遮挡
 SEE_THROUGH = ("Screenshot", "screencaptureui")   # 截图工具的全屏透明层,不算挡住
 IDLE_EXIT_S = 600    # 硬上限:空闲 10 分钟自动退出,不留孤儿进程
-# 11-17 C-2.5 多任务:一个任务一个光标(见 SeeU-多任务调度设计.md 六之三)
+# 多任务:一个任务一个光标
 MAX_CURSORS = 8      # 同时最多几只光标(再多挤掉最久没动的)
 WAIT_ALPHA = 0.45    # 排队中整只光标的透明度(打瞌睡 + 变淡)
 WAIT_MAX_S = 40      # 排队提示最多显示这么久(调度那边排队上限 30 秒),没人来收就自己停
@@ -85,7 +85,7 @@ def show(kind, x, y, label=None, color=None, owner=None, key=None, auto=False):
     """move/click 带名牌和颜色(color = (r,g,b) 0~1)。名牌可含空格/中文。
     owner = 目标 App 名(如 "iPhone Mirroring"):显示进程每 OCCLUDE_CHECK_S 秒自己查光标下最上层窗口是不是它,
     不是(被别的窗口挡住 / 不在当前桌面)就立刻藏,露出来再显示。不带 owner 就不查(老调用不受影响)。
-    11-17 C-2.5:key = 光标名(哪个任务;不同 key 各一只光标,不传 = 跟老调用共用一只);
+    key = 光标名(哪个任务;不同 key 各一只光标,不传 = 跟老调用共用一只);
     auto = 名牌按规则显示:屏幕上只有它一只光标时写「SeeU」,多只时写 label(任务名)。"""
     parts = [kind, round(x, 1), round(y, 1),
              quote(label, safe="@") if label else "-",                       # "-" = 用默认
@@ -96,12 +96,12 @@ def show(kind, x, y, label=None, color=None, owner=None, key=None, auto=False):
         parts += [quote(str(key), safe=""), "auto" if auto else "fixed"]
     send(*parts)
     prev, _last_xy[0] = _last_xy[0], (float(x), float(y))
-    # C-1.3:返回光标大约多久走到位(调用方等这么久再动手,波纹才对得上);第一次没有上一个位置,按老的 MOVE_S
+    # 返回光标大约多久走到位(调用方等这么久再动手,波纹才对得上);第一次没有上一个位置,按老的 MOVE_S
     return travel_s(prev[0], prev[1], x, y) if prev else MOVE_S
 
 
 def wait(key, on=True):
-    """11-17 C-2.5:这个任务在排队 → 它的光标打瞌睡(飘 z)+ 变淡;on=False 收掉(它下一次动作也会自动收)。"""
+    """这个任务在排队 → 它的光标打瞌睡(飘 z)+ 变淡;on=False 收掉(它下一次动作也会自动收)。"""
     send("wait", quote(str(key), safe=""), 1 if on else 0)
 
 
@@ -123,7 +123,7 @@ def toast(title, body="", secs=6.0, link=None, color=None):
     """屏幕右上角提示条(代替系统通知:不进通知中心、不受专注模式管、点了不会打开脚本编辑器)。
     link:点一下用 `open` 打开它(如会话链接 claude://claude.ai/epitaxy/<id>,点了跳回那个会话);不给就点了只关掉。
     secs 秒后自己淡出(最多 60 秒)。color=(r,g,b) 左侧色条,默认紫色。
-    10-15:显示进程没在跑(空闲 10 分钟会自己退)就先拉起,以前这种情况提示条会悄悄丢掉。"""
+    显示进程没在跑(空闲 10 分钟会自己退)就先拉起,以前这种情况提示条会悄悄丢掉。"""
     ensure_serve()
     send("toast", quote(title or "", safe="") or "-", quote(body or "", safe="") or "-", round(float(secs), 1),
          quote(link, safe="") if link else "-", ",".join(f"{c:.3f}" for c in color) if color else "-")
@@ -207,7 +207,7 @@ def serve(label=None, color=None):
                         NSWindowCollectionBehaviorFullScreenAuxiliary,
                         NSWindowCollectionBehaviorMoveToActiveSpace, NSWorkspace)
     from Foundation import NSBundle, NSObject, NSTimer, NSMakeRect, NSMakePoint, NSValue
-    # 10-14:下面 NSScreen/sharedApplication 一碰就会先登记成前台、Dock 闪一下;先标 LSUIElement(能开窗、不进 Dock)
+    # 下面 NSScreen/sharedApplication 一碰就会先登记成前台、Dock 闪一下;先标 LSUIElement(能开窗、不进 Dock)
     NSBundle.mainBundle().infoDictionary()["LSUIElement"] = "1"
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -254,7 +254,7 @@ def serve(label=None, color=None):
                 if p.x >= w_ - 36 and p.y <= 36:                      # 右上角 36×36 点内 = 点 ×:只关掉
                     t["until"] = 0.0
                     return
-                # 10-14 用户:整张卡片可点容易误跳 → 只有右下角「打开 ›」按钮才跳转,点别处不做任何事
+                # 整张卡片可点容易误跳 → 只有右下角「打开 ›」按钮才跳转,点别处不做任何事
                 if t["link"] and p.x >= w_ - TOAST_BTN_W - 14 and p.y >= h_ - 30:
                     import subprocess
                     subprocess.Popen(["open", t["link"]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -305,7 +305,7 @@ def serve(label=None, color=None):
         vf = NSScreen.mainScreen().visibleFrame()
         top = vf.origin.y + vf.size.height - 16
         x = vf.origin.x + vf.size.width - TOAST_W - 16
-        try:   # 10-15 监看悬浮窗显示在提示条那一列时,提示条从它下面开始叠(用户定:悬浮窗右上角,提示条让位)
+        try:   # 监看悬浮窗显示在提示条那一列时,提示条从它下面开始叠(悬浮窗右上角,提示条让位)
             from seeu_lib import watch_window as ww
             f = ww.visible_frame()
             if f and f[0] < x + TOAST_W and f[0] + f[2] > x and f[1] < top:
@@ -380,10 +380,10 @@ def serve(label=None, color=None):
                 ring = NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(cx - r, cy - r, 2 * r, 2 * r))
                 ring.setLineWidth_(2.5)
                 ring.stroke()
-            # C-1.3 起箭头、光晕、名牌都是图层(见 build_layers),这里只画点击波纹
+            # 箭头、光晕、名牌都是图层(见 build_layers),这里只画点击波纹
 
     def make_cursor(key, lab0, col0):
-        """11-17 C-2.5:一个任务一个光标(各自的窗口、图层、位置、动画、遮挡)。原来整个 serve 只有一个,这段原样搬进来。"""
+        """一个任务一个光标(各自的窗口、图层、位置、动画、遮挡)。原来整个 serve 只有一个,这段原样搬进来。"""
         cs = dict(key=key, cur=None, frm=None, to=None, t0=0.0, ring_t0=None, dur=MOVE_S, ctl=None, tilt=0.0, sway=0.0,
                   press_t0=None, arrive_t=0.0, redraw_n=0, last=time.time(), shown=False, label=lab0, color=col0,
                   label_raw=lab0, auto=False, owner=None, occluded=False, occ_t=0.0, waiting=False)
@@ -392,10 +392,10 @@ def serve(label=None, color=None):
         win.setReleasedWhenClosed_(False)
         win.setOpaque_(False)
         win.setBackgroundColor_(NSColor.clearColor())
-        win.setHasShadow_(False)   # C-1.3:有光晕后窗口阴影会把半透明光晕投成一圈深色圆盘
+        win.setHasShadow_(False)   # 有光晕后窗口阴影会把半透明光晕投成一圈深色圆盘
         win.setIgnoresMouseEvents_(True)
         win.setLevel_(NSScreenSaverWindowLevel)
-        # 10-14 C-1.1(实测切桌面残影):光标窗口不再"跨所有桌面",改成"显示时跟到当前桌面":
+        # 实测切桌面残影:光标窗口不再"跨所有桌面",改成"显示时跟到当前桌面":
         # 用户切走时它留在原桌面、跟着原桌面一起滑走,不会在新桌面上停一下;再出现时 orderFront 把它带到当前桌面。
         win.setCollectionBehavior_(NSWindowCollectionBehaviorMoveToActiveSpace
                                    | NSWindowCollectionBehaviorStationary
@@ -405,7 +405,7 @@ def serve(label=None, color=None):
         win.setContentView_(view)
         win.setAlphaValue_(0.0)
 
-        # ---- C-1.3 箭头 / 光晕 / 名牌做成图层:原地摆、光晕呼吸交给系统动画,Python 不用每帧重画
+        # ---- 箭头 / 光晕 / 名牌做成图层:原地摆、光晕呼吸交给系统动画,Python 不用每帧重画
         # (实测每帧重画时进程 ~9%,旧版不画 ~2.7%)。图层坐标统一成 y 朝下(跟 TIP 一致)。
         view.setWantsLayer_(True)
         _root = view.layer()
@@ -474,7 +474,7 @@ def serve(label=None, color=None):
             arrow_l.setAnchorPoint_(((APAD + ARROW_C[0]) / AW, (APAD + ARROW_C[1]) / AH))
             arrow_l.setPosition_((TIP[0] + ARROW_C[0], TIP[1] + ARROW_C[1]))
 
-            # 名牌(样式 B):箭头右下方的小胶囊;10-14:浅色底用深色字,深色底用白字
+            # 名牌(样式 B):箭头右下方的小胶囊;浅色底用深色字,深色底用白字
             light = 0.299 * r_ + 0.587 * g_ + 0.114 * b_ > 0.62
             fg = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.10, 0.17, 0.27, 1.0) if light else NSColor.whiteColor()
             attrs = {NSFontAttributeName: NSFont.systemFontOfSize_weight_(10, 0.23), NSForegroundColorAttributeName: fg}
@@ -518,7 +518,7 @@ def serve(label=None, color=None):
             g.setDuration_(0.4)
             glow_l.addAnimation_forKey_(g, "press")
 
-        # ---- C-1.4 待机呼吸 + 聚焦:反光层、尖端亮点挂在箭头图层下面(跟着一起缩放),只建一次
+        # ---- 待机呼吸 + 聚焦:反光层、尖端亮点挂在箭头图层下面(跟着一起缩放),只建一次
         def _cgpath_arrow():
             cp = Quartz.CGPathCreateMutable()
             P = lambda x, y: (APAD + x, APAD + y)
@@ -632,7 +632,7 @@ def serve(label=None, color=None):
             win.setFrameOrigin_(NSMakePoint(x - TIP[0], screen_h - y - (WIN_H - TIP[1])))
 
 
-        # ---- 11-17 C-2.5 打瞌睡(排队中,用户在小样里定):箭头右上方飘起 3 个 z,越飘越大淡出;整只光标变淡在 tick 里做
+        # ---- 打瞌睡(排队中):箭头右上方飘起 3 个 z,越飘越大淡出;整只光标变淡在 tick 里做
         zz_layers = []
         for _i in range(3):
             _z = Quartz.CALayer.layer()
@@ -699,7 +699,7 @@ def serve(label=None, color=None):
     curs = {}                   # 光标名(任务)-> 光标;老调用方不带名字 = "_"
     lab_n = [0]                 # 上一帧「在显示的光标」个数,变了就重排名牌(1 个写 SeeU,多个写任务名)
     started = time.time()
-    activity = [started]        # 最后一次收到光标消息(move / click / wait / hide);空闲退出看它(复查 11-17:光标回收后不能算空闲起点)
+    activity = [started]        # 最后一次收到光标消息(move / click / wait / hide);空闲退出看它(光标回收后不能算空闲起点)
 
     def get_cur(key, lab, col):
         c = curs.get(key)
@@ -713,7 +713,7 @@ def serve(label=None, color=None):
         return c
 
     def retire(c):
-        """回收一只光标的窗口(复查 11-17:只 orderOut 靠引用计数放,改成明确 close)。"""
+        """回收一只光标的窗口(只 orderOut 靠引用计数放,改成明确 close)。"""
         try:
             c.set_wait(False)
             c.win.orderOut_(None)
@@ -741,12 +741,12 @@ def serve(label=None, color=None):
     def on_move(msg, now):
         activity[0] = now
         x, y = float(msg[1]), float(msg[2])
-        # 10-14 可选第 4/5 段:名牌(URL 编码)、颜色 "r,g,b";不带就回到启动时的默认(老发法不受影响)
+        # 可选第 4/5 段:名牌(URL 编码)、颜色 "r,g,b";不带就回到启动时的默认(老发法不受影响)
         lab = unquote(msg[3]) if len(msg) >= 4 and msg[3] != "-" else label
         col = _parse_color(msg[4]) if len(msg) >= 5 and msg[4] != "-" else None
         col = col or color
         owner = unquote(msg[5]) if len(msg) >= 6 and msg[5] != "-" else None
-        # 11-17 C-2.5 第 7/8 段:光标名(哪个任务)、名牌规则 auto(只有它一个时写 SeeU)/ fixed
+        # 第 7/8 段:光标名(哪个任务)、名牌规则 auto(只有它一个时写 SeeU)/ fixed
         key = unquote(msg[6]) if len(msg) >= 7 and msg[6] != "-" else "_"
         auto = len(msg) >= 8 and msg[7] == "auto"
         c = get_cur(key, lab, col)
@@ -767,7 +767,7 @@ def serve(label=None, color=None):
         c.set_wait(False)                            # 动了 = 不在排队了
         cs["frm"] = cs["cur"] or (x, y)
         cs["to"], cs["t0"] = (x, y), now
-        # C-1.3 弧线:控制点在中点往一侧偏(距离 × ARC_K),时长按距离算
+        # 弧线:控制点在中点往一侧偏(距离 × ARC_K),时长按距离算
         fx_, fy_ = cs["frm"]
         d_ = math.hypot(x - fx_, y - fy_)
         cs["dur"] = travel_s(fx_, fy_, x, y) if cs["cur"] else 0.0
@@ -815,7 +815,7 @@ def serve(label=None, color=None):
                 c.breathe(False)
             if cs["tilt"] != old_tilt:
                 c.set_tilt(cs["tilt"])           # 只在移动/回正时每帧改一下图层角度,不重画
-            # 待机呼吸 + 光点:停下 IDLE_AFTER_S 秒后交给系统动画;排队中(打瞌睡)不呼吸(11-17 用户定:两种等法分开)
+            # 待机呼吸 + 光点:停下 IDLE_AFTER_S 秒后交给系统动画;排队中(打瞌睡)不呼吸(两种等法分开)
             if not moving and cs["tilt"] == 0.0 and now - cs["arrive_t"] >= IDLE_AFTER_S and not cs["waiting"]:
                 c.breathe(True)
             if cs["press_t0"] is not None and now >= cs["press_t0"]:
@@ -827,7 +827,7 @@ def serve(label=None, color=None):
             else:
                 cs["last"] = max(cs["last"], now - 1)        # 排队中不淡出
         idle = now - cs["last"]
-        # 10-14:两次动作之间窗口变了(用户开浏览器挡住、切桌面)也要自己藏,别等下一次动作
+        # 两次动作之间窗口变了(用户开浏览器挡住、切桌面)也要自己藏,别等下一次动作
         if cs["owner"] and cs["to"] and idle < FADE_AFTER_S + 1 and now - cs["occ_t"] >= OCCLUDE_CHECK_S:
             cs["occ_t"] = now
             cs["occluded"] = not _owner_on_top(cs["owner"], *cs["to"])
@@ -845,7 +845,7 @@ def serve(label=None, color=None):
                 step = (1 / 60.0) / 0.25      # 排队变淡 / 轮到变亮:0.25 秒过渡
                 win.setAlphaValue_(min(target_alpha, a + step) if target_alpha > a else max(target_alpha, a - step))
             else:
-                win.setAlphaValue_(target_alpha)   # 被挡、藏、到点淡出:照原来一步到位(10-14「立刻藏」)
+                win.setAlphaValue_(target_alpha)   # 被挡、藏、到点淡出:照原来一步到位(「立刻藏」)
         if cs["ring_t0"] is not None:
             if now - cs["ring_t0"] > RING_S:
                 cs["ring_t0"] = None
@@ -867,7 +867,7 @@ def serve(label=None, color=None):
                     break
                 if len(msg) >= 3 and msg[0] in ("move", "click"):
                     on_move(msg, now)
-                elif msg and msg[0] == "hide":    # 10-14 SeeU:目标位置被挡/不在当前桌面 → 立刻藏;11-17 带光标名只藏那一个
+                elif msg and msg[0] == "hide":    # SeeU:目标位置被挡/不在当前桌面 → 立刻藏;带光标名只藏那一个
                     activity[0] = now
                     if len(msg) >= 2:
                         c = curs.get(unquote(msg[1]))
@@ -876,7 +876,7 @@ def serve(label=None, color=None):
                     else:
                         for c in curs.values():
                             hide(c, now)
-                elif len(msg) == 3 and msg[0] == "wait":     # 11-17:wait 光标名 1|0 —— 排队中打瞌睡 + 变淡
+                elif len(msg) == 3 and msg[0] == "wait":     # wait 光标名 1|0 —— 排队中打瞌睡 + 变淡
                     activity[0] = now
                     c = curs.get(unquote(msg[1]))
                     if c and c.st["to"] is not None and c.st["cur"] is not None:
@@ -884,7 +884,7 @@ def serve(label=None, color=None):
                         if on:
                             c.st["wait_t"], c.st["last"] = now, now
                         c.set_wait(on)
-                elif len(msg) == 3 and msg[0] == "glow":   # 10-14 屏幕边缘光圈:glow r,g,b 秒数
+                elif len(msg) == 3 and msg[0] == "glow":   # 屏幕边缘光圈:glow r,g,b 秒数
                     col = _parse_color(msg[1]) or st["glow_color"]
                     if not glows or st.get("glow_screens") != len(NSScreen.screens()):
                         build_glows()                       # 显示器插拔后重建
@@ -894,7 +894,7 @@ def serve(label=None, color=None):
                             gw.contentView().setNeedsDisplay_(True)
                     st["glow_until"] = now + max(0.2, min(float(msg[2]), 600))   # 单次最多 10 分钟,有上限
                     st["glow_last"] = now
-                elif len(msg) == 6 and msg[0] == "toast":     # 10-14 提示条:toast 标题 内容 秒 链接 颜色
+                elif len(msg) == 6 and msg[0] == "toast":     # 提示条:toast 标题 内容 秒 链接 颜色
                     dq = lambda v: "" if v == "-" else unquote(v)
                     toast_new(dq(msg[1]), dq(msg[2]), float(msg[3]), dq(msg[4]) or None,
                               _parse_color(msg[5]) or (0.498, 0.467, 0.867), now)

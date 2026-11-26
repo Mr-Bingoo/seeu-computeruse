@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 网页(第 2 段,11-11):SeeU 专用的那份 Chrome / Edge,无界面运行(--headless=new),走调试端口。
+"""SeeU Windows 版 · 网页(第 2 段):SeeU 专用的那份 Chrome / Edge,无界面运行(--headless=new),走调试端口。
 
-为什么这样(依据见 SeeU-相关要点「11-11 C-1.1.5」):Windows 上给用户自己的 Chrome 发消息能用(第 1 段),但核实靠截图 / UIA,
+为什么这样:Windows 上给用户自己的 Chrome 发消息能用(第 1 段),但核实靠截图 / UIA,
 窗口被挡住时 Chrome 不重画;专用那份走调试端口,直接读网页结构、按编号点和填、读回核对,完全不碰桌面、不抢前台。
 - 单独配置(<SEEU_HOME>\\cdp\\win-chrome)、随机端口、只连 127.0.0.1;用户自己的 Chrome 不受影响(配置不同,互不相干)。
 - 只碰允许名单里的网站(跟 Mac 版同一份名单 ~/.seeu/seeu_web/allow.json;I See 开着不限);密码 / 验证码 / 银行卡框不打字。
@@ -29,7 +29,7 @@ BROWSERS = {
 }
 LAUNCH_WAIT = 30
 CallErr = cdp.CDPError
-_fopen = builtins.open      # 下面定义了 open(网址):11-11 真机就栽在这,读写状态文件调到了它,报错被当成「还没起来」一直等到超时
+_fopen = builtins.open      # 下面定义了 open(网址):真机就栽在这,读写状态文件调到了它,报错被当成「还没起来」一直等到超时
 
 
 class WebError(cdp.CDPError):
@@ -78,7 +78,7 @@ def _save(browser, d):
 
 def _profile_pids(browser):
     """还占着专用配置的进程(命令行里带这份配置的路径)。Chrome 同一份配置只许一个主进程:旧的还在,新起的会把活交给它、自己退出,
-    端口就永远等不到(11-11 真机:上一次没起成功留下的进程把后面全堵了)。"""
+    端口就永远等不到(真机:上一次没起成功留下的进程把后面全堵了)。"""
     prof = _profile(browser).lower()
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-Command",
@@ -121,7 +121,7 @@ def start(browser="chrome", visible=False):
         args += ["--headless=new", "--window-size=1280,900"]
     args.append("about:blank")
     # DETACHED | BREAKAWAY_FROM_JOB | NEW_PROCESS_GROUP:脱离启动它的程序,prlctl exec 那种一结束就收掉整组的才活得下来。
-    # 11-12 Codex 实测:Codex 拉起的 SeeU 在一个不许脱离的作业里,带 BREAKAWAY 直接「拒绝访问」(WinError 5)
+    # Codex 实测:Codex 拉起的 SeeU 在一个不许脱离的作业里,带 BREAKAWAY 直接「拒绝访问」(WinError 5)
     # → 被拒就不带它再起一次(浏览器跟着 Codex 走,Codex 关掉时一起没,下次用再起)。
     try:
         p = subprocess.Popen(args, creationflags=0x00000008 | 0x01000000 | 0x00000200, close_fds=True)
@@ -213,13 +213,13 @@ def _fn(d, tab, fn, args):
     if r is None:
         raise WebError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise WebError(*aejs.page_err(r))      # 11-23 C-3.9 整体复查:网页说的话不当 SeeU 的提示(见 seeu/web/aejs.page_err)
+        raise WebError(*aejs.page_err(r))      # 网页说的话不当 SeeU 的提示(见 seeu/web/aejs.page_err)
     return r
 
 
 def _wait_loaded(d, tab, timeout=10.0):
     # 新标签页先是 about:blank(它的 readyState 一上来就是 complete),要等地址换掉再看;
-    # 11-12 旧 Intel Mac 的 Win10(2 核)上没等到就返回,see 读到 0 项。
+    # 旧 Intel Mac 的 Win10(2 核)上没等到就返回,see 读到 0 项。
     t0 = time.time()
     while time.time() - t0 < timeout:
         try:
@@ -243,7 +243,7 @@ def open(url, browser="chrome"):
         raise WebError("只能打开 http / https 网址", "bad_url")
     if not _allowed(u):
         raise _not_allowed(u)
-    # 11-23 C-3.9 整体复查:已经有一份在跑就用它(包括 show() 开出来给用户登录的可见窗口)。原来这里一律 start(无界面):
+    # 已经有一份在跑就用它(包括 show() 开出来给用户登录的可见窗口)。原来这里一律 start(无界面):
     # 用户正看着登录窗口时 AI 一开网页,窗口被关掉、换成无界面重开。可见那份里新标签页开在后台,不切走用户正看的那页。
     d = _load(browser) or start(browser)
     args = {"url": u}
@@ -270,7 +270,7 @@ def tabs(browser="chrome"):
 
 
 def tabs_view(browser="chrome"):
-    """给 AI 看的标签页清单(11-23 C-3.9 整体复查,照 Mac web.tabs):没进 SeeU 允许名单的网站只给个数(I See 下全给);
+    """给 AI 看的标签页清单(照 Mac web.tabs):没进 SeeU 允许名单的网站只给个数(I See 下全给);
     空白页照给。返回 dict(tabs=[…], hidden=几个没给)。tabs() 照旧给全部(取证、老调用方用)。"""
     allt = tabs(browser)
     shown = [t for t in allt if not str(t.get("url") or "").lower().startswith(("http://", "https://")) or _allowed(t["url"])]
@@ -419,7 +419,7 @@ def close_tab(tab, browser="chrome"):
         cdp._http(d["port"], f"/json/close/{tab}")
 
 
-# 11-17 C-2.8(照 Mac web/__init__.py 末尾):专用浏览器里打字(含写完按回车)同一个浏览器一次一个任务,
+# 照 Mac web/__init__.py 末尾:专用浏览器里打字(含写完按回车)同一个浏览器一次一个任务,
 # 别的任务的回车 / 打字插进来会落到别的框里。占用键「web:chrome」(没有可找的窗口,见 sched._win_key)。调度模块出问题就不排。
 try:
     from seeu import sched as _sched
@@ -430,7 +430,7 @@ try:
         return _type_s(_sched.WEB_KEY + str(browser), target, text, tab=tab, browser=browser, mode=mode, enter=enter)
     type.__doc__ = _type_raw.__doc__
 
-    # 复查 11-17:按键(回车等)也按标签页投给网页里当前的框,别的任务正在打字时插进来会落进它的框 → 同一把(Mac 浏览器按键也跟打字同一个占用键)
+    # 按键(回车等)也按标签页投给网页里当前的框,别的任务正在打字时插进来会落进它的框 → 同一把(Mac 浏览器按键也跟打字同一个占用键)
     _key_raw = key
     _key_s = _sched.scheduled("web_press")(lambda app, *a, **k: _key_raw(*a, **k))
 

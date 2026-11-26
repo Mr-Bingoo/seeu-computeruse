@@ -3,7 +3,7 @@
 
 🔴 用的是 SkyLight 私有接口,只当"加速层":系统升级可能失效,失效就退回真鼠标 + 让路 + 桌面锁。
 做法照开源项目 Cua(trycua/cua,libs/cua-driver/rust/crates/platform-macos/src/input/{skylight,mouse}.rs)的公开代码,
-不逆向任何闭源程序(10-13 用户定)。
+不逆向任何闭源程序。
 
 一次点击 = mouseMoved(先让窗口知道指针在哪)→ mouseDown → mouseUp,每个事件都盖上:
   窗口内坐标(CGEventSetWindowLocation)、f1 点击次数、f3 按键号、f7 子类型、f51/f91/f92 窗口号、f58 点击组号、f40 目标 pid,
@@ -18,7 +18,7 @@ import json
 import os
 import sys
 import time
-from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
 _SL = ctypes.CDLL("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight")
 _CG = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
@@ -70,7 +70,7 @@ def available():
     return bool(SLEventPostToPid and SLEventSetIntegerValueField and CGEventSetWindowLocation)
 
 
-# 11-23 C-3.8:Intel Mac(macOS 14.8)第三轮实测,打字时整个 SeeU 服务进程崩了(怀疑下面按偏移读指针在那个系统上读错,
+# Intel Mac(macOS 14.8)第三轮实测,打字时整个 SeeU 服务进程崩了(怀疑下面按偏移读指针在那个系统上读错,
 # 未证实)。改成:每个系统版本第一次要附认证时,先在一个单独的小 Python 里照样造一次(只造不发,不碰任何 App);
 # 小 Python 正常退出才附,崩了 / 超时就这台机器这个系统版本不再附(按键照发,只是不带认证),SeeU 服务本身不倒。
 # 结果记在 seeu_auth_probe.json(按系统版本号),换系统会重试一次。
@@ -106,7 +106,7 @@ _AUTH_LOCK = _th.Lock()
 
 def auth_ok():
     """这台机器上附事件认证安不安全(见上)。
-    11-23 复查:只有小 Python 被信号打死(真崩了,退出码 < 0)才按系统版本记进文件、以后不再试;
+    只有小 Python 被信号打死(真崩了,退出码 < 0)才按系统版本记进文件、以后不再试;
     超时、导入失败这类(机器忙、库还没装齐)只在本进程里当不安全,下次启动再试。"""
     global _AUTH_OK
     if _AUTH_OK is not None:
@@ -187,7 +187,7 @@ def focus_without_raise(pid, wid):
     psn = (ctypes.c_uint8 * 8)()
     if GetProcessForPID(pid, psn) != 0:
         return False
-    # 🔴 11-24:记录本身 0xF8,但系统里的事件记录比这长,macOS 14(Intel)会接着往后读一个「认证信息」指针;只给 0xF8 就读到
+    # 🔴 记录本身 0xF8,但系统里的事件记录比这长,macOS 14(Intel)会接着往后读一个「认证信息」指针;只给 0xF8 就读到
     # 外面的内存 → SIGSEGV(Intel 朋友和 Sonoma 虚拟机打字崩的根因)。多给些清零的地方,读到的是空指针就跳过。
     buf = (ctypes.c_uint8 * 0x400)()
     buf[0x04] = 0xF8
@@ -229,7 +229,7 @@ def _post(etype, pid, wid, sx, sy, wx, wy, click_state, group, auth, drag=False,
 
 
 # ---------------------------------------------------------------- 监看悬浮窗钩子
-# 10-15 C-1.2:有的程序直接调这里(不走 seeu.act),悬浮窗要接在最底层才看得到。纯显示、有节流,任何异常吞掉。
+# 有的程序直接调这里(不走 seeu.act),悬浮窗要接在最底层才看得到。纯显示、有节流,任何异常吞掉。
 # 关:seeu/设置.json「监看小窗」= 关,或环境变量 SEEU_NO_WATCH=1。
 _W = {"on_t": 0.0, "on": True, "show_t": {}, "geo": {}}
 WATCH_SHOW_EVERY_S = 1.0     # 同一窗口最多每秒发一次 show(高频连点约 7 下/秒,不能每下都查)
@@ -237,7 +237,7 @@ WATCH_SHOW_EVERY_S = 1.0     # 同一窗口最多每秒发一次 show(高频连�
 
 def set_step(text=None):
     """调用方说一句现在在做什么(如「录入第 5 行」),之后浏览器卡片上写「正在录入第 5 行」,换一句或传 None 才变回默认
-    (正在点击 / 正在打字)。只影响浏览器的卡片(SeeU C-0.5,10-22:直接调 bgkey/bgclick 的程序卡片上看不到进度)。"""
+    (正在点击 / 正在打字)。只影响浏览器的卡片(直接调 bgkey/bgclick 的程序卡片上看不到进度)。"""
     _W["user_step"] = str(text).strip() if text and str(text).strip() else None
 
 
@@ -248,7 +248,7 @@ def _watch_on():
     if now - _W["on_t"] > 2.0:
         _W["on_t"] = now
         try:
-            from seeu.where import settings_file   # 11-22 C-3.7:插件版存用户文件夹
+            from seeu.where import settings_file   # 插件版存用户文件夹
             with open(settings_file(), encoding="utf-8") as f:
                 v = str(json.load(f).get("监看小窗", "开")).strip()
         except Exception:
@@ -257,7 +257,7 @@ def _watch_on():
     return _W["on"]
 
 
-# 10-21 C-0.2:浏览器窗口不弹画面框,弹浏览器卡片写这一步(直接调 bgclick/bgkey 填网页文档时,用户看到的是画面框、没有步骤)
+# 浏览器窗口不弹画面框,弹浏览器卡片写这一步(直接调 bgclick/bgkey 填网页文档时,用户看到的是画面框、没有步骤)
 BROWSERS = {"Safari", "Safari Technology Preview", "Google Chrome", "Microsoft Edge", "Brave Browser", "Arc",
             "Chromium", "Vivaldi", "Firefox", "Orion"}
 _W["owner"] = {}       # 窗口号 -> App 名
@@ -275,7 +275,7 @@ def _owner_of_wid(wid):
 
 def watch_step(app, step, wid=None):
     """浏览器上的后台动作:悬浮标卡片写「正在 step」(同一步每秒最多发一次)。不是浏览器返回 False。纯显示,异常吞掉。
-    wid = 正在操作的浏览器窗口号(SeeU C-0.3:卡片上「看画面」就播这个窗口;不知道就不传,按钮变灰)。"""
+    wid = 正在操作的浏览器窗口号(卡片上「看画面」就播这个窗口;不知道就不传,按钮变灰)。"""
     if app not in BROWSERS:
         return False
     step = _W.get("user_step") or step          # 调用方 set_step 说过就用它的话
@@ -293,7 +293,7 @@ def watch_step(app, step, wid=None):
                 fn(app, step, wid=int(wid))
             elif fn:
                 fn(app, step)
-            # 10-21:屏幕光圈也要亮(悬浮窗「被控提示」开着,或设置里光圈 = 全部);以前只有 seeu.act 和个别调用方自己点亮,直接调这层的没有
+            # 屏幕光圈也要亮(悬浮窗「被控提示」开着,或设置里光圈 = 全部);以前只有 seeu.act 和个别调用方自己点亮,直接调这层的没有
             from seeu import act
             act._halo("bg")
     except Exception:
@@ -348,10 +348,10 @@ def _watch(wid, sx=None, sy=None, win_xy=None, step="点击"):
 
 
 # ---------------------------------------------------------------- 让路:用户开着的系统浮层
-# 10-20 C-0.2:我们发的「按下」会被系统当成"在浮层外点了一下",把用户开着的 Apps 面板(Siri 进程层 23)、菜单等收掉
-# (实测见 SeeU-相关要点.md 10-20 节)。所以按下前查一眼:有就等它关,最多 OVERLAY_WAIT_S 秒,超时照点并记进 last_overlay。
+# 我们发的「按下」会被系统当成"在浮层外点了一下",把用户开着的 Apps 面板(Siri 进程层 23)、菜单等收掉
+# 所以按下前查一眼:有就等它关,最多 OVERLAY_WAIT_S 秒,超时照点并记进 last_overlay。
 # 查一次约 1ms,高频连点也能每下查。超时的那个窗口记住,以后不再为它等(防常驻的高层窗口每下都卡)。
-# 10-24 C-0.7 用户在场实测:只有 Apps、Spotlight(都是 Siri 进程层 23)会被后台点击收掉;控制中心、通知中心(含横幅)、
+# 用户在场实测:只有 Apps、Spotlight(都是 Siri 进程层 23)会被后台点击收掉;控制中心、通知中心(含横幅)、
 # 音量/蓝牙/专注模式/天气等顶部菜单都不受影响 → 只等 OVERLAY_OWNERS 里的,其余白等(曾因通知横幅停手)。
 OVERLAY_WAIT_S = 15.0
 OVERLAY_LAYERS = (8, 999)          # 模态面板 8 … 弹出菜单 101 …;3=浮动面板(悬浮窗等常驻)、1000+=屏保层(代理光标)、输入法超高层都不算
@@ -381,12 +381,12 @@ def user_overlays(exclude_pid=None):
     return out
 
 
-OVERLAY_SNAP_DIR = home("seeu_overlay")   # 等浮层时的取证(截图 + 窗口信息),10-23 加
+OVERLAY_SNAP_DIR = home("seeu_overlay")   # 等浮层时的取证(截图 + 窗口信息)
 OVERLAY_SNAP_KEEP = 40                                           # 最多留这么多个文件,超了删最旧的
 
 
 def snap_overlays(ov):
-    """🔴 10-23 C-0.6:开始等浮层时,把每个浮层窗口单独截一张(只截它自己,不截整屏)+ 记 App/层级/范围/进程号,
+    """🔴 开始等浮层时,把每个浮层窗口单独截一张(只截它自己,不截整屏)+ 记 App/层级/范围/进程号,
     存 OVERLAY_SNAP_DIR,打印路径,好事后知道是镜像转发的手机通知还是 Mac 上哪个 App。任何异常吞掉,绝不影响点击。"""
     try:
         import Quartz
@@ -444,7 +444,7 @@ def wait_overlays(exclude_pid=None, timeout=None):
     return waited
 
 
-# 10-24 C-0.9:隐身浏览器被用户叫出来(程序坞图标 / 看画面)以后会抢键盘,藏回去也救不回来,只能重开(10-22 实测)。
+# 隐身浏览器被用户叫出来(程序坞图标 / 看画面)以后会抢键盘,藏回去也救不回来,只能重开。
 # seeu.stealth 的看门狗发现被叫出来,就把 pid 记进来;之后往这个 pid 点击/按键一律抛 CalledOut,等 stealth.restart 重开。
 CALLED_OUT = {}             # pid -> (App 名, 发现时间)
 
@@ -498,13 +498,13 @@ class TapNoEffect(RuntimeError):
 
 def tap(app_name, sx, sy, prime=None, auth=False, step=None, verify=False, settle=False):
     """推荐入口:后台点 App 窗口里的屏幕点 (sx,sy)。step = 这一步在做什么(浏览器卡片上写,同 set_step)。
-    verify(10-27 C-1.0 Beta1,实测「假成功」):点前截一张,点完最多等 TAP_VERIFY_S 秒看画面变没变;
+    verify(实测「假成功」):点前截一张,点完最多等 TAP_VERIFY_S 秒看画面变没变;
     一点没变 → 记现场、抛 TapNoEffect(调用方退回系统鼠标)。只给「点了画面肯定会变」的按钮开(翻页、进入);
     🔴 页面慢到超时才动的,退回系统鼠标会再点一下,点第二下有害的地方别开。截不到图就不核实(照旧当成功)。
-    settle(10-30 实测:刚关完弹窗/面板马上点,两次「假成功」):点前每 SETTLE_GAP_S 截一张,前后两张几乎一样(< SETTLE_STILL)
+    settle(实测:刚关完弹窗/面板马上点,两次「假成功」):点前每 SETTLE_GAP_S 截一张,前后两张几乎一样(< SETTLE_STILL)
     才点;最多等 SETTLE_MAX_S 秒,一直在动(转盘灯、视频)也照点。给「刚关弹窗、页面还在收」的那一下开。截不到图就直接点。
-    prime(默认按 PRIME_APPS 定):先"只聚焦不置前" + 在窗口左上角外面垫一下(11-26 前垫在标题栏),吃掉"激活点击",再点目标。
-    10-13 实测 iPhone 镜像:不垫的话聚焦后第一下点击会被吃掉(跟真鼠标点没激活的窗口一样);垫了之后 3/3 一次点进。
+    prime(默认按 PRIME_APPS 定):先"只聚焦不置前" + 在窗口左上角外面垫一下(以前垫在标题栏),吃掉"激活点击",再点目标。
+    实测 iPhone 镜像:不垫的话聚焦后第一下点击会被吃掉(跟真鼠标点没激活的窗口一样);垫了之后 3/3 一次点进。
     auth 实测对镜像点击不需要。返回 (pid, wid)。"""
     if step:
         set_step(step)
@@ -518,8 +518,8 @@ def tap(app_name, sx, sy, prime=None, auth=False, step=None, verify=False, settl
     if before is not None:
         _verify_tap(app_name, pid, wid, sx, sy, before)
     if split_target(app_name)[0] in PRIME_APPS:
-        _tapped_mark(pid)   # 10-23 C-0.6:点过 → 下次滚动前要先"小拖动"(见 scroll)
-    if split_target(app_name)[0] in BROWSERS:     # 10-21:记下来,第一次打字前 bgkey 核实焦点进没进(没进就在这再点一次)
+        _tapped_mark(pid)   # 点过 → 下次滚动前要先"小拖动"(见 scroll)
+    if split_target(app_name)[0] in BROWSERS:     # 记下来,第一次打字前 bgkey 核实焦点进没进(没进就在这再点一次)
         PENDING_TAP[pid] = (app_name, sx, sy, time.time())
     return pid, wid
 
@@ -528,7 +528,7 @@ TAP_VERIFY_S = 2.0          # 点完最多等这么久看画面动没动
 SETTLE_MAX_S = 1.5          # 点前等画面稳定最多这么久(硬上限,到了照点)
 SETTLE_GAP_S = 0.15         # 隔这么久截一张比
 SETTLE_STILL = 0.002        # 前后两张变化像素比例低于这个算稳定(没点进的图互相 0.0000%,弹窗收起动画远大于这个)
-TAP_CHANGE_MIN = 0.003      # 变化像素比例超过这个算点进去了。10-27 实测:没点进的 3 张图互相 0.0000%,点进去 48%
+TAP_CHANGE_MIN = 0.003      # 变化像素比例超过这个算点进去了。实测:没点进的 3 张图互相 0.0000%,点进去 48%
 TAP_FAIL_DIR = home("seeu_tapfail")   # 没点进的现场(前后图 + 诊断),只留最近 TAP_FAIL_KEEP 组
 TAP_FAIL_KEEP = 10
 
@@ -636,14 +636,14 @@ def _tap_fail_snap(app_name, pid, wid, sx, sy, before, after, ratio):
     return base
 
 
-# 10-21 C-0.2:浏览器上点完,焦点偶尔没进输入框(自动测试 7 次有 2 次),后面打字全落空。
+# 浏览器上点完,焦点偶尔没进输入框(自动测试 7 次有 2 次),后面打字全落空。
 # tap() 记下"刚点过哪";bgkey 第一次打字前核实,没进就原地再点一次,还不行就报错停手。按过别的键就作废(免得点回旧格子)。
 PENDING_TAP = {}            # pid -> (app_name, sx, sy, 时间)
 PENDING_TAP_S = 15.0        # 点完多久内的第一次打字才核实
 
-# 要"垫一下"的 App:聚焦后第一下点击会被吃掉(11-26 起垫在窗口左上角外面,以前垫标题栏)。
-# 🔴 普通文档类 App 别垫:「文本编辑」标题栏正中是文档名,点了会弹改名小窗(10-13 踩过);它们只聚焦就够。
-PRIME_APPS = {"iPhone Mirroring"}   # 复查 11-26:只放拖不动尺寸的窗口(垫点在窗口左上角外 1pt,正好是可调尺寸窗口的拉角热区)
+# 要"垫一下"的 App:聚焦后第一下点击会被吃掉(垫在窗口左上角外面,以前垫标题栏)。
+# 🔴 普通文档类 App 别垫:「文本编辑」标题栏正中是文档名,点了会弹改名小窗(踩过);它们只聚焦就够。
+PRIME_APPS = {"iPhone Mirroring"}   # 只放拖不动尺寸的窗口(垫点在窗口左上角外 1pt,正好是可调尺寸窗口的拉角热区)
 TAPPED_FILE = home("seeu_tapped.json")   # {pid: 最近一次点击时间};有的调用方点/滚各开子进程,标记得落文件
 
 
@@ -677,7 +677,7 @@ def _tapped_take(pid):
 
 def _wait_mouse_up(timeout=3.0):
     """用户正按着鼠标键时,别往标题栏发"按下":系统可能把两者混成"拖标题栏",把窗口拖到用户鼠标那儿
-    (10-14 跨桌面实测疑似:镜像闪到用户桌面一下、位置被挪)。等松开,最多 timeout 秒,超时照做。"""
+    (跨桌面实测疑似:镜像闪到用户桌面一下、位置被挪)。等松开,最多 timeout 秒,超时照做。"""
     import Quartz
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -699,12 +699,12 @@ def _prepare(app_name, sx, sy, prime=None):
     _safety(pid)
     _watch(wid)
     if prime and not _wait_mouse_up():
-        # 🔴 SeeU C-0.4(10-22 用户报:拖悬浮标时镜像窗口被一起拖走):用户按着鼠标 3 秒还没松 = 多半在拖东西,
+        # 🔴 (用户报:拖悬浮标时镜像窗口被一起拖走):用户按着鼠标 3 秒还没松 = 多半在拖东西,
         # 这时垫一下会被系统混成"拖标题栏"(当时垫在标题栏;现在垫在窗口外,照旧保守)→ 不垫了,只聚焦(第一下点击可能被吃掉,调用方核实会重试)
         print("[SeeU] 你正按着鼠标,这次不在镜像上垫一下", file=sys.stderr)
         prime = False
     if prime:
-        # 🔴 11-26 C-4.3(用户报、镜像真机对照):垫在标题栏会被系统当成拖标题栏,窗口跟着用户的真鼠标走(6/170,多半是抬起后才开始走,
+        # 🔴 (用户报、镜像真机对照):垫在标题栏会被系统当成拖标题栏,窗口跟着用户的真鼠标走(6/170,多半是抬起后才开始走,
         # 等鼠标停、缩短按住都挡不住);垫在窗口左上角外面 0/110,激活点击照样吃得掉(6/6;不垫 0/6)
         click(pid, wid, xy, xy[0] - 1, xy[1] - 1, focus=True)
         time.sleep(0.3)
@@ -715,8 +715,8 @@ def _prepare(app_name, sx, sy, prime=None):
 
 
 def drag(app_name, pts, hold_ms=0, step_ms=280, prime=None):
-    """iPhone 镜像里能用(11-21 真机:hold_ms=550, step_ms=280 后台画 7 点手势,一次画对、不切前台;翻面板也一直在用)。
-    10-13 那次「镜像里不生效」的结论已过时。
+    """iPhone 镜像里能用(真机:hold_ms=550, step_ms=280 后台画 7 点手势,一次画对、不切前台;翻面板也一直在用)。
+    早先那次「镜像里不生效」的结论已过时。
     后台沿路径拖(屏幕点坐标)。hold_ms=0 快速划(翻页/上划);>0 先长按再拖(拖图标、手势解锁)。
     事件节奏照 seeu_lib.mac_input.qdrag(真鼠标版已在镜像里验证过)。"""
     x0, y0 = pts[0]
@@ -757,19 +757,19 @@ def drag(app_name, pts, hold_ms=0, step_ms=280, prime=None):
 def long_press(app_name, sx, sy, ms=900, prime=None):
     """后台长按。"""
     pid, wid, xy = _prepare(app_name, sx, sy, prime)
-    click(pid, wid, xy, sx, sy, hold=max(0.0, float(ms)) / 1000.0)   # 11-06:负数原来按下后抛异常、不抬起
+    click(pid, wid, xy, sx, sy, hold=max(0.0, float(ms)) / 1000.0)   # 负数原来按下后抛异常、不抬起
     return pid, wid
 
 
 def scroll(app_name, sx, sy, dy, dx=0, steps=6, prime=None, prime_at=None):
     """后台在 (sx,sy) 处滚动,dy 像素(负数 = 内容往上走 = 往下翻)。分 steps 次发,像触控板。
     🔴 镜像被切到前台过、再切走之后,某些 App 里的弹出面板滚动会卡死:后台发的、往系统发的、借真光标瞬移过去发的全不动,
-    等两分钟也不好;用户亲手滚能滚,而且滚过之后后台也恢复。SeeU C-0.4(10-22)查清:缺的是"鼠标从窗口外移进来"——
+    等两分钟也不好;用户亲手滚能滚,而且滚过之后后台也恢复。查清:缺的是"鼠标从窗口外移进来"——
     往镜像进程发一串从窗口外到滚动点的鼠标移动就解开(3/3,不碰真光标)。所以滚镜像前先 _move_in。
     (补发滚动取消/惯性结束、后台点面板都没用;关面板重开也能解。)调用方滚完照样要核实画面变没变。
-    prime_at=(x,y)(屏幕点,10-24 C-0.8):"点过之后第一次滚"补的那下小拖动默认落在滚动点上,起终点同一处 = 对列表就是一次点击
-    (10-24 实测:弹出面板里误点了任务行、跳进别的 App)。调用方给一个面板里**没有可点东西的空白点**,补拖动就落在那里;不给 = 落滚动点。
-    10-24 起补拖动只在"点过之后第一次滚、而且滚完画面没变"时才做(见下);能滚的列表不补,不会误点。"""
+    prime_at=(x,y)(屏幕点):"点过之后第一次滚"补的那下小拖动默认落在滚动点上,起终点同一处 = 对列表就是一次点击
+    (实测:弹出面板里误点了任务行、跳进别的 App)。调用方给一个面板里**没有可点东西的空白点**,补拖动就落在那里;不给 = 落滚动点。
+    补拖动只在"点过之后第一次滚、而且滚完画面没变"时才做(见下);能滚的列表不补,不会误点。"""
     pid, wid, xy = _prepare(app_name, sx, sy, prime)
     if split_target(app_name)[0] not in PRIME_APPS:
         _wheel(pid, wid, xy, sx, sy, dy, dx, steps)
@@ -778,10 +778,10 @@ def scroll(app_name, sx, sy, dy, dx=0, steps=6, prime=None, prime_at=None):
     if not _tapped_take(pid):
         _wheel(pid, wid, xy, sx, sy, dy, dx, steps)
         return pid, wid
-    # 🔴 SeeU C-0.6(10-23 真机复现):某些 App 的弹出面板里后台点过任何一下,之后后台滚动全卡死(关面板重开才好)——
-    # 10-14 起面板滚不动的真因(打开面板后点过里面的标签)。补一个来回小触摸拖动就解开(2/2),长按一下也行,
+    # 🔴 (真机复现):某些 App 的弹出面板里后台点过任何一下,之后后台滚动全卡死(关面板重开才好)——
+    # 面板滚不动的真因(打开面板后点过里面的标签)。补一个来回小触摸拖动就解开(2/2),长按一下也行,
     # 按住时长、补 LUP、再移动、再移入都没用。
-    # 🔴 10-24 C-0.8(实测 + 用户定):那下补拖动起终点同一处,对列表 = 一次点击,弹出面板里误点任务行跳进了别的 App。
+    # 🔴 (实测):那下补拖动起终点同一处,对列表 = 一次点击,弹出面板里误点任务行跳进了别的 App。
     # 改成"点过之后第一次滚"先正常滚,滚前滚后截图对比;画面变了 = 没卡,不补拖动;没变才补拖动(落 prime_at 或滚动点)再滚一次。
     # 截不到图就不补(宁可滚不动交给调用方的兜底,也不冒误点的险)。
     before = _grab_gray(wid)
@@ -807,7 +807,7 @@ def scroll(app_name, sx, sy, dy, dx=0, steps=6, prime=None, prime_at=None):
 
 
 SCROLL_SETTLE_S = 0.5        # 滚完等画面停下再截(滚动有惯性)
-SCROLL_CHANGE_MIN = 0.02     # 变化像素比例超过这个算"滚动了"。10-24 弹出面板实测:两张没滚的图只差 0.01%;
+SCROLL_CHANGE_MIN = 0.02     # 变化像素比例超过这个算"滚动了"。弹出面板实测:两张没滚的图只差 0.01%;
                              # 原来用 0.3%(同 act._ladder)可能被面板上的小动画/点按高亮顶过去,误判成滚了、不补拖动。真滚几百像素整片都变。
 SCROLL_SNAP_DIR = home("seeu_scroll")   # 点过后第一次滚的前后对比图(排查用,只留最近 SCROLL_SNAP_KEEP 组)
 SCROLL_SNAP_KEEP = 10
@@ -880,7 +880,7 @@ def _scroll_snap(before, after, ratio):
 
 
 def _move_in(pid, wid, xy, sx, sy, n=15):
-    """往进程发一串"鼠标从窗口左边外面移到 (sx,sy)"(不碰真光标),让镜像当成鼠标刚进来(SeeU C-0.4,见 scroll)。约 0.3 秒。"""
+    """往进程发一串"鼠标从窗口左边外面移到 (sx,sy)"(不碰真光标),让镜像当成鼠标刚进来(见 scroll)。约 0.3 秒。"""
     import Quartz
     ox = xy[0] - 60
     for i in range(n + 1):
@@ -896,7 +896,7 @@ def _move_in(pid, wid, xy, sx, sy, n=15):
 
 
 def split_target(app_name):
-    """目标写法:"应用名" 或 "应用名「窗口标题」"(10-14:同一应用开了好几个窗口/实例时指定其中一个,
+    """目标写法:"应用名" 或 "应用名「窗口标题」"(同一应用开了好几个窗口/实例时指定其中一个,
     如 BlueStacks 多开里的 "BlueStacks「助手」")。返回 (应用名, 标题或 None)。"""
     m = re.match(r"^(.*?)「(.*)」$", app_name or "")
     return (m.group(1), m.group(2)) if m else (app_name, None)
@@ -904,7 +904,7 @@ def split_target(app_name):
 
 def _match(w, app_name):
     owner, title = split_target(app_name)
-    try:                                        # 11-22:英文名在中文系统里也认(Safari → Safari浏览器)
+    try:                                        # 英文名在中文系统里也认(Safari → Safari浏览器)
         from seeu.ax import same_app
         same = same_app(w.get("kCGWindowOwnerName"), owner)
     except Exception:
@@ -920,7 +920,7 @@ def main_window(app_name, min_w=50, min_h=50):
     cand = []
     owner, title = split_target(app_name)
     from seeu_lib import mac_input as _mi
-    # 跑到一半的长进程可能早 import 了旧版 mac_input(没有这个常量),带默认值兜底(10-15 撞上过)
+    # 跑到一半的长进程可能早 import 了旧版 mac_input(没有这个常量),带默认值兜底(撞上过)
     HIDDEN_WINDOWS = getattr(_mi, "HIDDEN_WINDOWS", {"Welcome to iPhone Mirroring"})
     for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, 0) or []:
         if not _match(w, app_name) or (w.get("kCGWindowName") or "") in HIDDEN_WINDOWS:
@@ -934,10 +934,10 @@ def main_window(app_name, min_w=50, min_h=50):
     if not cand:
         return None
     # 镜像还有个隐藏的「Welcome to iPhone Mirroring」大窗,同名窗口优先
-    # 🔴 10-15:同名窗口排最前(隐藏的「Welcome」大窗有时报在屏,见 seeu_lib.mac_input.win_geo)
+    # 🔴 同名窗口排最前(隐藏的「Welcome」大窗有时报在屏,见 seeu_lib.mac_input.win_geo)
     try:
         from seeu.ax import local_name
-        main_names = {title} if title else {owner, local_name(owner)}   # 11-23:中文系统里镜像主窗口叫「iPhone镜像」
+        main_names = {title} if title else {owner, local_name(owner)}   # 中文系统里镜像主窗口叫「iPhone镜像」
     except Exception:
         main_names = {title or owner}
     cand.sort(key=lambda d: (d["name"] in main_names, d["onscreen"], d["w"] * d["h"]), reverse=True)

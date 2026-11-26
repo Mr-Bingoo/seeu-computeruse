@@ -35,7 +35,7 @@ function Seg($words) {
         $x1 = [Math]::Min($x1, $r.X); $y1 = [Math]::Min($y1, $r.Y); $x2 = [Math]::Max($x2, $r.X + $r.Width); $y2 = [Math]::Max($y2, $r.Y + $r.Height) }
     return ,@{ text = (($words | % { $_.Text }) -join " "); x = [int]$x1; y = [int]$y1; w = [int]($x2 - $x1); h = [int]($y2 - $y1) }
 }
-# 11-12:同一行里两个词隔得比字高还远(如菜单「文件」「编辑」被认成一行)就拆成两项,按名字点才点得准
+# 同一行里两个词隔得比字高还远(如菜单「文件」「编辑」被认成一行)就拆成两项,按名字点才点得准
 foreach ($l in $res.Lines) {
     $hmax = 0; foreach ($w in $l.Words) { $hmax = [Math]::Max($hmax, $w.BoundingRect.Height) }
     $seg = @(); $prev = $null

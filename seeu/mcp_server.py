@@ -1,4 +1,4 @@
-"""SeeU 的 MCP 服务(10-30 第一版):把 see/tap/type/scroll… 包成标准 MCP 工具,别家 AI 客户端(Codex 等)也能用。
+"""SeeU 的 MCP 服务(第一版):把 see/tap/type/scroll… 包成标准 MCP 工具,别家 AI 客户端(Codex 等)也能用。
 
 为什么自己写不用官方包:官方 Python 包要 3.10+,本机系统 Python 3.9(SeeU 依赖的 pyobjc 装在这份里)。
 协议本身很小:stdio 上一行一个 JSON-RPC 消息,只要 initialize / tools/list / tools/call / ping。
@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 
-# 11-01:不是 Mac 就在 AI 客户端的服务日志里写清楚再退出(说明文字跟 seeu/__init__.py 同一段)
+# 不是 Mac 就在 AI 客户端的服务日志里写清楚再退出(说明文字跟 seeu/__init__.py 同一段)
 if sys.platform != "darwin":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     try:
@@ -26,7 +26,7 @@ if sys.platform != "darwin":
         print(ex, file=sys.stderr)
     sys.exit(1)
 
-# 10-31 豆包实测:豆包拉起 MCP 服务时设了 PYTHONNOUSERSITE=1,用户目录里装的 pyobjc 加载不到(报 No module named 'objc')
+# 豆包实测:豆包拉起 MCP 服务时设了 PYTHONNOUSERSITE=1,用户目录里装的 pyobjc 加载不到(报 No module named 'objc')
 # → 去掉这个变量(SeeU 再拉起的悬浮窗、代理光标等子程序也不继承),把用户库路径加回来
 if os.environ.pop("PYTHONNOUSERSITE", None) is not None:
     import site
@@ -34,7 +34,7 @@ if os.environ.pop("PYTHONNOUSERSITE", None) is not None:
     if os.path.isdir(_us) and _us not in sys.path:
         site.addsitedir(_us)
 
-# 10-31 Claude 聊天页实测:客户端用 disclaimer 直接拉起 Python → 系统把授权算在 Python 自己头上(谁拉起 Python 都白拿)。
+# Claude 聊天页实测:客户端用 disclaimer 直接拉起 Python → 系统把授权算在 Python 自己头上(谁拉起 Python 都白拿)。
 # 这时本进程就是自己的"负责进程" → 原地换成 SeeU 小程序(seeu/launcher/SeeU.app),由它再拉起本服务,授权只认「SeeU」。
 # 小程序拉起的那份负责进程是 SeeU,不会再转;问不到负责进程(私有接口失效)就照旧跑。改客户端设置没用:客户端开着时会把设置写回去。
 def _via_launcher():
@@ -60,15 +60,15 @@ import traceback
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # seeu 的上一层
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
 from seeu.version import current as _ver
-VERSION = _ver()   # 11-01:跟 seeu/VERSION 走,不再单独写
+VERSION = _ver()   # 跟 seeu/VERSION 走,不再单独写
 PROTOCOLS = ("2024-11-05", "2025-03-26", "2025-06-18")
 LOG = home("seeu_mcp.log")
 IMG_MAX = 1280          # 截图长边缩到这么多像素再发(省 token;镜像 2x 截图约 1700 高)
 
-# 11-01 用户定:MCP 说明、工具说明、返回给 AI 的结果字只留英文一份(给 AI 读的;回用户时 AI 用用户的语言)。
+# MCP 说明、工具说明、返回给 AI 的结果字只留英文一份(给 AI 读的;回用户时 AI 用用户的语言)。
 INSTRUCTIONS = """SeeU: see and operate apps on the user's Mac in the background — look at the screen, click, type, scroll —
 without taking the user's mouse or switching the frontmost app. The user keeps using the computer as usual.
 Reply to the user in the user's language.
@@ -207,7 +207,7 @@ TOOLS = [
 ]
 
 
-# 11-15 C-2.1:后台打开 App。只给自己打不开 App 的客户端(千问:跑命令在沙箱里,每次要用户批准),见 openapp.enabled()
+# 后台打开 App。只给自己打不开 App 的客户端(千问:跑命令在沙箱里,每次要用户批准),见 openapp.enabled()
 OPEN_APP_TOOL = _tool(
     "seeu_open_app", "Open a Mac app in the background (its window opens behind the user's current one; the front app is "
     "not switched). Use it instead of running `open -a` yourself. Apps already open are left as they are. Terminals, "
@@ -228,7 +228,12 @@ def _open_app_enabled():
 
 
 def tool_list():
-    return TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+    tools = TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+    try:                                   # 加只读 / 会动的标注(seeu/hints.py);出错就照旧给不带标注的
+        from seeu.hints import annotate
+        return annotate(tools)
+    except Exception:   # noqa: BLE001
+        return tools
 
 
 # ---------------------------------------------------------------- 工具实现
@@ -258,7 +263,7 @@ _shots = {}   # App → 最近一次 see 发给 AI 的截图尺寸 (宽, 高),px
 
 def _px_to_screen(app, px, py):
     """截图像素 → 屏幕点。按点的这一刻窗口的位置和大小换算(see 之后窗口被挪了也准)。
-    10-30 参考别家:AI 照着缩过的截图给坐标,让它自己做乘除法容易点偏。"""
+    参考别家:AI 照着缩过的截图给坐标,让它自己做乘除法容易点偏。"""
     from seeu import act
     if app not in _shots:
         raise ValueError(f"no screenshot of {app} yet: call seeu_see (with screenshot) first, then tap by pixel")
@@ -272,19 +277,19 @@ def _px_to_screen(app, px, py):
 def _image(png):
     """缩到长边 IMG_MAX 再 base64。缩失败就发原图。"""
     from seeu import act
-    out = os.path.join(act._tmp(), "mcp_send.png")      # 11-07:原来放系统临时目录,每个进程留一张、没人清;现在跟截图一起、隔天一起清
+    out = os.path.join(act._tmp(), "mcp_send.png")      # 原来放系统临时目录,每个进程留一张、没人清;现在跟截图一起、隔天一起清
     try:
         subprocess.run(["sips", "-Z", str(IMG_MAX), png, "--out", out], capture_output=True, timeout=10, check=True)
         src = out
     except Exception:
         src = png
     import cv2
-    h, w = cv2.imread(src).shape[:2]     # 按实际发出去的图记尺寸(sips 取整跟自己算的会差 1 像素,10-30 实测)
+    h, w = cv2.imread(src).shape[:2]     # 按实际发出去的图记尺寸(sips 取整跟自己算的会差 1 像素,实测)
     with open(src, "rb") as f:
         return {"type": "image", "data": base64.b64encode(f.read()).decode(), "mimeType": "image/png"}, (w, h)
 
 
-from seeu.reason_en import to_en   # 11-01:代码里的原因照旧中文(调用方按中文判断),交给 AI 时转英文
+from seeu.reason_en import to_en   # 代码里的原因照旧中文(调用方按中文判断),交给 AI 时转英文
 
 
 _RESTART = re.compile(r"seeu\.(?:stealth|cdp) restart (?:\"([^\"]+)\"|([^\s),;)]+))")
@@ -292,7 +297,7 @@ _NOT_ALLOWED = re.compile(r"seeu allow ((?:https?|file)://[^\s),;)]+)")
 
 
 def _allow_hint(r):
-    """结果里带「seeu allow 网址」= 卡在允许名单:提示 AI 先问用户,答应了调 seeu_allow_site(11-02 用户定)。"""
+    """结果里带「seeu allow 网址」= 卡在允许名单:提示 AI 先问用户,答应了调 seeu_allow_site。"""
     t = " ".join(str(r.get(k) or "") for k in ("reason", "note", "unlock"))
     m = _RESTART.search(t)
     if m:
@@ -311,7 +316,7 @@ def _allow_hint(r):
 
 
 def _tell(r):
-    """11-24 C-4.1:借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
+    """借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
     try:
         from seeu import i18n
         from seeu import act
@@ -356,7 +361,7 @@ def do_check(a):
 def do_see(a):
     import seeu
     from seeu import safety
-    safety.check_app(a["app"])        # 11-06:看画面也过安全底线(终端、密码 App、隐私设置页、宿主自己)
+    safety.check_app(a["app"])        # 看画面也过安全底线(终端、密码 App、隐私设置页、宿主自己)
     app, web = a["app"], _web(a["app"])
     if web:
         v = web.see(app, tab=_tab(a.get("tab")))
@@ -377,7 +382,7 @@ def do_see(a):
                    f"tap by pixel: seeu_tap with px, py (top-left is 0,0); SeeU converts it")
         if a.get("screenshot", True):
             out.append(img)
-        if v.get("stale"):           # 11-15 C-2.0:Chrome / Electron 窗口看不见,截图停在旧画面
+        if v.get("stale"):           # Chrome / Electron 窗口看不见,截图停在旧画面
             from seeu import act
             where = {act.DESK_WHY: "ask the user to switch to that desktop (or move the window here)",
                      act.LOCK_WHY: "ask the user to unlock the Mac / wake the display"}.get(
@@ -396,7 +401,7 @@ ASKED_TTL = 1800     # 用户可能过一会儿才回答
 
 
 def _allow(a):
-    """allow_real 只在「上一步真的问过用户」之后才认。11-06 体检:原来 AI 第一次调用就能自带 allow_real="auto",
+    """allow_real 只在「上一步真的问过用户」之后才认。原来 AI 第一次调用就能自带 allow_real="auto",
     「借用鼠标 = 问我」形同虚设,也没提示条。没问过就当没传(这一步照设置走,该问会返回 ask_user)。"""
     v = str(a.get("allow_real") or "").strip().lower()
     if not v:
@@ -436,16 +441,16 @@ def do_type(a):
         r = web.type(app, _target(a), a["text"], tab=_tab(a.get("tab")))
     else:
         if a.get("target") not in (None, ""):
-            # 外部评审 11-17 第 1 条:点框 + 打字在一次占用里做完,中间不让别的任务插进来抢焦点
+            # 点框 + 打字在一次占用里做完,中间不让别的任务插进来抢焦点
             from seeu import sched
             tg = _target(a)
             try:
-                # 复查 11-17(C-2.7):按位置点框时,排完队先核对画面 / 窗口位置(跟单独点一样),变了就不点不打
+                # 按位置点框时,排完队先核对画面 / 窗口位置(跟单独点一样),变了就不点不打
                 with sched.hold(app, pt=tg if isinstance(tg, tuple) else None):
                     # 只后台点一下输入框(点框常常画面不变 → ineffective 也照打,打字自己会核实);
                     # 不走真鼠标那条路:那条要把 App 拉到前台(藏着的 App 会露出来、抢用户前台)
                     tr = seeu.tap(app, tg, real=False)
-                    if tr.get("outcome") in ("failed", "refused", "busy"):     # 11-17:排不上队也别接着打(框没点上,字会打到别处)
+                    if tr.get("outcome") in ("failed", "refused", "busy"):     # 排不上队也别接着打(框没点上,字会打到别处)
                         return ["Tapping the field failed:\n" + _result_text(tr)], tr.get("outcome") not in ("busy",)
                     r = _remember_ask(a, seeu.type(app, a["text"], enter=bool(a.get("enter")), allow=_allow(a)))
             except sched.Busy as ex:
@@ -461,7 +466,7 @@ def do_scroll(a):
     import seeu
     app, web = a["app"], _web(a["app"])
     r = None
-    # 11-06 二次复查:① 网页里 scrollBy 正数才是往下,跟工具说明(负数往下)反了 → 这里取反;
+    # ① 网页里 scrollBy 正数才是往下,跟工具说明(负数往下)反了 → 这里取反;
     # ② 辅助功能那条路滚不了,原来靠接 WebError 退到后台滚轮,但 web.scroll 已把异常转成结果,永远接不到 → 先问能不能滚
     if web and web.can_scroll(app, tab=_tab(a.get("tab"))):
         dy = a.get("dy")
@@ -489,10 +494,10 @@ LONG_PRESS_MAX_MS = 10000
 
 def do_long_press(a):
     import seeu
-    ms = max(50, min(int(a.get("ms") or 1000), LONG_PRESS_MAX_MS))    # 11-06:原来没上限,一个大数就把服务卡住
+    ms = max(50, min(int(a.get("ms") or 1000), LONG_PRESS_MAX_MS))    # 原来没上限,一个大数就把服务卡住
     from seeu import web
     if web.is_browser(web.canon(a["app"])):
-        # 11-07:浏览器里不长按(见 act.long_press)。先判这个再算目标:浏览器没有截图,给 px/py 会先报「还没截图」,AI 看不到真正的原因
+        # 浏览器里不长按(见 act.long_press)。先判这个再算目标:浏览器没有截图,给 px/py 会先报「还没截图」,AI 看不到真正的原因
         r = seeu.long_press(a["app"], (0, 0), ms=ms)
     else:
         r = seeu.long_press(a["app"], _target(a), ms=ms)
@@ -511,7 +516,7 @@ def do_open_app(a):
     from seeu import openapp
     r = openapp.open_app(a["app"])
     if r.get("outcome") in ("delivered", "unverified"):
-        try:            # 外部评审 11-17:开 App 也会动焦点,记成「这个任务最后动过它」
+        try:            # 开 App 也会动焦点,记成「这个任务最后动过它」
             from seeu import sched
             sched.mark_focus(r.get("name") or a["app"])
         except Exception:   # noqa: BLE001
@@ -532,7 +537,7 @@ def do_web_open(a):
     from seeu import web
     r = web.open(a["app"], a["url"])
     r.setdefault("outcome", "delivered" if r.get("loaded") else "unverified")
-    if r.get("outcome") == "refused":       # 11-06:不是浏览器 / 不是网页网址 / 名单外还没问用户 → 没打开
+    if r.get("outcome") == "refused":       # 不是浏览器 / 不是网页网址 / 名单外还没问用户 → 没打开
         return [_result_text(r)], True
     txt = _result_text(r) + f"\ntab: {r.get('id')}"
     if r.get("id") is None:
@@ -553,8 +558,8 @@ _SAID = [""]     # 这次调用里 AI 填的 user_said(do_manage / do_allow_site
 
 
 def _notice(zh, en):
-    """11-02:AI 代用户改了东西(加名单、改设置、重开…),屏幕上弹提示条留痕,AI 没问就做了用户也看得到。
-    11-23 C-3.9 整体复查:服务这边看不到对话,user_said 只能查「不是空的」→ 提示条带上 AI 填的原话前 40 字(Windows / Linux 早就带),
+    """AI 代用户改了东西(加名单、改设置、重开…),屏幕上弹提示条留痕,AI 没问就做了用户也看得到。
+    服务这边看不到对话,user_said 只能查「不是空的」→ 提示条带上 AI 填的原话前 40 字(Windows / Linux 早就带),
     用户一眼看得出是不是自己说的。"""
     try:
         from seeu_lib import cursor_overlay as co
@@ -619,7 +624,7 @@ def do_manage(a):
             return ["failed: value = which app to restart (Safari, Chrome or the app name)"], True
         from seeu import stealth
         full = "Google Chrome" if app == "Chrome" else app
-        if not stealth.was_called_out(full):       # 11-02:只重开 SeeU 记过「被叫出来」的那份,防关掉用户自己开的
+        if not stealth.was_called_out(full):       # 只重开 SeeU 记过「被叫出来」的那份,防关掉用户自己开的
             return [f"refused: SeeU has no record of its hidden {full} being brought to the front in the last 24 hours, so it "
                     "won't quit it (it may be the user's own window). Tell the user."], True
         mod = ["seeu.stealth", "restart", app] if app in ("Safari", "Chrome") else ["seeu.cdp", "restart", app]
@@ -692,10 +697,10 @@ def _log(name, a, ok, secs):
         pass
 
 
-# 会动手的工具:动手前把 AI 写的原因发给悬浮窗(10-30;文字卡一行灰字 / 看画面底边字幕带)。看画面、读网页不发。
+# 会动手的工具:动手前把 AI 写的原因发给悬浮窗(文字卡一行灰字 / 看画面底边字幕带)。看画面、读网页不发。
 WHY_TOOLS = {"seeu_tap", "seeu_type", "seeu_scroll", "seeu_press", "seeu_menu", "seeu_long_press",
              "seeu_mirror_home", "seeu_mirror_open", "seeu_web_open", "seeu_open_app"}
-# 悬浮窗上这一步写什么动作(10-30 用户:按编号打字别写成「点击」);点击不给,照旧认点击处的字
+# 悬浮窗上这一步写什么动作(按编号打字别写成「点击」);点击不给,照旧认点击处的字
 WHY_ACT = {"seeu_type": "打字", "seeu_scroll": "滚动", "seeu_press": "按键", "seeu_menu": "点菜单",
            "seeu_long_press": "长按", "seeu_mirror_home": "回主屏", "seeu_mirror_open": "打开 App",
            "seeu_web_open": "开标签页", "seeu_open_app": "打开 App"}
@@ -721,7 +726,7 @@ def _show_why(name, a):
 
 
 def _missing_args(name, a):
-    """11-15:AI 漏传必填参数时,动手前就用大白话说清缺哪个(原来到函数里才抛 KeyError,只回一句 missing argument: 'app')。"""
+    """AI 漏传必填参数时,动手前就用大白话说清缺哪个(原来到函数里才抛 KeyError,只回一句 missing argument: 'app')。"""
     tool = next((t for t in TOOLS + [OPEN_APP_TOOL] if t.get("name") == name), None)
     need = (tool or {}).get("inputSchema", {}).get("required") or []
     miss = [k for k in need if a.get(k) is None]
@@ -743,21 +748,21 @@ def call_tool(name, a):
     bad = _missing_args(name, a)
     if bad:
         return bad
-    try:                                    # 11-22 C-3.7:插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
+    try:                                    # 插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
         from seeu import deps
         wait = deps.gate()
     except Exception:   # noqa: BLE001
         wait = None
     if wait:
         return {"content": [{"type": "text", "text": wait}], "isError": False}
-    if isinstance(a.get("app"), str):       # 11-06 二次复查:浏览器的别的写法(「标题」、包名、进程号)先归一,别绕开网页层
-        if name == "seeu_press":            # 11-25:浏览器归一会去掉「标题」,按键(⌘W 这类)要拿它核对窗口
+    if isinstance(a.get("app"), str):       # 浏览器的别的写法(「标题」、包名、进程号)先归一,别绕开网页层
+        if name == "seeu_press":            # 浏览器归一会去掉「标题」,按键(⌘W 这类)要拿它核对窗口
             try:
                 from seeu import ax
                 a["_window"] = ax.split_window(a["app"])[1]
             except Exception:
                 pass
-        try:                                # 11-15:别的语言的 App 名(「备忘录」→ Notes)先换成系统现在叫它的名字
+        try:                                # 别的语言的 App 名(「备忘录」→ Notes)先换成系统现在叫它的名字
             from seeu import ax
             a["app"] = ax.canon_name(a["app"])
         except Exception:
@@ -772,7 +777,7 @@ def call_tool(name, a):
     try:
         parts, err = fn(a)
     except (Exception, SystemExit) as ex:   # WebError / AXError / RuntimeError …:原话给 AI(里面常带「卡在…原因…怎么办」)
-        # 11-06 体检:SystemExit 也接(seeu_lib.ocr 认字失败抛它,原来整个服务跟着退出);安全底线拦的报 refused 不报 failed
+        # SystemExit 也接(seeu_lib.ocr 认字失败抛它,原来整个服务跟着退出);安全底线拦的报 refused 不报 failed
         traceback.print_exc(file=sys.stderr)
         out = "failed"
         try:
@@ -802,7 +807,7 @@ def handle(msg):
         return None
     if method == "initialize":
         want = params.get("protocolVersion")
-        try:            # 11-17 多任务调度:这个服务进程 = 一个任务;名字用客户端报的(悬浮标、排队提示里看得到)
+        try:            # 多任务调度:这个服务进程 = 一个任务;名字用客户端报的(悬浮标、排队提示里看得到)
             os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")
             ci = params.get("clientInfo") or {}
             if isinstance(ci, dict) and ci.get("name"):
@@ -825,7 +830,7 @@ def handle(msg):
 
 
 def _wire(out):
-    """回复转成一行。11-06 二次复查:网页文字里有半个 emoji(孤立代理字符)时按 UTF-8 写不出去,
+    """回复转成一行。网页文字里有半个 emoji(孤立代理字符)时按 UTF-8 写不出去,
     原来异常没人接、整个服务退出 → 换成 � 再发。"""
     s = json.dumps(out, ensure_ascii=False)
     try:
@@ -839,7 +844,7 @@ _CRASH_LOG = []
 
 
 def _crash_log():
-    """11-22 Intel Mac 第三轮:打字时整个服务进程没了(客户端只报 Transport closed),现场什么都没留下。
+    """Intel Mac 第三轮:打字时整个服务进程没了(客户端只报 Transport closed),现场什么都没留下。
     打开 faulthandler:进程被系统信号打死(段错误等)时把 Python 调用栈写进 seeu_crash.log(只追加,开头记时间和进程号)。"""
     try:
         import faulthandler
@@ -856,21 +861,21 @@ def _crash_log():
 
 def main():
     _crash_log()
-    try:                                # 11-22 C-3.7:插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
+    try:                                # 插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
         from seeu.where import settings_file
         settings_file()
     except Exception:   # noqa: BLE001
         pass
-    try:                                # 11-22 C-3.7:插件版更新后,把新版浏览器中转程序 / 插件文件抄到固定位置(登记过才抄)
+    try:                                # 插件版更新后,把新版浏览器中转程序 / 插件文件抄到固定位置(登记过才抄)
         from seeu.web import install as _winst
         _winst.refresh()
     except Exception:   # noqa: BLE001
         pass
-    os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 11-17:同一个 AI 会话的几步算同一个任务
+    os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 同一个 AI 会话的几步算同一个任务
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
     os.dup2(2, 1)                       # 之后 fd 1(含子进程)都进 stderr
     sys.stdout = sys.stderr
-    try:                                # 11-15:给 npm 启动包 seeu-computeruse 留「装在哪」的纸条(千问只认 npx)
+    try:                                # 给 npm 启动包 seeu-computeruse 留「装在哪」的纸条(千问只认 npx)
         from seeu import install as _inst
         _inst.write_pointer()
     except Exception:   # noqa: BLE001
@@ -886,7 +891,7 @@ def main():
                                     "error": {"code": -32700, "message": "not JSON"}}) + "\n")
             continue
         for m in (msg if isinstance(msg, list) else [msg]):
-            if not isinstance(m, dict):     # 11-06 体检:合法 JSON 但不是对象(1、null、"x")原来会让服务崩溃退出
+            if not isinstance(m, dict):     # 合法 JSON 但不是对象(1、null、"x")原来会让服务崩溃退出
                 proto.write(json.dumps({"jsonrpc": "2.0", "id": None,
                                         "error": {"code": -32600, "message": "not a JSON-RPC object"}}) + "\n")
                 proto.flush()

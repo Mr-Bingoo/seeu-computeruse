@@ -1,4 +1,4 @@
-"""SeeU 浏览器助手 · 安装 / 卸载本机中转程序(C-1.4,10-20)
+"""SeeU 浏览器助手 · 安装 / 卸载本机中转程序
 
   python3 -m seeu.web.install            找出本机装了的 Chrome 同内核浏览器,逐个登记中转程序,再教怎么加载插件
   python3 -m seeu.web.install uninstall  撤销登记
@@ -24,7 +24,7 @@ BROWSER_DIRS = {
 }
 
 
-# 11-22 C-3.7:插件版的代码文件夹每次更新都会换位置 → 中转程序和插件文件抄一份到固定的地方再登记,
+# 插件版的代码文件夹每次更新都会换位置 → 中转程序和插件文件抄一份到固定的地方再登记,
 # 不然更新后浏览器找不到中转程序、「加载已解压的扩展程序」选的那个文件夹也没了。host.py 只用标准库,单拿出来能跑。
 STABLE = os.path.expanduser("~/.seeu/seeu_web/app")     # 同 host.py 的 DIR,不跟 SEEU_HOME
 

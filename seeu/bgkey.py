@@ -21,7 +21,7 @@ KEYCODE = {
     "p": 35, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44, "n": 45, "m": 46,
     ".": 47, "`": 50, "return": 36, "tab": 48, "space": 49, "delete": 51, "escape": 53,
     "left": 123, "right": 124, "down": 125, "up": 126,
-    # 10-31 Codex App 实测按 end 报「不认识的键」→ 只好全选重打;补上常用导航/编辑键和 F 键,外加几个常见别名
+    # Codex App 实测按 end 报「不认识的键」→ 只好全选重打;补上常用导航/编辑键和 F 键,外加几个常见别名
     "home": 115, "end": 119, "pageup": 116, "pagedown": 121, "forwarddelete": 117,
     "enter": 36, "esc": 53, "backspace": 51,
     "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97, "f7": 98, "f8": 100, "f9": 101,
@@ -56,7 +56,7 @@ def _key(pid, code, down, flags=0, auth=True, text=None, flags_changed=False):
 
 MOD_CODE = {"cmd": 55, "shift": 56, "alt": 58, "ctrl": 59}
 MOD_ALIAS = {"command": "cmd", "meta": "cmd", "super": "cmd", "win": "cmd", "option": "alt", "opt": "alt",
-             "control": "ctrl", "ctl": "ctrl"}       # 11-06:常见别名(跟 safety.MOD_ALIAS 同一套)
+             "control": "ctrl", "ctl": "ctrl"}       # 常见别名(跟 safety.MOD_ALIAS 同一套)
 
 
 def _safety(pid, key=None, mods=(), text=None):
@@ -73,7 +73,7 @@ def _safety(pid, key=None, mods=(), text=None):
 
 
 def _called_out(pid):
-    """隐身浏览器被叫出来过 → 抛 bgclick.CalledOut,不发(10-24 C-0.9,见 bgclick.CALLED_OUT)。长进程里旧版 bgclick 没有就跳过。"""
+    """隐身浏览器被叫出来过 → 抛 bgclick.CalledOut,不发(见 bgclick.CALLED_OUT)。长进程里旧版 bgclick 没有就跳过。"""
     fn = getattr(bg, "check_called_out", None)
     if fn:
         fn(pid)
@@ -88,15 +88,15 @@ def _set_step(step):
 
 
 def one_newline(text):
-    """\r\n、单独的 \r 都并成 \n(11-23 C-3.9)。"""
+    """\r\n、单独的 \r 都并成 \n。"""
     return str(text).replace("\r\n", "\n").replace("\r", "\n")
 
 
 def press(pid, key, mods=(), auth=True, step=None):
     """按一个键(可带 cmd/shift/alt/ctrl)。step = 这一步在做什么(浏览器卡片上写,同 bgclick.set_step)。
-    🔴 10-15 C-1.2:修饰键要先单独发"按下"(flagsChanged)、最后发"松开",只把标记挂在字母上的话,
+    🔴 修饰键要先单独发"按下"(flagsChanged)、最后发"松开",只把标记挂在字母上的话,
     iPhone 镜像这类转发输入的程序不认 —— 后台 ⌘A 清框变成打了个 "a"(拼音输入法里挂着候选「啊 阿」)。"""
-    # 11-06 体检:发任何事件之前先把键名、修饰键全部认一遍。原来 mods 里写错一个(AI 常写 option / command),
+    # 发任何事件之前先把键名、修饰键全部认一遍。原来 mods 里写错一个(AI 常写 option / command),
     # 前面的修饰键已经「按下」、KeyError 又在 try 外面 → 永远不松开,目标程序以为 ⌘ 一直按着。别名一并收下。
     key = str(key)
     code = KEYCODE.get(key.lower())
@@ -133,7 +133,7 @@ def press(pid, key, mods=(), auth=True, step=None):
 
 
 def _watch(pid, step):
-    """浏览器上打字/按键时悬浮标卡片写这一步(10-21;镜像等不是浏览器的照旧不画)。长进程里旧版 bgclick 没这个函数就跳过。"""
+    """浏览器上打字/按键时悬浮标卡片写这一步(镜像等不是浏览器的照旧不画)。长进程里旧版 bgclick 没这个函数就跳过。"""
     fn = getattr(bg, "watch_pid", None)
     if fn:
         fn(pid, step)
@@ -162,7 +162,7 @@ last_focus = None      # 最近一次核实结果:dict(ok, retried, note);没核
 
 
 def verify_focus(pid):
-    """10-21:浏览器上刚 tap 过、这是第一次打字 → 核实焦点进了输入框;没进原地再点一次;还不行抛 FocusError。
+    """浏览器上刚 tap 过、这是第一次打字 → 核实焦点进了输入框;没进原地再点一次;还不行抛 FocusError。
     问不到(开关没开等)就照常打,last_focus 里记「没核实」。只核实一次(用掉就作废)。"""
     global last_focus
     pend = getattr(bg, "PENDING_TAP", {}).pop(pid, None)
@@ -188,8 +188,8 @@ def verify_focus(pid):
                      f"怎么办:确认点的位置是输入框/表格格子;网页可能还没加载完,稍等再试")
 
 
-# 有真键位、不用 Shift 的字符(数字、小写字母、部分符号):按真键位发,网页看到的 keyCode/code 才对(10-21 测:原来一律是 A 键)。
-# 10-24 C-0.7:大写字母、要 Shift 的符号也走真键位 + Shift(隐身 Chrome 实测文字不变、网页看到的键和 Shift 都对;
+# 有真键位、不用 Shift 的字符(数字、小写字母、部分符号):按真键位发,网页看到的 keyCode/code 才对(实测:原来一律是 A 键)。
+# 大写字母、要 Shift 的符号也走真键位 + Shift(隐身 Chrome 实测文字不变、网页看到的键和 Shift 都对;
 # 百度输入法中/英两种状态下发都不会被切换)。🔴 iPhone 镜像没测过,照旧走键位 0 + 附带文字;中文照旧。
 # 出问题把 SHIFT_REAL 改 False 就回到老做法。
 _PLAIN = {ch: c for ch, c in KEYCODE.items() if len(ch) == 1 and not ch.isupper()}
@@ -225,7 +225,7 @@ def _bundle_of(pid):
 
 
 def _skip_shift(pid):
-    """11-23 C-4.0 Fable 复查:中文系统里镜像叫「iPhone镜像」,原来只比英文名,镜像里就走了没测过的「真键位 + Shift」。
+    """中文系统里镜像叫「iPhone镜像」,原来只比英文名,镜像里就走了没测过的「真键位 + Shift」。
     名字先归一(ax.canon_name),再比包名。"""
     name = _app_of(pid)
     try:
@@ -242,12 +242,12 @@ def _newline_mods(pid):
     return newline.mods(_bundle_of(pid), _app_of(pid))
 
 
-TYPE_WAIT_USER_S = 3.0      # 后台打字前等用户停手的上限;到点照打,不卡流程(11-01 用户定)
+TYPE_WAIT_USER_S = 3.0      # 后台打字前等用户停手的上限;到点照打,不卡流程
 _MOD_MASK = 0x20000 | 0x40000 | 0x80000 | 0x100000   # Shift / Control / Option / Command 按着
 
 
 def _wait_user_keys(limit=TYPE_WAIT_USER_S):
-    """11-01 实测:用户同时在 Mac 上打字,后台打的字没打进(撞车)。用户 0.5 秒内按过键、或正按着修饰键,
+    """实测:用户同时在 Mac 上打字,后台打的字没打进(撞车)。用户 0.5 秒内按过键、或正按着修饰键,
     就等一下;最多 limit 秒,到点照打。返回等了几秒。拿不到状态就不等。"""
     try:
         import Quartz
@@ -276,7 +276,7 @@ def type_unicode(pid, text, auth=True, step=None):
     for ch in one_newline(text):
         _called_out(pid)       # 每个字前查一次:打到一半被叫出来也马上停(整组按下/松开不拆开)
         if ch == "\n":
-            press(pid, "return", nl, auth=auth)     # 11-23 C-4.0:VS Code / Jupyter / 表格按单独回车(见 seeu/newline.py)。11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
+            press(pid, "return", nl, auth=auth)     # VS Code / Jupyter / 表格按单独回车(见 seeu/newline.py)。换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
             continue
         sc = _shifted_code(ch) if shift_ok else None
         if sc is not None:
@@ -290,7 +290,7 @@ def type_unicode(pid, text, auth=True, step=None):
             _key(pid, SHIFT_CODE, False, 0, auth, flags_changed=True)
             time.sleep(GAP)
             continue
-        # 🔴 C-1.3 Codex(网页做的输入框)实测:空格走"键位 0 + 附带文字"会从空格起后面全丢,空格改用真空格键位 49
+        # 🔴 Codex(网页做的输入框)实测:空格走"键位 0 + 附带文字"会从空格起后面全丢,空格改用真空格键位 49
         code = 49 if ch == " " else _PLAIN.get(ch, 0)
         _key(pid, code, True, 0, auth, text=ch)
         time.sleep(GAP)
@@ -308,7 +308,7 @@ def type_physical(pid, text, auth=True, step=None):
     for ch in one_newline(text):
         _called_out(pid)       # 每个字前查一次:打到一半被叫出来也马上停(整组按下/松开不拆开)
         if ch == "\n":
-            press(pid, "return", nl, auth=auth)     # 11-23 C-3.9:同 type_unicode,换行按 Shift+回车(C-4.0 起 VS Code / 表格按单独回车)
+            press(pid, "return", nl, auth=auth)     # 同 type_unicode,换行按 Shift+回车(VS Code / 表格按单独回车)
             continue
         if ch == " ":
             press(pid, "space", auth=auth)
@@ -333,14 +333,14 @@ def type_physical(pid, text, auth=True, step=None):
 
 def type_to(app_name, text, enter=False, prime=None, check=None):
     """推荐入口:后台往 App 当前焦点输入框打字(中英文都行,走 unicode),可选最后回车。
-    先聚焦 + 垫一下(同 bgclick.tap)。10-13 镜像 Spotlight 实测:中英文、回车开 App 都通,前台不变。
-    check(pid):聚焦之后、打字之前调一下,抛异常就不打(11-17 C-2.5:SeeU 用来核对焦点在不在指定窗口)。老调用不传,行为不变。"""
+    先聚焦 + 垫一下(同 bgclick.tap)。镜像 Spotlight 实测:中英文、回车开 App 都通,前台不变。
+    check(pid):聚焦之后、打字之前调一下,抛异常就不打(SeeU 用来核对焦点在不在指定窗口)。老调用不传,行为不变。"""
     g = bg.main_window(app_name)
     if not g:
         raise RuntimeError(f"找不到 {app_name} 的窗口")
     pid, _wid, _xy = bg._prepare(app_name, g["x"] + g["w"] / 2, g["y"] + g["h"] / 2, prime)
     if check:
-        _wait_user_keys()      # 11-26 C-4.4:等用户停手放在核对前面,免得核对完又等几秒、焦点已经换了(type_unicode 里那次通常马上过)
+        _wait_user_keys()      # 等用户停手放在核对前面,免得核对完又等几秒、焦点已经换了(type_unicode 里那次通常马上过)
         check(pid)
     type_unicode(pid, text)
     if enter:

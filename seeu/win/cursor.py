@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 代理光标(11-14,照 Mac 版 seeu_lib/cursor_overlay.py):纯显示的透明小窗口,画一个箭头跟着 SeeU 的动作走。
+"""SeeU Windows 版 · 代理光标(照 Mac 版 seeu_lib/cursor_overlay.py):纯显示的透明小窗口,画一个箭头跟着 SeeU 的动作走。
 
 跟系统鼠标没关系,用户照常用自己的鼠标。样子和规则照 Mac:
   - 后台模式 = 紫色 + 「SeeU」;让路模式(借用户的鼠标键盘)= 亮橙 + 署名(没写署名用这台电脑的用户名)。
@@ -8,7 +8,7 @@
   - 目标窗口被挡住、或在别的虚拟桌面上,就不画(显示进程每 0.2 秒查一次)。
 🔴 窗口永远不抢前台、不接鼠标(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)。
 调用方:show(kind, x, y, label, color, owner, key, auto) / wait(key, on) / hide(key) / quit();坐标是屏幕物理像素(跟 SeeU 动作层一致)。
-11-17 C-2.6(照 Mac):key = 哪个任务,一个任务一只光标(不带 key = 跟老调用共用一只);auto = 名牌按规则(屏幕上只有它一只写「SeeU」,
+照 Mac:key = 哪个任务,一个任务一只光标(不带 key = 跟老调用共用一只);auto = 名牌按规则(屏幕上只有它一只写「SeeU」,
 多只写任务名);wait = 排队中:箭头右上飘 z + 整只变淡到 0.45、不呼吸(待机光点只给「停下等下一步」,两种不叠)。
 环境变量 SEEU_NO_CURSOR=1 不画(同 Mac)。显示进程:python -m seeu.win.cursor serve(调用方会自己拉起)。
 """
@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 
-PORT = 47831                 # 同 Mac seeu_lib/cursor_overlay。🔴 别跟浮标(floatwin 47833)同号:11-14 复查,原来撞号,两个显示进程只能活一个、消息串台
+PORT = 47831                 # 同 Mac seeu_lib/cursor_overlay。🔴 别跟浮标(floatwin 47833)同号:原来撞号,两个显示进程只能活一个、消息串台
 WIN_W, WIN_H = 150, 90           # 窗口大小(逻辑像素,乘缩放)—— 同 Mac 的点
 TIP = (40.0, 40.0)               # 箭头尖端在窗口里的位置
 PURPLE = (0.50, 0.47, 0.87)      # 后台模式(#7F77DD)
@@ -38,8 +38,8 @@ FOCUS_EVERY, FOCUS_S = 3, 1.0                                      # 每 3 次�
 SHINE_TAIL, SHINE_TIP, SHINE_W = (12.5, 16.5), (0.8, 0.6), 5.0     # 反光起止点(相对尖端)、光带半宽(同 Mac)
 ARROW_C = (7.0, 9.0)
 IDLE_EXIT_S = 600
-MAX_CURSORS = 8                  # 11-17 C-2.6(同 Mac):一个任务一只光标,同时最多几只(再多挤掉最久没动的)
-WAIT_ALPHA = 0.45                # 排队中整只光标的透明度(打瞌睡 + 变淡,用户 11-17 在小样里定)
+MAX_CURSORS = 8                  # 同 Mac:一个任务一只光标,同时最多几只(再多挤掉最久没动的)
+WAIT_ALPHA = 0.45                # 排队中整只光标的透明度(打瞌睡 + 变淡)
 WAIT_MAX_S = 40                  # 排队提示最多显示这么久(调度那边排队上限 30 秒),没人来收就自己停
 WAIT_FADE_S = 0.25               # 排队变淡 / 轮到变亮的过渡
 ZZ_S = 2.7                       # 一个 z 飘完的时长;3 个错开 1/3(同 Mac)
@@ -97,9 +97,9 @@ def ensure_serve(force=False):
     if (os.environ.get("SEEU_NO_CURSOR") and not force) or sys.platform != "win32":
         return False
     if _running():
-        _serve_fail[0] = 0.0              # 11-15 复查:冷启动慢(杀毒在扫)超过 3 秒被记成起不来,其实后来起来了 → 放下
+        _serve_fail[0] = 0.0              # 冷启动慢(杀毒在扫)超过 3 秒被记成起不来,其实后来起来了 → 放下
         return False
-    if time.time() < _serve_fail[0]:      # 11-14 复查:刚拉过没起来(沙箱 / 安全软件拦)→ 60 秒内不再试,免得每个动作白等 3 秒
+    if time.time() < _serve_fail[0]:      # 刚拉过没起来(沙箱 / 安全软件拦)→ 60 秒内不再试,免得每个动作白等 3 秒
         return False
     py = sys.executable
     pyw = os.path.join(os.path.dirname(py), "pythonw.exe")
@@ -178,7 +178,7 @@ def arc_point(frm, to, ctl, p):
 
 def arc_ctl(frm, to, s=1.0, side=None):
     """弧线控制点:中点往垂直方向偏 距离 × ARC_K(最多 ARC_MAX 点 × 缩放)。
-    side=1 往上拱(屏幕 y 小的一边)、-1 往下;不给就随机一边(11-15 照 Mac cursor_overlay:按毫秒单双数挑)。"""
+    side=1 往上拱(屏幕 y 小的一边)、-1 往下;不给就随机一边(照 Mac cursor_overlay:按毫秒单双数挑)。"""
     if side is None:
         side = 1 if (int(time.time() * 1000) % 2) else -1
     mx, my = (frm[0] + to[0]) / 2.0, (frm[1] + to[1]) / 2.0
@@ -312,7 +312,7 @@ def serve():
     gp.GdiplusStartup(ctypes.byref(tok), ctypes.byref(GpStartup(1, None, False, False)), None)
 
     st = dict(msg=time.time(), quit=False)          # 全局:最后一次收到消息(空闲退出看它)、要不要退出;提示条也用
-    curs = {}                                       # 11-17 C-2.6:光标名(任务)→ 这只光标的状态;老调用不带名字 = "_"
+    curs = {}                                       # 光标名(任务)→ 这只光标的状态;老调用不带名字 = "_"
 
     def new_cursor(key, now):
         """一只光标一份状态 + 一个透明窗口(原来全机一份的那些字段,原样搬进来)。"""
@@ -358,7 +358,7 @@ def serve():
             return 1.0
 
     pt = {}
-    pts = {}            # 11-17:几只光标在不同缩放的屏幕上 → 每种尺寸留一块画布,别每帧重建
+    pts = {}            # 几只光标在不同缩放的屏幕上 → 每种尺寸留一块画布,别每帧重建
 
     def canvas(s):
         pw, ph = int(WIN_W * s), int(WIN_H * s)
@@ -448,7 +448,7 @@ def serve():
         tx, ty = TIP[0] * s, TIP[1] * s
         still = st["to"] is None and abs(st["tilt"]) < 0.002
         bt = now - st["arrive"] - IDLE_AFTER_S                      # 待机多久了(到位后 5 秒开始)
-        breathing = still and bt >= 0 and not st["waiting"]        # 排队中(打瞌睡)不呼吸(11-17 用户定:两种等法分开)
+        breathing = still and bt >= 0 and not st["waiting"]        # 排队中(打瞌睡)不呼吸(两种等法分开)
         bk = breath_k(bt) if breathing else 0.0
         # 光晕:一团径向渐变(同心圆一圈圈叠)。平时透明度 0.19~0.41 来回(半个来回 0.45π 秒);待机呼吸时跟着呼吸、略放大
         if breathing:
@@ -592,10 +592,10 @@ def serve():
         if kind == "hide":
             st["msg"] = now
             targets = [curs[m[1]]] if len(m) > 1 and m[1] in curs else ([] if len(m) > 1 else list(curs.values()))
-            for c in targets:                     # 11-17:带光标名只藏那一只;不带全藏(老行为)
+            for c in targets:                     # 带光标名只藏那一只;不带全藏(老行为)
                 c.update(shown=False, waiting=False, last=now - FADE_AFTER_S - 2)
             return
-        if kind == "wait" and len(m) >= 3:        # 11-17:wait 光标名 1|0 —— 排队中打瞌睡 + 变淡
+        if kind == "wait" and len(m) >= 3:        # wait 光标名 1|0 —— 排队中打瞌睡 + 变淡
             st["msg"] = now
             c = curs.get(str(m[1]))
             if c is not None:
@@ -618,7 +618,7 @@ def serve():
         if kind not in ("move", "click"):
             return
         x, y, label, color, owner = m[1], m[2], m[3] if len(m) > 3 else "SeeU", m[4] if len(m) > 4 else PURPLE, m[5] if len(m) > 5 else 0
-        key = str(m[6]) if len(m) > 6 and m[6] else "_"          # 11-17 第 7/8 段:光标名(哪个任务)、名牌规则 auto / fixed
+        key = str(m[6]) if len(m) > 6 and m[6] else "_"          # 第 7/8 段:光标名(哪个任务)、名牌规则 auto / fixed
         auto = len(m) > 7 and m[7] == "auto"
         st["msg"] = now
         move_cursor(get_cur(key, now), kind, x, y, label, color, owner, auto, now)
@@ -718,7 +718,7 @@ def serve():
         gp.GdipDeletePen(pen)
         bw = (W_ - 90 * s) if t["link"] else (W_ - 36 * s)
         text_at(gr, t["body"], 0, 12, False, (0.82, 0.82, 0.82), 1.0, o + 24 * s, o + 31 * s, bw, H_ - 34 * s, s)
-        if t["link"]:                                  # 右下「打开 ›」:只有点它才跳(Mac 10-14 用户定:整张可点容易误跳)
+        if t["link"]:                                  # 右下「打开 ›」:只有点它才跳(同 Mac:整张可点容易误跳)
             bx, by = o + W_ - TOAST_BTN_W * s - 10 * s, o + H_ - 26 * s
             rrect(gr, bx, by, TOAST_BTN_W * s, 20 * s, 10 * s, t["color"], 0.95)
             lab = OPEN_EN if _en() else OPEN_ZH
@@ -813,7 +813,7 @@ def serve():
     wc = WNDCLASSW(0, proc, 0, 0, hinst, None, None, None, None, "SeeUCursor")
     u.RegisterClassW(ctypes.byref(wc))
     EX_CUR = 0x00080000 | 0x00000020 | 0x00000008 | 0x00000080 | 0x08000000   # LAYERED | TRANSPARENT | TOPMOST | TOOLWINDOW | NOACTIVATE
-    # 11-17:定时器挂在一个永远不显示的宿主窗口上(光标窗口一只一个,会回收)
+    # 定时器挂在一个永远不显示的宿主窗口上(光标窗口一只一个,会回收)
     hwnd = u.CreateWindowExW(EX_CUR, "SeeUCursor", "SeeU cursor host", 0x80000000, 0, 0, 1, 1, None, None, hinst, None)
     hwnd_box[0] = hwnd
     canvas(1.0)
@@ -840,7 +840,7 @@ def serve():
         for c in list(curs.values()):
             try:
                 step(c, now)
-            except Exception:   # noqa: BLE001 —— 复查 11-17:一只出错不耽误别的光标
+            except Exception:   # noqa: BLE001 —— 一只出错不耽误别的光标
                 pass
         relabel(now)
 

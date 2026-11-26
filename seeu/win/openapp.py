@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 后台打开 App(11-15 C-2.1,照 Mac 版 seeu/openapp.py)。
+"""SeeU Windows 版 · 后台打开 App(照 Mac 版 seeu/openapp.py)。
 
-用户定:只给自己打不开 App 的客户端用(现在只有千问)。规则跟 Mac 一样:只开不关;终端 / 命令行、系统权限界面、
+只给自己打不开 App 的客户端用(现在只有千问)。规则跟 Mac 一样:只开不关;终端 / 命令行、系统权限界面、
 密码程序、「设置」、浏览器(网页走 seeu_web_open)、正在运行 SeeU 的程序都不开;已经开着的不动;
 App 打开时自己抢了前台,就把前台还给用户原来的窗口,结果里照实说。
 
@@ -15,7 +15,7 @@ import re
 import subprocess
 import time
 
-# 自己打不开 App 的客户端(程序名,小写)。千问 Windows 版的程序名没实测,先按常见写法列,装上后核对(相关要点 11-15 C-2.1)
+# 自己打不开 App 的客户端(程序名,小写)。千问 Windows 版的程序名没实测,先按常见写法列,装上后核对
 NEED_OPEN = {"qianwen.exe", "千问.exe", "qwen.exe", "tongyi.exe"}
 
 # 常用系统自带 App 的中文名 → 英文系统里的叫法(照 Mac 版 ax.canon_name:AI 写中文名,英文 Windows 上也认)
@@ -29,7 +29,7 @@ EN_ZH = {}
 for _z, _e in ZH_EN.items():
     EN_ZH.setdefault(_e, _z)
 
-# 不替 AI 打开的(按名字 / AppID 片段,不分大小写;AppID 按子串认,不用 \b —— 11-15 复查:Terminal_8wekyb… 里 \b 不成立)
+# 不替 AI 打开的(按名字 / AppID 片段,不分大小写;AppID 按子串认,不用 \b —— Terminal_8wekyb… 里 \b 不成立)
 _BLOCK = [
     (re.compile(r"(cmd\.exe|^cmd$|command prompt|命令提示符|命令提示字元|powershell|pwsh|windowsterminal|windows ?terminal|"
                 r"^terminal$|终端|終端|\bwsl\b|microsoft\.wsl|wsl\.exe|wslhost|linux|ubuntu|debian|kali|opensuse|suse|fedora|almalinux|oracle ?linux|pengwin|alpine|"
@@ -48,7 +48,7 @@ _BLOCK = [
      "是存密码的程序"),
     (re.compile(r"(immersivecontrolpanel|^settings$|^设置$|^設定$|control ?panel|controlpanel|控制面板|^控制台$|コントロール)", re.I),
      "是系统设置,可能直接开在隐私 / 账户那页"),
-    # 11-15 复查:能被 AI 借来跑命令 / 交出电脑的 —— 别的 AI 客户端、远程协助
+    # 能被 AI 借来跑命令 / 交出电脑的 —— 别的 AI 客户端、远程协助
     (re.compile(r"(anthropic|claude|openai|chatgpt|codex|cursor|windsurf|codeium|copilot|officehub|workbuddy|doubao|豆包|"
                 r"kimi|moonshot|deepseek|lingma|qoder|\btrae\b|marscode|qianwen|千问|tongyi|通义|\bqwen\b|yuanbao|元宝|"
                 r"perplexity|ollama|lm ?studio|zhipu|智谱|chatglm|\bkiro\b|antigravity|\bvoid\b|"
@@ -56,7 +56,7 @@ _BLOCK = [
                 r"teamviewer|anydesk|todesk|sunlogin|向日葵|parsec|rustdesk|splashtop|chrome ?remote|\bvnc|realvnc|tightvnc|"
                 r"ultravnc|anyviewer|nomachine|radmin)", re.I),
      "是 AI 客户端或远程协助程序"),
-    # 11-15 第二轮复查:终端名单外的终端、带命令行的 IDE、能跑脚本的启动器、虚拟机、磁盘 / 系统管理
+    # 终端名单外的终端、带命令行的 IDE、能跑脚本的启动器、虚拟机、磁盘 / 系统管理
     (re.compile(r"(wave ?terminal|\brio\b|termius|electerm|securecrt|mremoteng|xshell|finalshell|"
                 r"visual studio|vs ?code|vscodium|^code$|\\code\.exe|jetbrains|intellij|pycharm|webstorm|goland|clion|rider|"
                 r"phpstorm|datagrip|android studio|\bzed\b|sublime text|notepad\+\+|"
@@ -70,7 +70,7 @@ _BROWSER = re.compile(r"(chrome|msedge|microsoft edge|firefox|brave|\bopera\b|vi
                       r"iexplore|internet explorer|liebao|猎豹|2345(浏览器|explorer|browser)|maxthon|傲游|浏览器|瀏覽器|"
                       r"\b(web|uc|qq|tor|avast secure|avg secure|cent|yandex|quark|夸克|arc|zen|floorp|waterfox|librewolf) ?browser\b|"
                       r"yandex)", re.I)
-_BROWSER_NAME = re.compile(r"^(arc|zen|dia|comet|opera|edge|chrome|firefox)$", re.I)   # 只对显示名整串比(第三轮复查:拼进 AppID 后永远对不上)
+_BROWSER_NAME = re.compile(r"^(arc|zen|dia|comet|opera|edge|chrome|firefox)$", re.I)   # 只对显示名整串比(拼进 AppID 后永远对不上)
 _VM_SHARED = re.compile(r"(parallels|vmware|virtualbox).*shared|shared.*(parallels|vmware|virtualbox)", re.I)
 _MAC_NAME = re.compile(r"[(（]\s*(mac|macos)\s*[)）]\s*$", re.I)
 
@@ -100,13 +100,13 @@ def enabled():
 
 _apps = []
 _last_read = 0.0
-REFRESH_GAP_S = 120          # 找不到时重读列表的冷却(第二轮复查:写错名字每次都白读一遍,千问沙箱里一次 30 秒)
+REFRESH_GAP_S = 120          # 找不到时重读列表的冷却(写错名字每次都白读一遍,千问沙箱里一次 30 秒)
 import threading
 _apps_lock = threading.Lock()
 
 
 def preload():
-    """11-15 Win10 千问实测:千问的沙箱里第一次读开始菜单要 30 秒(平时约 6 秒)→ 认出是千问时就在后台先读好。"""
+    """Win10 千问实测:千问的沙箱里第一次读开始菜单要 30 秒(平时约 6 秒)→ 认出是千问时就在后台先读好。"""
     threading.Thread(target=lambda: _safe_start_apps(), daemon=True).start()
 
 
@@ -195,7 +195,7 @@ def find(name):
 
 def why_not(dn, aid):
     s = f"{dn} {aid}"
-    # 11-15 Win10 实测:Parallels 把 Mac 上的 App 也放进「开始」菜单(…\Parallels\Shared Applications\Terminal (Mac).exe),
+    # Win10 实测:Parallels 把 Mac 上的 App 也放进「开始」菜单(…\Parallels\Shared Applications\Terminal (Mac).exe),
     # 一打开就是在 Mac 上运行真程序,出了 Windows 的安全底线管得到的范围 → 一律不开(别的虚拟机软件同理按路径认)
     if _VM_SHARED.search(aid) or _MAC_NAME.search(dn) or _MAC_NAME.search(os.path.splitext(os.path.basename(aid))[0]):
         return f"{dn} 是虚拟机共享过来的 Mac 上的 App,打开它会在 Mac 上运行,SeeU 不从 Windows 里替你打开"
@@ -222,7 +222,7 @@ def _keys(dn):
 
 
 def _matches(w, keys):
-    """窗口是不是这个 App 的:程序名对得上,或标题等于名字 / 以「 - 名字」结尾(11-15 复查:原来按子串,太宽)。"""
+    """窗口是不是这个 App 的:程序名对得上,或标题等于名字 / 以「 - 名字」结尾(原来按子串,太宽)。"""
     t, e = (w.get("title") or "").strip().lower(), os.path.basename(w.get("exe") or "").lower()
     return any(t == k or t.endswith(" - " + k) or e in (k + ".exe", k.replace(" ", "") + ".exe") for k in keys)
 
@@ -243,7 +243,7 @@ def _exe_of(aid):
 
 
 def _running(dn, aid=""):
-    """已经开着的窗口:名字对得上,或(传统程序)窗口的程序就是 AppID 里那个 exe(第二轮复查:Teams、网易云这类标题对不上)。"""
+    """已经开着的窗口:名字对得上,或(传统程序)窗口的程序就是 AppID 里那个 exe(Teams、网易云这类标题对不上)。"""
     from seeu.win import window as W
     keys, ex = _keys(dn), _exe_of(aid)
     for w in W.list_windows():
@@ -261,12 +261,12 @@ class _SEI(ctypes.Structure):
 
 
 def _shell_open(target):
-    """ShellExecuteExW + SEE_MASK_FLAG_NO_UI:出错不弹系统提示框(11-15 复查:弹了框 MCP 服务会一直等)。返回 (成没成, 错误码)。"""
+    """ShellExecuteExW + SEE_MASK_FLAG_NO_UI:出错不弹系统提示框(弹了框 MCP 服务会一直等)。返回 (成没成, 错误码)。"""
     e = _SEI()
     e.cbSize = ctypes.sizeof(_SEI)
     e.fMask = 0x00000400 | 0x00000100         # SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC
     e.lpVerb, e.lpFile, e.nShow = "open", target, 4   # 4 = SW_SHOWNOACTIVATE
-    try:                                       # shell: 路径要 COM(第二轮复查:开 App 前可能还没有任何 UIA 调用)
+    try:                                       # shell: 路径要 COM(开 App 前可能还没有任何 UIA 调用)
         ctypes.windll.ole32.CoInitializeEx(None, 2)
     except Exception:   # noqa: BLE001
         pass

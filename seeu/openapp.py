@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""后台打开 App(11-15 C-2.1,用户定:只给自己打不开 App 的客户端用,比如千问)。
+"""后台打开 App(只给自己打不开 App 的客户端用,比如千问)。
 
 千问跑命令关在沙箱里,`open -a 备忘录` 每次都要用户点「允许」。SeeU 的 MCP 服务不在那个沙箱里,
 由它用系统接口打开(不激活 = 窗口开在后面,不抢前台)。
 
-规则(用户 11-15 同意):
+规则:
 - 只开不关;终端 / 能跑脚本的 App / 密码 App / 系统设置 / 正在运行 SeeU 的程序 不开(跟点击、打字同一套安全底线);
   浏览器不走这里(用 seeu_web_open,网址要过允许名单)。
 - 有的 App 一打开就自己跳到最前面,拦不住:跳了就切回用户原来在用的程序,并在结果里照实说。
@@ -16,7 +16,7 @@ import os
 import re
 import time
 
-# 自己打不开 App 的客户端(包名)。千问 5.2:跑的命令在沙箱里,打开 App 要用户批准(11-15 实测)
+# 自己打不开 App 的客户端(包名)。千问 5.2:跑的命令在沙箱里,打开 App 要用户批准
 NEED_OPEN = {"com.alibaba.tongyi": "千问"}
 
 APP_DIRS = ("/System/Applications", "/System/Applications/Utilities", "/Applications", "/Applications/Utilities",
@@ -24,7 +24,7 @@ APP_DIRS = ("/System/Applications", "/System/Applications/Utilities", "/Applicat
             "/System/Cryptexes/App/System/Applications")      # 新版 macOS 的 Safari 真身在这(「应用程序」里那个是链接)
 
 
-_HOST_HOME = os.environ.pop("SEEU_HOST_HOME", None)   # 11-15 复查:读一次就从环境里拿掉,别传给被打开的程序(那边再起 SeeU 会误认成千问)
+_HOST_HOME = os.environ.pop("SEEU_HOST_HOME", None)   # 读一次就从环境里拿掉,别传给被打开的程序(那边再起 SeeU 会误认成千问)
 
 
 def enabled():
@@ -62,7 +62,7 @@ def _in_app_dirs(path):
 
 def find(name):
     """App 名 / 包名 → (路径, 包名, 显示名);找不到返回 None。
-    11-15 复查:只认那几个「应用程序」文件夹里的 App;名字里带 / 或 .. 的一律不认(原来写成路径就能开任意位置的 .app)。"""
+    只认那几个「应用程序」文件夹里的 App;名字里带 / 或 .. 的一律不认(原来写成路径就能开任意位置的 .app)。"""
     from AppKit import NSWorkspace
     from Foundation import NSBundle, NSFileManager
     name = str(name or "").strip()
@@ -105,7 +105,7 @@ def find(name):
     return path, bundle, (dn[:-4] if dn.endswith(".app") else dn)
 
 
-# 11-15 复查:能被 AI 借来跑命令 / 交出电脑的 —— 别的 AI 客户端(往对话框里打字让它跑命令)、远程协助 / 屏幕共享
+# 能被 AI 借来跑命令 / 交出电脑的 —— 别的 AI 客户端(往对话框里打字让它跑命令)、远程协助 / 屏幕共享
 AI_OR_REMOTE = re.compile(r"(anthropic|claude|openai|chatgpt|codex|cursor|\btrae\b|windsurf|codeium|github copilot|"
                           r"microsoft copilot|^copilot$|com\.microsoft\.copilot|workbuddy|doubao|kimi|moonshot|deepseek|lingma|"
                           r"qoder|qianwen|千问|tongyi|通义|\bqwen\b|yuanbao|元宝|perplexity|ollama|lm ?studio|lmstudio|zhipu|智谱|"
@@ -113,7 +113,7 @@ AI_OR_REMOTE = re.compile(r"(anthropic|claude|openai|chatgpt|codex|cursor|\btrae
                           r"screensharing|screen sharing|屏幕共享|teamviewer|anydesk|todesk|sunlogin|向日葵|parsec|rustdesk|"
                           r"splashtop|chrome ?remote|remote ?desktop|远程|遠端|windows app|com\.microsoft\.rdc|\bvnc|realvnc|"
                           r"jump desktop|jumpdesktop|edovia|\bscreens\b|anyviewer|nomachine)", re.I)
-# 11-15 第二轮复查:开了就能跑命令 / 改系统的 —— 终端名单外的终端、带命令行的 IDE、能跑脚本的启动器、虚拟机、磁盘工具这类
+# 开了就能跑命令 / 改系统的 —— 终端名单外的终端、带命令行的 IDE、能跑脚本的启动器、虚拟机、磁盘工具这类
 CAN_RUN = re.compile(r"(wave ?terminal|\brio\b|termius|electerm|securecrt|royal ?tsx|tabby|\bhyper\b|co\.zeit\.hyper|\bwarp\b|"
                      r"visual studio code|^code$|vscodium|com\.microsoft\.vscode|com\.visualstudio|xcode|jetbrains|intellij|"
                      r"pycharm|webstorm|goland|clion|rider|phpstorm|rubymine|datagrip|android studio|\bzed\b|sublime text|"

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · MCP 服务(第 2 段,11-11):把 see / tap / type / press / scroll 包成 MCP 工具给 AI 客户端用。
+"""SeeU Windows 版 · MCP 服务(第 2 段):把 see / tap / type / press / scroll 包成 MCP 工具给 AI 客户端用。
 
 协议部分跟 Mac 版 seeu/mcp_server.py 同一套写法(stdio 一行一个 JSON-RPC,只要 initialize / tools/list / tools/call / ping),
 工具和说明按 Windows 写。Windows 上 `python -m seeu mcp` 自动走这里。只用标准库 + comtypes(UIA)。
@@ -23,16 +23,16 @@ def _under(path, base):
 
 
 def _fix_env():
-    """11-15 千问(Windows 5.2)实测:它拉起工具时①把 USERPROFILE 换成自己的文件夹
+    """千问(Windows 5.2)实测:它拉起工具时①把 USERPROFILE 换成自己的文件夹
     (…\\qwen-agent\\<号>\\custom-mcp\\runtime\\custom_<id>),SeeU 的设置、日志、名单都跑进去;
     ②PATH 里没有 System32,按名字调 powershell / taskkill 全报「系统找不到指定的文件」(找 App、认字、专用浏览器都坏)。
     启动时修回来:用户目录用 npm 启动包传来的 HOME(它按系统账户记录取的真家目录);跟着旧用户目录的
     APPDATA / LOCALAPPDATA / TEMP 一起改回(新目录不在就不换);PATH 补上系统目录。别的客户端环境正常,什么都不动。
-    11-15 复查:千问的原值只存在 sys 上(openapp 判断「是不是千问」用),SEEU_HOST_HOME 从环境里拿掉 ——
+    千问的原值只存在 sys 上(openapp 判断「是不是千问」用),SEEU_HOST_HOME 从环境里拿掉 ——
     留在环境里会传给被打开的程序,那边客户端再起 SeeU 会误认成千问。"""
     env = os.environ
     sys.seeu_host_home = env.pop("SEEU_HOST_HOME", "") or ""
-    # 第二轮复查:npx / Electron 宿主带进来的变量会传给 SeeU 打开的程序(ELECTRON_RUN_AS_NODE=1 时 VS Code 这类开不出窗口)
+    # npx / Electron 宿主带进来的变量会传给 SeeU 打开的程序(ELECTRON_RUN_AS_NODE=1 时 VS Code 这类开不出窗口)
     for k in list(env):
         if k in ("ELECTRON_RUN_AS_NODE", "NODE_OPTIONS", "NODE_PATH", "INIT_CWD") or k.lower().startswith("npm_"):
             env.pop(k, None)
@@ -67,9 +67,9 @@ def _fix_env():
 
 _env_fixed = os.name == "nt" and _fix_env()
 
-# 11-14(照 Mac 版 10-31 豆包实测那处):有的客户端拉起 MCP 服务时设 PYTHONNOUSERSITE=1,装在用户目录里的 comtypes 就加载不到。
+# 照 Mac 版豆包实测那处:有的客户端拉起 MCP 服务时设 PYTHONNOUSERSITE=1,装在用户目录里的 comtypes 就加载不到。
 # 去掉这个变量(SeeU 再拉起的浮标等子程序也不继承),把用户库路径加回来。
-# 11-15 复查:千问换了用户目录时,Python 启动时算的用户库路径也是错的 → 环境修好后重算一次再加。
+# 千问换了用户目录时,Python 启动时算的用户库路径也是错的 → 环境修好后重算一次再加。
 if os.environ.pop("PYTHONNOUSERSITE", None) is not None or _env_fixed:
     import site
     site.USER_BASE = None
@@ -204,7 +204,7 @@ TOOLS = [
 WIN_PHRASES = [
     ("」对得上好几个程序的窗口:", "\" matches windows of several programs: "),
     (";请写成「程序名「标题里的几个字」」或「#窗口号」", "; write it as \"program name「part of the title」\" or \"#window number\""),
-    # —— 11-15 C-2.1 后台打开 App(win/openapp.py)
+    # —— 后台打开 App(win/openapp.py)
     (" 是虚拟机共享过来的 Mac 上的 App,打开它会在 Mac 上运行,SeeU 不从 Windows 里替你打开", " is a Mac app shared into this virtual machine — opening it would run it on the Mac; SeeU won't open it from Windows"),
     (" 是命令行程序,能直接运行任何命令,SeeU 不替你打开", " is a command-line program that can run any command; SeeU won't open it for you"),
     (" 是系统权限或系统管理相关的界面,SeeU 不替你打开", " is a system permission / administration screen; SeeU won't open it for you"),
@@ -218,7 +218,7 @@ WIN_PHRASES = [
     ("窗口在另一个虚拟桌面上:后台点不动时不借鼠标、不借前台(一拉前台系统就会把你切到那个桌面);这一步请你切过去,或把窗口挪到现在的桌面",
      "the window is on another virtual desktop: when the background has no effect SeeU won't borrow the mouse or the foreground "
      "(Windows would switch you to that desktop); please switch there, or move the window to this desktop, for this step"),
-    ("画面变了:第 ", "the screen changed: item "), (" 项「", " \""),      # 11-14 按编号操作前核对
+    ("画面变了:第 ", "the screen changed: item "), (" 项「", " \""),      # 按编号操作前核对
     ("」已经不在 see 时的位置,先 see 一次再操作", "\" is no longer where seeu_see saw it; call seeu_see again before acting"),
     ("是命令行程序,能直接运行任何命令", " is a command-line program that can run any command"),
     ("是系统权限相关的界面", " is a system permission / security window"),
@@ -275,7 +275,7 @@ WIN_PHRASES = [
     ("等几秒再 see", "wait a few seconds and see again"),
     ("它整个被别的窗口盖住了,Chrome / Electron 这类程序被盖住时不重画",
      "it is completely covered by other windows, and Chrome / Electron apps don't repaint while covered"),
-    ("。按截图位置操作会照着旧画面点到别的东西(11-15 Win10 实测:照旧图点,点中了另一张卡片的「连接」),SeeU 没做。",
+    ("。按截图位置操作会照着旧画面点到别的东西(Win10 实测:照旧图点,点中了另一张卡片的「连接」),SeeU 没做。",
      ". Acting on a screenshot position would hit whatever is really there now, not what the old picture shows, so SeeU didn't do it. "),
     ("改用 see 列表里控件的编号操作(截图认字得来的编号同样不行);列表里没有的,等几秒再 see 一次,画面跟上了再按位置点",
      "Use the number of a control from the seeu_see list instead (numbers of text recognized from the screenshot are blocked too); "
@@ -296,7 +296,6 @@ WIN_PHRASES = [
      "background has no effect SeeU won't borrow the mouse (Windows would switch the user over). If what you need isn't in "
      "the list, ask the user to switch to that desktop or move the window here."),
     ("窗口里没找到", "not found in the window: "), ("没有编号", "no item number "), (",先 see 一次", ", call seeu_see first"),
-    # —— 11-23 C-3.9 整体复查
     ("选中 / 勾选状态变了", "the selected / checked state changed"),
     ("资源管理器地址栏里只打已有文件夹的路径(打程序名、命令回车会直接运行),SeeU 不打(这一步请你自己来)",
      "in the File Explorer address bar SeeU only types the path of an existing folder (a program name or command would run "
@@ -304,7 +303,6 @@ WIN_PHRASES = [
     ("资源管理器地址栏里现在不是已有文件夹的路径,回车会直接运行里面的东西,SeeU 不按(这一步请你自己来)",
      "the File Explorer address bar doesn't hold an existing folder path now; Enter would run what's in it, so SeeU won't "
      "press it (please do this step yourself)"),
-    # —— 11-23 C-4.0 Fable 复查
     ("资源管理器地址栏里 SeeU 不一个个按字符键(拼出来的命令会被运行);要跳到某个文件夹,用打字工具打完整的文件夹路径",
      "in the File Explorer address bar SeeU doesn't press character keys one by one (a command spelled out that way would run); "
      "to go to a folder, type its full path with the type tool"),
@@ -338,7 +336,7 @@ def en(s):
 
 
 # ---------------------------------------------------------------- 工具实现
-_shots = {}          # App → (截图宽, 高, 窗口 rect, 窗口号),px/py 按它换算。窗口号 11-23 C-3.9 整体复查加的:同程序两个窗口时核对是不是 see 的那个
+_shots = {}          # App → (截图宽, 高, 窗口 rect, 窗口号),px/py 按它换算。窗口号:同程序两个窗口时核对是不是 see 的那个
 _asked = {}          # App → 上次这个 App 的动作返回 ask_user 的时间
 ASKED_TTL = 1800
 
@@ -372,7 +370,7 @@ def _target(a, need=True):
             raise ValueError(f"px/py is outside the screenshot ({w}×{h})")
         now = W.find(app)
         if seen is not None and int(now["hwnd"]) != int(seen):
-            # 11-23 C-3.9 整体复查:这个程序开着好几个窗口,这次找到的不是截图的那个 → 照截图位置会点进另一个窗口,不点
+            # 这个程序开着好几个窗口,这次找到的不是截图的那个 → 照截图位置会点进另一个窗口,不点
             from seeu.win import act
             raise act.Stale(act.WRONG_WINDOW.format(a=int(seen), b=int(now["hwnd"])))
         x, y, ww, wh = now["rect"]                  # 按这一刻窗口的位置换算(see 之后窗口被挪了也准)
@@ -386,7 +384,7 @@ def _target(a, need=True):
 
 
 def _tell(r):
-    """11-24 C-4.1:借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
+    """借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
     try:
         from seeu import i18n
         from seeu.win import act
@@ -461,10 +459,10 @@ WEB_PHRASES = [
      "this is the user's own browser: in the background SeeU can't tell which field has the cursor (it could be a password field), "
      "so typing or editing keys on a web page need target = the field's number (SeeU checks it isn't a password field first). "
      "Prefer SeeU's own browser (seeu_web_open) for web pages"),
-    ("这是用户自己的浏览器:它没开网页内容的辅助功能时,后台打字 / 滚动它常常不认(11-11 真机,Chrome 157)。网页请改用 SeeU 专用浏览器(seeu_web_open),那条路稳",
+    ("这是用户自己的浏览器:它没开网页内容的辅助功能时,后台打字 / 滚动它常常不认(真机实测,Chrome 157)。网页请改用 SeeU 专用浏览器(seeu_web_open),那条路稳",
      "this is the user's own browser: when its page accessibility is off it often ignores background typing / scrolling. "
      "Use SeeU's own browser (seeu_web_open) for web pages; that route is reliable"),
-    ("这个 Chrome / Edge 窗口现在没开网页内容的辅助功能(没有网页内容子窗口),后台滚动它不认(11-11 真机:Chrome 157 平时不建这个子窗口)。网页请改用 SeeU 专用浏览器(seeu_web_open),那条路能滚;或者借用户的鼠标滚",
+    ("这个 Chrome / Edge 窗口现在没开网页内容的辅助功能(没有网页内容子窗口),后台滚动它不认(真机实测:Chrome 157 平时不建这个子窗口)。网页请改用 SeeU 专用浏览器(seeu_web_open),那条路能滚;或者借用户的鼠标滚",
      "this Chrome / Edge window doesn't accept background scrolling right now (its page accessibility is off). For web pages use "
      "SeeU's own browser (seeu_web_open), which can scroll"),
     ("Windows 没装文字识别语言包,认不了字。", "Windows has no text-recognition (OCR) language installed. "),
@@ -474,7 +472,7 @@ WEB_PHRASES = [
     ("(英文用 en-US)", " (use en-US for English)"),
 ]
 WIN_PHRASES += WEB_PHRASES
-WIN_PHRASES += [("管理员窗口,SeeU 碰不了", "runs as administrator, SeeU can't touch it"),       # 11-14 命令行出口也用这张表
+WIN_PHRASES += [("管理员窗口,SeeU 碰不了", "runs as administrator, SeeU can't touch it"),       # 命令行出口也用这张表
                 ("拖动要给屏幕点 x y,至少两个点:", "drag needs screen points x y, at least two: ")]
 
 
@@ -498,13 +496,13 @@ def do_see(a):
         out[0] += ("\n\nThis program has several windows: " + " | ".join(v["windows"]) +
                    f"\nTo use another one, write app as \"{win['exe'][:-4] if win['exe'].lower().endswith('.exe') else win['exe']}"
                    "「part of its title」\" or \"#window number\" (seeu_windows)")
-    if v.get("note"):            # 11-14:窗口在另一个虚拟桌面上
+    if v.get("note"):            # 窗口在另一个虚拟桌面上
         out[0] += ("\n\nnote: this window is on another virtual desktop, so its controls may be incomplete (some apps show only "
                    "the frame controls). You can look at the screenshot, tap by pixel "
                    "(not in Chrome / Electron windows), type and press keys, and type into a listed field by its number; but if the background "
                    "has no effect SeeU won't borrow the mouse or the foreground (Windows would switch the user to that desktop). If what you "
                    "need isn't in the list, ask the user to switch to that desktop or move the window here.")
-    if v.get("stale"):           # 11-15:截图可能是旧画面
+    if v.get("stale"):           # 截图可能是旧画面
         tipe = {act.COVER_WHY: "until the window is uncovered (ask the user to uncover part of it).",
                 act.DESK_WHY: "until the window is on the current desktop (ask the user to switch to it or move it here)."}.get(
             v["stale"], "until the picture catches up (call seeu_see again in a few seconds).")
@@ -588,7 +586,7 @@ def do_web_open(a):
 
 
 def do_web_tabs(a):
-    v = _w().tabs_view()         # 11-23 C-3.9 整体复查:名单外的标签页只给个数(照 Mac)
+    v = _w().tabs_view()         # 名单外的标签页只给个数(照 Mac)
     out = json.dumps(v["tabs"], ensure_ascii=False, indent=1)
     if v["hidden"]:
         out += f"\n(+{v['hidden']} tab(s) on sites that are not on SeeU's allow list — not shown)"
@@ -649,7 +647,7 @@ def do_manage(a):
     return [f"unknown action: {act_}"], True
 
 
-# 11-15 C-2.1:后台打开 App,只给自己打不开 App 的客户端(千问),见 openapp.enabled()(照 Mac 版)
+# 后台打开 App,只给自己打不开 App 的客户端(千问),见 openapp.enabled()(照 Mac 版)
 OPEN_APP_TOOL = _tool(
     "seeu_open_app", "Open a Windows app in the background (its window is shown without taking the foreground; if the app "
     "grabs the foreground anyway, SeeU gives it back to the user's window). Use it instead of starting programs yourself. "
@@ -672,7 +670,12 @@ def _open_app_enabled():
 
 
 def tool_list():
-    return TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+    tools = TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+    try:                                   # 加只读 / 会动的标注(seeu/hints.py);出错就照旧给不带标注的
+        from seeu.hints import annotate
+        return annotate(tools)
+    except Exception:   # noqa: BLE001
+        return tools
 
 
 def do_open_app(a):
@@ -681,7 +684,7 @@ def do_open_app(a):
     from seeu.win import openapp
     r = openapp.open_app(a["app"])
     if r.get("outcome") in ("delivered", "unverified"):
-        try:            # 外部评审 11-17:开 App 也会动焦点,记成「这个任务最后动过它」
+        try:            # 开 App 也会动焦点,记成「这个任务最后动过它」
             from seeu import sched
             sched.mark_focus(a["app"])
         except Exception:   # noqa: BLE001
@@ -703,12 +706,12 @@ def _log(name, a, ok, secs, note=""):
         with open(LOG, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%m-%d %H:%M:%S')} {name} {json.dumps(safe, ensure_ascii=False)} "
                     f"why={a.get('why', '')!r} {'ok' if ok else 'ERR'} {secs:.1f}s"
-                    + (f" | {note[:150]}" if note else "") + "\n")   # 11-12:出错时记一句原因(以前只记 ERR,查不了)
+                    + (f" | {note[:150]}" if note else "") + "\n")   # 出错时记一句原因(以前只记 ERR,查不了)
     except Exception:
         pass
 
 
-# 浮标上这一步写什么(11-13;跟 Mac 版 WHY_ACT 一个意思)
+# 浮标上这一步写什么(跟 Mac 版 WHY_ACT 一个意思)
 FLOAT_ACT = {"seeu_tap": "点击", "seeu_type": "打字", "seeu_scroll": "滚动", "seeu_press": "按键", "seeu_long_press": "长按",
              "seeu_web_open": "开标签页", "seeu_open_app": "打开 App"}
 
@@ -727,7 +730,7 @@ def float_step(name, a):
         try:
             from seeu.win import window as W
             app = os.path.splitext(W.info(int(app[1:])).get("exe") or "")[0] or app
-            if app.islower():                 # 进程名多是全小写(notepad、chrome):首字母大写,跟 AI 平时写的程序名一个样(11-14)
+            if app.islower():                 # 进程名多是全小写(notepad、chrome):首字母大写,跟 AI 平时写的程序名一个样
                 app = app[0].upper() + app[1:]
         except Exception:   # noqa: BLE001
             pass
@@ -753,7 +756,7 @@ def _show_float(name, a):
         fs = float_step(name, a)
         if fs:
             from seeu.win import floatwin
-            try:            # 11-17:先分好任务显示名(Claude、Claude2…),浮标上这一行跟后面的排队、光标名牌是同一个任务
+            try:            # 先分好任务显示名(Claude、Claude2…),浮标上这一行跟后面的排队、光标名牌是同一个任务
                 from seeu import sched
                 sched.touch()
                 floatwin.tint(sched.cursor_hex())
@@ -765,7 +768,7 @@ def _show_float(name, a):
 
 
 def _missing_args(name, a):
-    """11-15:AI 漏传必填参数时,动手前就用大白话说清缺哪个(原来到函数里才抛 KeyError,只回一句 missing argument: 'app')。"""
+    """AI 漏传必填参数时,动手前就用大白话说清缺哪个(原来到函数里才抛 KeyError,只回一句 missing argument: 'app')。"""
     tool = next((t for t in TOOLS + [OPEN_APP_TOOL] if t.get("name") == name), None)
     need = (tool or {}).get("inputSchema", {}).get("required") or []
     miss = [k for k in need if a.get(k) is None]
@@ -786,7 +789,7 @@ def call_tool(name, a):
     bad = _missing_args(name, a)
     if bad:
         return bad
-    try:                                    # 11-22 C-3.7:插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
+    try:                                    # 插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
         from seeu import deps
         wait = deps.gate()
     except Exception:   # noqa: BLE001
@@ -804,11 +807,11 @@ def call_tool(name, a):
         out = "refused" if isinstance(ex, safety.Refused) or getattr(ex, "code", None) in ("refused", "not_allowed") else "failed"
         why = (f"a value SeeU needed was missing ({ex}) — check this call's parameters, then call seeu_see and try again"
                if isinstance(ex, KeyError) else str(ex))
-        code = "\ncode: stale" if type(ex).__name__ == "Stale" else ""      # 11-23 C-3.9 整体复查:画面 / 窗口变了,给 AI 明确的代码(说明里写了 stale = 先 see)
+        code = "\ncode: stale" if type(ex).__name__ == "Stale" else ""      # 画面 / 窗口变了,给 AI 明确的代码(说明里写了 stale = 先 see)
         parts, err = [f"outcome: {out}{code}\nreason: {en(why)}" + "".join("\n" + x for x in _tell({"outcome": out, "reason": why}))], True
         note = f"{type(ex).__name__}: {why}"
     else:
-        # 11-12:结果(delivered / ineffective / …)也记下来;以前只记 ok,Codex 点错标签页那次事后分不清是谁错
+        # 结果(delivered / ineffective / …)也记下来;以前只记 ok,Codex 点错标签页那次事后分不清是谁错
         first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")
         note = first.split("\n", 1)[0].replace("outcome:", "").strip()
     _log(name, a, not err, time.time() - t0, note.replace("\n", " "))
@@ -825,7 +828,7 @@ def handle(msg):
         return None
     if method == "initialize":
         want = params.get("protocolVersion")
-        try:            # 11-17 C-2.6 多任务调度(同 Mac):这个服务进程 = 一个任务;名字用客户端报的(浮标、光标名牌、排队提示里看得到)
+        try:            # 多任务调度(同 Mac):这个服务进程 = 一个任务;名字用客户端报的(浮标、光标名牌、排队提示里看得到)
             os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")
             ci = params.get("clientInfo") or {}
             if isinstance(ci, dict) and ci.get("name"):
@@ -855,18 +858,18 @@ def _wire(out):
 
 
 def main():
-    try:                                # 11-22 C-3.7:插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
+    try:                                # 插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
         from seeu.where import settings_file
         settings_file()
     except Exception:   # noqa: BLE001
         pass
-    os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 11-17:同一个 AI 会话的几步算同一个任务
+    os.environ.setdefault("SEEU_TASK_ID", f"mcp:{os.getpid()}")     # 同一个 AI 会话的几步算同一个任务
     # Windows 的标准输入输出默认不是 UTF-8:协议一律按 UTF-8 收发
     proto = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1, newline="\n")
     os.dup2(2, 1)
     sys.stdout = sys.stderr
     stdin = open(sys.stdin.fileno(), encoding="utf-8", errors="replace", closefd=False)
-    try:                                # 11-15:给 npm 启动包 seeu-computeruse 留「装在哪」的纸条(千问只认 npx)
+    try:                                # 给 npm 启动包 seeu-computeruse 留「装在哪」的纸条(千问只认 npx)
         from seeu.win import install as _inst
         _inst.write_pointer()
     except Exception:   # noqa: BLE001

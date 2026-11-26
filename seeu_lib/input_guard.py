@@ -4,7 +4,7 @@
 input_guard.py —— 真实鼠标/键盘输入之前的"把关层"。
 
 适用场景:点击要对着 Mac 窗口走真实鼠标的情形(如 iPhone 镜像)。ADB 控制的安卓设备/模拟器不挪 Mac 鼠标,用不上。
-只用苹果公开接口,只读检查,本模块自己不发任何输入事件。2026-10-01 新建(3.0 输入层第一步),
+只用苹果公开接口,只读检查,本模块自己不发任何输入事件。
 设计参考官方 Computer Use 的把关思路:用户在用就等、目标被挡就不点、密码框不打字、能试运行。
 
 用法(坐标一律是桌面点坐标,原点主屏左上,跟 mac_input.px_to_pt() 输出一致):
@@ -29,7 +29,7 @@ input_guard.py —— 真实鼠标/键盘输入之前的"把关层"。
 两档接手灵敏度:默认 manual(用户一碰就抛 UserTakeover);程序自动跑时设 SEEU_INPUT_MODE=script(老名字 PSLIB_INPUT_MODE 也认)
 (碰一下不算,连续操作 1.5s 才算接手,接手后暂停、用户停手 3s 自动继续),详见 yield_to_user()。
 
-10-07 补(借鉴官方 Computer Use,拆解文档 8.3 第 3~7 条):
+借鉴官方 Computer Use:
   拒绝原因码 + 处理分类(REASONS / handling())、用户在打字先让(keyboard_busy)、目标应用有弹窗/表单不点
   (modal_sheet,读 AX)、打字前核对焦点在目标应用(focus_mismatch)、动作硬上限(check_limits / limit_exceeded)。
   动态让路可调(yield_to_user 的 resume_idle_s / on_waiting / log),suspend_yield() 临时关掉让路。
@@ -49,7 +49,7 @@ DEFAULT_MIN_IDLE = 2.0      # 用户停手多少秒才算"没在用"
 DEFAULT_WAIT_TIMEOUT = 60.0  # 硬上限:等用户停手最多等多久,到点抛 GuardTimeout
 POLL_S = 0.25
 
-# 两档接手灵敏度(用户 10-01 定):
+# 两档接手灵敏度:
 #   manual(默认,LLM 一步步操作):用户一碰就停,抛 UserTakeover 交还给用户
 #   script(程序自动跑,环境变量 SEEU_INPUT_MODE=script,老名字 PSLIB_INPUT_MODE 也认):碰一下不算,持续操作 ≥ TAKEOVER_HOLD_S 才算接手,
 #           接手后暂停,等用户停手 RESUME_IDLE_S 秒自动继续;暂停最多 MAX_PAUSE_S(硬上限)
@@ -137,7 +137,7 @@ def _cursor_pos():
 
 
 def user_idle_seconds():
-    """距离上一个任何输入事件多少秒。注意:我们自己合成的事件也会把它清零(10-01 实测),
+    """距离上一个任何输入事件多少秒。注意:我们自己合成的事件也会把它清零,
     所以判断用户在不在用要走 user_active(),别直接拿这个数。"""
     import Quartz
     return float(Quartz.CGEventSourceSecondsSinceLastEventType(
@@ -304,7 +304,7 @@ _AX = {}
 
 
 def _ax():
-    """本机 pyobjc 没装 ApplicationServices 包,直接从系统框架加载这几个 C 函数(10-07 实测可用)。"""
+    """本机 pyobjc 没装 ApplicationServices 包,直接从系统框架加载这几个 C 函数(实测可用)。"""
     if not _AX:
         import objc
         from Foundation import NSBundle
@@ -341,7 +341,7 @@ def modal_state(pid):
             if _ax_get(w, "AXModal"):
                 return True, f"「{_ax_get(w, 'AXTitle') or ''}」是模态对话框"
             if _ax_get(w, "AXSubrole") in ("AXDialog", "AXSystemDialog") and _ax_get(w, "AXMain") is False:
-                # 10-13(SeeU 实测「文本编辑」):新版 macOS 应用在前台时,左上角红黄绿三个按钮是一个单独的
+                # SeeU 实测「文本编辑」:新版 macOS 应用在前台时,左上角红黄绿三个按钮是一个单独的
                 # 66×20 小窗,也报 AXDialog。比真对话框小得多的不算弹窗。
                 sz = _ax_get(w, "AXSize")
                 import re as _re
@@ -457,7 +457,7 @@ def _inside(x, y, r):
 def window_at(x, y, skip=()):
     """(x,y) 上最上层、真正会接住点击的窗口,返回 dict(owner/pid/id/name/layer/bounds);没有返回 None。
     跳过:全透明窗口(输入法候选等)、Dock 的全屏窗口、seeu_lib 代理光标(屏保层、Python 进程、不拦鼠标)、skip 里的应用名、
-    正在让路的 SeeU 悬浮窗/悬浮标/多任务岛(借真鼠标那几秒不接鼠标,点击穿下去;10-30 SeeU 报:不跳会误判成被挡住)。"""
+    正在让路的 SeeU 悬浮窗/悬浮标/多任务岛(借真鼠标那几秒不接鼠标,点击穿下去;SeeU 报:不跳会误判成被挡住)。"""
     import Quartz
     try:
         from seeu_lib.watch_window import passthrough_wids
@@ -540,7 +540,7 @@ def guarded(x, y, owner, do, **kw):
 # ---------------------------------------------------------------- 还原前台应用和鼠标
 
 def frontmost_app():
-    """当前前台应用。🔴 NSWorkspace 在没有事件循环的脚本里会缓存第一次查到的值(10-01 实测:
+    """当前前台应用。🔴 NSWorkspace 在没有事件循环的脚本里会缓存第一次查到的值(实测:
     切到别的应用后还一直返回旧的),查之前先让事件循环跑 20ms 收一下系统通知,才是最新值。"""
     from AppKit import NSWorkspace, NSRunLoop, NSDate
     NSRunLoop.currentRunLoop().runUntilDate_(NSDate.dateWithTimeIntervalSinceNow_(0.02))
@@ -569,7 +569,7 @@ def _activate_pid(pid, bundle):
 
 
 def _same_app(shown, owner):
-    """系统给的应用名是不是 owner:先比原名,对不上再按系统语言换名比(中文系统 iPhone Mirroring → iPhone镜像;11-23 加)。"""
+    """系统给的应用名是不是 owner:先比原名,对不上再按系统语言换名比(中文系统 iPhone Mirroring → iPhone镜像)。"""
     if not shown or not owner:
         return False
     if shown == owner:
@@ -602,7 +602,7 @@ def _owner_rects(owner):
 
 class FrontState:
     """包住一整段操作:进入时记下前台应用和鼠标位置,退出时还原。
-    按"一段流程"用,别每点一下就包一次——反复切前台会让窗口一闪一闪(09-26 用户反馈过)。
+    按"一段流程"用,别每点一下就包一次——反复切前台会让窗口一闪一闪(用户反馈过)。
     avoid_owner:鼠标原位置在这个应用的窗口里就不放回去(iPhone 镜像里停着鼠标会被当长按)。
     用户中途自己切了应用/挪了鼠标,就不还原,尊重用户当前的操作。"""
 

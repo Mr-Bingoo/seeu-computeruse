@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Mr-Bingoo/seeu-computeruse",
+  "description": "Launcher for SeeU: background computer use on Mac and Windows. Install SeeU first (see repo).",
+  "repository": {
+    "url": "https://github.com/Mr-Bingoo/seeu-computeruse",
+    "source": "github",
+    "id": "1441521371"
+  },
+  "version": "1.2.3",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "seeu-computeruse",
+      "version": "1.2.3",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

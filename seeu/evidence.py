@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU 出事时一键取证(C-0.5,10-22 用户要):觉得被抢键盘、打字跑错地方、窗口乱跳时,马上跑一下,当场记下现场。
+"""SeeU 出事时一键取证:觉得被抢键盘、打字跑错地方、窗口乱跳时,马上跑一下,当场记下现场。
 
     python3 -m seeu 取证              # 记文字现场(几秒)
     python3 -m seeu 取证 --shot       # 再截一张整屏(先查 iPhone 镜像在不在当前桌面,在就不截)
@@ -18,7 +18,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "参考/取证")
 SHOT_DIR = home("seeu_evidence")
 BROWSERS = ["Safari", "Google Chrome", "Microsoft Edge", "Brave Browser", "Arc", "Chromium"]
@@ -144,7 +144,7 @@ def shot():
     try:
         from seeu_lib import mac_input as mi
         from seeu.ax import local_name
-        g = mi.win_geo(local_name("iPhone Mirroring"))     # 11-23:中文系统里进程名叫「iPhone镜像」
+        g = mi.win_geo(local_name("iPhone Mirroring"))     # 中文系统里进程名叫「iPhone镜像」
     except Exception:
         g = "查不到"
     if g is not None:

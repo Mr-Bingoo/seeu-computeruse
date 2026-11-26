@@ -1,4 +1,4 @@
-"""SeeU Linux 版(预览,11-18 起;第一版只支持 GNOME + Wayland)。说明见同目录 README.md,方案见 ../SeeU-Linux版方案.md。"""
+"""SeeU Linux 版(预览,只支持 GNOME + Wayland)。"""
 import os
 import sys
 
@@ -35,7 +35,7 @@ def _shell_env(uid):
 
 
 def fix_session_env(environ=None, uid=None, shell_env=None):
-    """补上缺的桌面会话变量(11-19 Codex 实测:它拉起 MCP 服务时只给 HOME、PATH、LANG 等 8 个变量,
+    """补上缺的桌面会话变量(Codex 实测:它拉起 MCP 服务时只给 HOME、PATH、LANG 等 8 个变量,
     缺了会话总线,AT-SPI 一连就整个进程退出)。只补缺的、不改已有的;先照搬本用户 gnome-shell 的,
     再退回 /run/user/<uid> 下的默认位置。返回补了哪些。"""
     env = os.environ if environ is None else environ

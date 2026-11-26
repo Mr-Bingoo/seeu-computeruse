@@ -27,7 +27,7 @@ def _bus():
     return Gio, Gio.bus_get_sync(Gio.BusType.SESSION)
 
 
-# 只读的问话:GNOME 一时卡住(没显卡加速的机器上,新窗口刚打开那一两秒;11-20 旧 Intel Mac 虚拟机实测)超时了就再问,
+# 只读的问话:GNOME 一时卡住(没显卡加速的机器上,新窗口刚打开那一两秒;旧 Intel Mac 虚拟机实测)超时了就再问,
 # 最多再问 2 次(合计最多约 6 秒)。会动东西的(挪指针、拉前台、写剪贴板…)不重发,免得做两遍。
 READ_ONLY = {"Ping", "GetRects", "GetPointer", "GetFocus", "GetClipboard"}
 RETRY = 2
@@ -125,7 +125,7 @@ def set_clipboard(text):
 
 def cursor(x, y, name="SeeU", color="#7F77DD", ms=60000, kind="move", key=None, auto=False):
     """代理光标(跟 Mac / Windows 同一套样子):kind = move | click(到点缩一下 + 波纹);ms = 停下多久淡出,0 = 收起。
-    key = 哪个任务的光标(11-18 C-3.0,一个任务一只;不带 = 跟老调用共用一只);auto = 名牌按规则(只剩一只写 SeeU,多只写 name)。
+    key = 哪个任务的光标(一个任务一只;不带 = 跟老调用共用一只);auto = 名牌按规则(只剩一只写 SeeU,多只写 name)。
     返回走到位要几秒(调用方可以等这么久再动手)。只是显示,出错返回 0。小插件老版本不认 key 就退回共用一只。"""
     try:
         if key:
@@ -213,10 +213,10 @@ def locked():
             return bool(ping().get("locked"))
         except NoHelper:
             # 小插件装了、启用了却不在:多半是锁屏(GNOME 锁屏时自动停用它)
-            # 装了但被停用:小插件说不了话,全靠 logind;logind 读不到 → 当锁着(11-25 C-4.2)
+            # 装了但被停用:小插件说不了话,全靠 logind;logind 读不到 → 当锁着
             return installed() and (enabled() or lg is None)
         except Exception:   # noqa: BLE001
-            # 11-23 C-3.9 整体复查:GNOME 没回话(超时等)时原来一律当没锁。logind 明说没锁(lg 是 False)才当没锁;
+            # GNOME 没回话(超时等)时原来一律当没锁。logind 明说没锁(lg 是 False)才当没锁;
             # logind 也读不到(lg 是 None)= 两头都问不到 → 当锁着,不动手
             return lg is None
     return False
@@ -262,7 +262,7 @@ def _parse_list(out):
 
 def _enabled_list(strict=False):
     """已启用的扩展。strict=True:读不出 / 解析不出返回 None(要往回写的地方用:不知道原来有哪些就不能写,
-    11-23 C-3.9 整体复查:原来解析失败当成空列表,装 / 卸时写回去会把用户别的扩展全抹掉)。"""
+    原来解析失败当成空列表,装 / 卸时写回去会把用户别的扩展全抹掉)。"""
     out = subprocess.run(["gsettings", "get", "org.gnome.shell", "enabled-extensions"],
                          capture_output=True, text=True, timeout=10).stdout.strip()
     v = _parse_list(out)
@@ -292,7 +292,7 @@ ALL_OFF_NOTE = "「扩展」总开关关着,更新没替你打开(免得把你�
 
 def _turned_off():
     """明确读到「被关掉」才 True(在已停用名单里,或「扩展」总开关关着);读不出当没关。
-    11-25 C-4.2:原来只看启用名单,被停用时 enabled() 还是 True → 装了不启用,SeeU 还误报「屏幕锁着」。"""
+    原来只看启用名单,被停用时 enabled() 还是 True → 装了不启用,SeeU 还误报「屏幕锁着」。"""
     try:
         if UUID in (_disabled_list() or []):
             return True
@@ -324,7 +324,7 @@ def _files():
 
 def install(touch_master=False):
     """装进用户自己的扩展目录并加进启用列表(不要管理员密码)。返回 {copied, enabled, relogin, all_on, all_off}。
-    touch_master:要不要打开「扩展」总开关。用户 11-26 定:只有检查 --fix(用户主动修)才传 True;更新是顺带的,不替用户打开。
+    touch_master:要不要打开「扩展」总开关。只有检查 --fix(用户主动修)才传 True;更新是顺带的,不替用户打开。
     默认 False:从旧版更新上来时,内存里跑的是旧的 update.py(不带这个参数),也不会去开总开关。
     GNOME 只在登录时扫一遍扩展 → 第一次装 / 换了新版要注销重新登录一次才生效(Wayland 下没法只重启 Shell)。"""
     d = dest_dir()

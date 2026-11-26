@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU 中英文对照表(10-21 用户定:开源做中文 + 英文两版,按钮、提示、悬浮标都要两套)。
+"""SeeU 中英文对照表(开源做中文 + 英文两版,按钮、提示、悬浮标都要两套)。
 
 用法:
     from seeu.i18n import T, step
@@ -16,10 +16,10 @@ import time
 TEXT = {
     # 悬浮标 / 卡片按钮(英文要短:卡片 300 宽一排四个)
     "btn.isee": ("I See", "I See"),
-    "btn.why": ("原因", "Why"),          # 10-30:AI 每一步的原因开关(只在 AI 任务出现)
+    "btn.why": ("原因", "Why"),          # AI 每一步的原因开关(只在 AI 任务出现)
     "btn.halo_real": ("抢占", "Takeover"),
     "btn.halo_bg": ("被控", "Controlled"),
-    "btn.light": ("灯光", "Glow"),          # 10-21 用户定:光圈开关叫「灯光」,关着时显示「灭灯泡 + 灯光」
+    "btn.light": ("灯光", "Glow"),          # 光圈开关叫「灯光」,关着时显示「灭灯泡 + 灯光」
     "btn.light_off": ("关", "Off"),
     "btn.collapse": ("收起", "Hide"),
     "btn.view_screen": ("看画面", "Screen"),
@@ -57,9 +57,9 @@ TEXT = {
     "card.screen_off": ("网页模块操作的可能是后台标签页,不放画面", "May be a background tab, no live view"),
     "card.why": ("原因: {why}", "Why: {why}"),
     "card.todo": ("怎么办: {todo}", "What to do: {todo}"),
-    # 10-27 用户定:自动推「在做什么」、借鼠标 / 卡住自动展开写清楚
+    # 自动推「在做什么」、借鼠标 / 卡住自动展开写清楚
     "card.near": ("点「{x}」附近", "Clicking near “{x}”"),
-    "card.on": ("点「{x}」", "Clicking “{x}”"),               # 10-28:点在字上不写「附近」
+    "card.on": ("点「{x}」", "Clicking “{x}”"),               # 点在字上不写「附近」
     "card.borrow": ("正在用你的鼠标", "Using your mouse"),
     "card.borrow_at": ("正在用你的鼠标(点「{x}」附近)", "Using your mouse (near “{x}”)"),
     "card.borrow_on": ("正在用你的鼠标(点「{x}」)", "Using your mouse (on “{x}”)"),
@@ -73,7 +73,7 @@ TEXT = {
     "step.勾选": ("勾选", "Checking"),
     "step.选下拉框": ("选下拉框", "Choosing option"),
     "step.滚动": ("滚动", "Scrolling"),
-    "step.长按": ("长按", "Long-pressing"),           # 10-30:MCP 告诉悬浮窗这一步是什么动作
+    "step.长按": ("长按", "Long-pressing"),           # MCP 告诉悬浮窗这一步是什么动作
     "step.点菜单": ("点菜单", "Using menu"),
     "step.回主屏": ("回主屏", "Going home"),
     "step.打开 App": ("打开 App", "Opening app"),
@@ -83,11 +83,11 @@ TEXT = {
     "overlay.wait": ("⏸ SeeU 等你关掉 {what} 再点(最多 {secs} 秒)", "⏸ SeeU waits for you to close {what} (up to {secs}s)"),
     "overlay.timeout": ("⚠️ SeeU 等了 {secs} 秒浮层还开着,照点了(可能把它收起): {what}",
                         "⚠️ {what} still open after {secs}s, clicking anyway (it may close)"),
-    # 11-01 借用鼠标「问我」档的提示条
+    # 借用鼠标「问我」档的提示条
     "ask.title": ("SeeU 要借你的鼠标", "SeeU needs your mouse"),
     "ask.body": ("{what}:请回到 AI 对话里选「仅此一次 / 自动使用 / 拒绝」", "{what}: go back to the AI chat and choose \"just this once / allow for this session / refuse\""),
     "ask.tap": ("点一下", "A click"), "ask.type": ("打字", "Typing"), "ask.drag": ("拖动", "A drag"),
-    # 11-01 更新命令(python3 -m seeu 更新 / update)
+    # 更新命令(python3 -m seeu 更新 / update)
     "upd.not_git": ("这份 SeeU 不是用 git clone 装的(或者是开发用的本机版),没法自动更新。到 {url} 下载新版覆盖,或重新 git clone。",
                     "This copy of SeeU wasn't installed with git clone (or it's a development copy), so it can't update itself. Download the new version from {url}, or git clone it again."),
     "inst.plugin": ("这份 SeeU 是从插件市场装的,装插件时已经接好了(不用再接入,再接一次会多出一份同样的工具)。"
@@ -136,7 +136,7 @@ TEXT = {
     "upd.check_win": ("顺便检查一下:", "Checking the setup:"),
     "upd.no_git_win": ("没找到 git 命令:先到 git-scm.com 装 Git for Windows,再运行一次。",
                        "git was not found: install Git for Windows from git-scm.com, then run this again."),
-    # 11-18 C-3.0:Linux 预览版
+    # Linux 预览版
     "upd.no_git_linux": ("没找到 git 命令:先装(Ubuntu / Debian:sudo apt install git;Fedora:sudo dnf install git),再运行一次。",
                          "git was not found: install it first (Ubuntu / Debian: sudo apt install git; Fedora: sudo dnf install git), then run this again."),
     "upd.linux_ext": ("SeeU 的 GNOME 小插件有新版,已经装好。🔴 要注销重新登录一次才生效(在那之前悬浮标、代理光标、借鼠标还是旧版)。",
@@ -149,7 +149,7 @@ TEXT = {
 _C = {"t": 0.0, "lang": "zh"}
 try:
     from seeu.where import settings_file as _sf
-    _SETTINGS = _sf()  # 11-22 C-3.7:插件版存用户文件夹(seeu/where.py)
+    _SETTINGS = _sf()  # 插件版存用户文件夹(seeu/where.py)
 except Exception:   # noqa: BLE001
     _SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "设置.json")
 
@@ -171,7 +171,7 @@ def lang():
             _C["lang"] = "en"
         elif v in ("自动", "auto"):
             try:
-                if os.name == "nt":          # 11-14:Windows 上问系统的界面语言(语言号低 10 位 = 4 是中文)
+                if os.name == "nt":          # Windows 上问系统的界面语言(语言号低 10 位 = 4 是中文)
                     import ctypes
                     first = "zh" if (ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF) == 0x04 else "en"
                 else:
@@ -196,7 +196,7 @@ def T(key, **kw):
         return s
 
 
-# 11-24 C-4.1(用户提):要借鼠标键盘而借不成时,给 AI 一句能照着转给用户的话。只在「后台做不成、确实要借」时出现
+# 要借鼠标键盘而借不成时,给 AI 一句能照着转给用户的话。只在「后台做不成、确实要借」时出现
 # (后台能做的,窗口在别的桌面也照做,不会走到这里)。两处调用:三个系统的 mcp_server。
 TELL = {
     "other_desktop": (

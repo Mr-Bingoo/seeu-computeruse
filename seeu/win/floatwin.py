@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版浮标(第一步,11-13 SeeU C-1.4):只写「SeeU」的胶囊 ↔ 单任务文字卡片。
+"""SeeU Windows 版浮标(第一步):只写「SeeU」的胶囊 ↔ 单任务文字卡片。
 
-样子照 Mac 版现在的样子(seeu_lib/watch_window.py;11-13 实地截图量的数,对照图在 seeu/参考/Windows浮标小样/Mac对照-1113.png):
-  胶囊 92×32(紫色呼吸圆点 +「SeeU」,任何时候只写 SeeU,不写进度 / 个数 —— 用户 10-27 定);
+样子照 Mac 版现在的样子(seeu_lib/watch_window.py;实地截图量的数):
+  胶囊 92×32(紫色呼吸圆点 +「SeeU」,任何时候只写 SeeU,不写进度 / 个数);
   点一下从右上角长成卡片 300×68:第一行「项目 · App」小字,第二行「正在…」大字;卡住时 300×87:「卡住了: 原因」+「怎么办: …」。
   鼠标移到卡片上,右上角出现「收起」;按住能拖;深浅色跟系统。
-做法:直接调系统接口(分层窗口 + GDI+,纯 ctypes,不装东西;三种做法的对比见 seeu/参考/Windows浮标小样/README.md)。
+做法:直接调系统接口(分层窗口 + GDI+,纯 ctypes,不装东西)。
 🔴 窗口永远不抢前台、不拿键盘(WS_EX_NOACTIVATE + WM_MOUSEACTIVATE 返回不激活)。
 做不到的:Mac 的模糊玻璃(Windows 的系统模糊不给胶囊形用),用接近不透明的底色代替。
-已做(11-13):接进 MCP 动作(mcp_server.float_step)、借鼠标 / 键盘提示(borrow)、按钮栏(灯光三档 / I See / 原因 / 收起)、屏幕四周光圈。
-I See 按钮(用户 11-13 定要加):只在网页任务出现;🔴 只有用户亲手的真鼠标点击能开(发消息、后台点击都开不了,SeeU 的安全底线也不碰自己的浮标),关谁都能关。
-多任务灵动岛(11-13):≥2 个任务同时在跑时换成岛(island / ordered / alive_tasks)。
-看画面(11-13 C-1.5):普通程序的任务,按钮栏上点「看画面」,卡片换成被操作窗口的实时小画面(一秒 5 张,后台截、不抢前台),点击位置有波纹和小圆点;
+已做:接进 MCP 动作(mcp_server.float_step)、借鼠标 / 键盘提示(borrow)、按钮栏(灯光三档 / I See / 原因 / 收起)、屏幕四周光圈。
+I See 按钮:只在网页任务出现;🔴 只有用户亲手的真鼠标点击能开(发消息、后台点击都开不了,SeeU 的安全底线也不碰自己的浮标),关谁都能关。
+多任务灵动岛:≥2 个任务同时在跑时换成岛(island / ordered / alive_tasks)。
+看画面:普通程序的任务,按钮栏上点「看画面」,卡片换成被操作窗口的实时小画面(一秒 5 张,后台截、不抢前台),点击位置有波纹和小圆点;
   再点一下回文字卡,选过会记住。网页任务(专用浏览器没有窗口)、窗口最小化了、多任务岛上看不了。
 还没做:文字微光、悬浮标在屏幕中间时从顶上撑开、多显示器、看画面的小窗拉边缩放。
 
@@ -32,7 +32,7 @@ import sys
 import time
 
 if __name__ == "__main__":
-    # 11-16 复查:浮标用 `python -m seeu.win.floatwin serve` 拉起,这份代码在 sys.modules 里叫 __main__;别处再 import
+    # 浮标用 `python -m seeu.win.floatwin serve` 拉起,这份代码在 sys.modules 里叫 __main__;别处再 import
     # seeu.win.floatwin 会另起一份(SERVING / HAND_T 对不上,I See 按钮开不了)→ 登记成同一个
     sys.modules.setdefault("seeu.win.floatwin", sys.modules[__name__])
 
@@ -52,16 +52,16 @@ MAX_ROWS_ALL = 8                                # 展开全部时最多列几行
 HOLD_S = 8                                      # 顶上那个任务至少停几秒才换(防几个任务一起跑时来回跳)
 TASK_KEEP_S = 60                                # 任务这么久没动静就不算在跑了(卡住的留着等人处理)
 CW, CH = ISLAND_W + 2 * M, CARD_H_MAX + 2 * M   # 画布:宽按岛算;高是单任务时的,岛更高时显示进程会换一块更高的
-ISEE_NOTE = "我已知风险，授权 AI 执行 · 卡住时请立即报告！"   # I See 开着时卡片上的一行(同 Mac,用户 10-24 定的原话)
+ISEE_NOTE = "我已知风险，授权 AI 执行 · 卡住时请立即报告！"   # I See 开着时卡片上的一行(同 Mac 版的原话)
 ANIM_S = 0.38
 H_ANIM_S = 0.25                                 # 卡片高度变了(文字卡 ↔ 画面、原因开关、多一行说明)过渡多久
 NOTE_LINE = 15                                  # 原因折到第二行时多出来的高
 SHIM_W, SHIM_SPEED, SHIM_PERIOD, ACTIVE_S = 48.0, 150.0, 5.0, 3.0   # 文字微光:亮带宽、每秒扫多远、几秒一轮;最近几秒有动作才扫(同 Mac)
 BREATH_S = 2.2
 HIDE_AFTER_S = 120           # 这么久没收到消息就消失(Mac:1 分钟收成悬浮标 + 再留 1 分钟)
-STUCK_KEEP_S = 3600          # 11-24 用户定:卡住时展开着的悬浮窗最多留 1 小时(同 Mac);你点收起 / AI 接着干活照旧
+STUCK_KEEP_S = 3600          # 卡住时展开着的悬浮窗最多留 1 小时(同 Mac);你点收起 / AI 接着干活照旧
 SUB_A = 0.62                 # 小字透明度(同 Mac)
-BORROW_HOLD_S = 2.5          # 借鼠标 / 键盘的提示:最后一次借用消息后留这么多秒再收回(同 Mac,10-27)
+BORROW_HOLD_S = 2.5          # 借鼠标 / 键盘的提示:最后一次借用消息后留这么多秒再收回(同 Mac)
 ORANGE = (255, 159, 10)      # 借用系统鼠标时的颜色(同 Mac)
 TB_H, TB_FONT, ICON_R = 28, 13, 7      # 按钮栏高、字号、图标圆的半径(同 Mac)
 LIGHT_H = 20                           # 灯光选项条高
@@ -70,8 +70,8 @@ LIGHT_LABEL = {"off": "关", "real": "抢占", "bg": "被控"}
 GLOW_W, GLOW_FADE_S, GLOW_PERIOD_S, GLOW_BREATH = 26, 0.35, 1.8, 0.55   # 屏幕四周光圈:宽、淡入淡出、呼吸一轮、呼吸幅度(同 Mac)
 BORROW_TEXT = {"mouse": ("正在用你的鼠标", "别动鼠标,几秒后还你"), "keyboard": ("正在用你的键盘", "别碰键盘,几秒后还你")}
 
-# ───────── 英文(11-14):代码里流转的还是中文,画出来之前才翻;语言跟 Mac 一样看 设置.json「语言」/ 环境变量 SEEU_LANG ─────────
-# 能用 Mac 版 seeu/i18n.py 里现成译法的照用(用户定过的那套),这里只放 Windows 浮标自己多出来的
+# ───────── 英文:代码里流转的还是中文,画出来之前才翻;语言跟 Mac 一样看 设置.json「语言」/ 环境变量 SEEU_LANG ─────────
+# 能用 Mac 版 seeu/i18n.py 里现成译法的照用(定好的那套),这里只放 Windows 浮标自己多出来的
 UI_EN = {
     "灯光": "Glow", "原因": "Why", "关": "Off", "抢占": "Takeover", "被控": "Controlled",
     "看操作": "Steps", "看画面": "Screen", "收起": "Hide", "等下一步": "Waiting", "折叠 ⌃": "Fold ⌃", "刚刚": "just now",
@@ -176,7 +176,7 @@ def light_level():
     return v if v in LIGHTS else "real"
 
 
-SERVING = False     # 11-16:本进程是不是浮标显示进程(serve 里置真)
+SERVING = False     # 本进程是不是浮标显示进程(serve 里置真)
 HAND_T = 0.0        # 最近一次认出「手按」的时间(isee.on(by="overlay") 用)
 
 
@@ -225,7 +225,7 @@ def ensure_serve():
 
 
 def who_name(who=None):
-    """任务名:调用方传的 > 环境变量 SEEU_PROJECT(项目)> SEEU_TASK_DISPLAY(11-17 C-2.6,同 Mac:SeeU 调度起的显示名,
+    """任务名:调用方传的 > 环境变量 SEEU_PROJECT(项目)> SEEU_TASK_DISPLAY(同 Mac:SeeU 调度起的显示名,
     AI 会话叫 Claude、Claude2…,跟排队提示、光标名牌对得上)。没有就 ""。"""
     return str(who if who is not None else (os.environ.get("SEEU_PROJECT") or os.environ.get("SEEU_TASK_DISPLAY") or "")).strip()
 
@@ -238,7 +238,7 @@ def browser(app, step="", who=None, note="", web=False, wid=0):
 
 
 def queue(app, on=True, pos=1, holder="", who=None, color=None):
-    """11-17 C-2.6(同 Mac watch_window.queue):这个任务在排队等 app(on=False 排完了)。pos = 排第几,holder = 谁占着,
+    """同 Mac watch_window.queue:这个任务在排队等 app(on=False 排完了)。pos = 排第几,holder = 谁占着,
     color = 任务光标色 "#RRGGBB"。岛把它放进下段「排队中」(变暗、右边 zZ)。旧版显示进程不认识,直接忽略。"""
     if os.environ.get("SEEU_NO_WATCH") == "1" or sys.platform != "win32":
         return
@@ -248,7 +248,7 @@ def queue(app, on=True, pos=1, holder="", who=None, color=None):
 
 
 def tint(color, who=None):
-    """11-17:这个任务的光标颜色("#RRGGBB"),岛上那行圆点跟它一致。没有任务名不发,不拉起显示进程。"""
+    """这个任务的光标颜色("#RRGGBB"),岛上那行圆点跟它一致。没有任务名不发,不拉起显示进程。"""
     w = who_name(who)
     if not w or not color or os.environ.get("SEEU_NO_WATCH") == "1" or sys.platform != "win32":
         return
@@ -322,7 +322,7 @@ def _shim(prims, tx, cy, text, size, bold, ink, sx, measure, a=1.0):
         prims.append(("shim", tx, cy, text, size, bold, _a((255, 255, 255) if dark else (26, 26, 26), 255 * (0.85 if dark else 0.5) * a), sx))
 
 
-EXPAND_EDGE = 40                                # 悬浮标离屏幕左 / 右边这么近算「贴边」(同 Mac,展开方式 C,用户 10-30 定)
+EXPAND_EDGE = 40                                # 悬浮标离屏幕左 / 右边这么近算「贴边」(同 Mac,展开方式 C)
 
 
 def anchor(capx, left, right, s=1.0):
@@ -376,7 +376,7 @@ def view_port(aspect):
 
 
 def view_saved_w(saved, aspect):
-    """记住的大小 → 宽:竖的画面记卡片高、横的记卡片宽,各一份(同 Mac,用户 10-22 定);没记过用默认。"""
+    """记住的大小 → 宽:竖的画面记卡片高、横的记卡片宽,各一份(同 Mac);没记过用默认。"""
     v = (saved or {}).get("view_port_h" if view_port(aspect) else "view_land_w")
     if not isinstance(v, (int, float)) or v <= 0:
         return view_default_w(aspect)
@@ -397,7 +397,7 @@ def edge_at(lx, ly, card, e=EDGE):
 
 def resize_w(edge, w0, dx, dy, aspect):
     """从宽 w0 开始,抓着 edge 拖了 (dx, dy) → 新的宽(还没夹范围)。画面保持比例:拉左右边按宽算,拉上下边由高反推宽,
-    拉角取两种里大的(跟着鼠标走,不抖;同 Mac 10-24 / 10-31)。"""
+    拉角取两种里大的(跟着鼠标走,不抖;同 Mac)。"""
     wx = w0 + (dx if "r" in edge else -dx if "l" in edge else 0)
     hy = view_h(w0, aspect) + (dy if "b" in edge else -dy if "t" in edge else 0)
     w_by_h = (hy - TB_H - BORDER) / aspect + 2 * BORDER
@@ -423,7 +423,7 @@ def card_lines(info):
 
 
 def bar_buttons(measure, has_why, web=False, W=CARD_W, x0=6):
-    """按钮栏上的按钮(卡片内坐标,左上原点):[(名字, x0, x1)]。顺序同 Mac(10-24 用户定):灯光固定第一、I See 第二而且只在网页任务出现、
+    """按钮栏上的按钮(卡片内坐标,左上原点):[(名字, x0, x1)]。顺序同 Mac:灯光固定第一、I See 第二而且只在网页任务出现、
     原因(AI 任务才有)… 看画面、收起。"""
     out, x = [], x0
     lw = 4 + 2 * ICON_R + 4 + measure(tr("灯光"), TB_FONT, False) + 6
@@ -458,7 +458,7 @@ def _icon_light(P, cx, cy, lvl, ink, a=1.0):
         P.append(("dot", cx, cy, ICON_R + 0.75, _a(ORANGE if lvl == "real" else (127, 119, 221), 255 * a)))
         mark = (255, 255, 255, int(255 * a))
     P.append(("circ", cx, cy, ICON_R, _a(ink, 255 * 0.88 * a), 1.5))
-    # 四个角照 Mac(seeu_lib/watch_island.py light_icon):竖一小段 → 半径 1.1 的圆角 → 横一小段(11-22 用户:拐弯要圆的,跟 Mac 一致)
+    # 四个角照 Mac(seeu_lib/watch_island.py light_icon):竖一小段 → 半径 1.1 的圆角 → 横一小段(拐弯要圆的,跟 Mac 一致)
     d, L, R = 2.8, 1.6, 1.1
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -714,7 +714,7 @@ def task_key(who, app):
     return (who or "").strip() or (app or "").strip() or "SeeU"
 
 
-Q_ALPHA = 0.55       # 排队那几行整体的淡度(同 Mac,用户 11-17 在小样里定)
+Q_ALPHA = 0.55       # 排队那几行整体的淡度(同 Mac)
 Q_FOLD = 2           # 排队超过这么多行就折成「还有 N 个在排队」
 
 
@@ -728,7 +728,7 @@ def hex_rgb(h):
 
 
 def queued(t):
-    """11-17 C-2.6(同 Mac):在排队等别的任务用完同一个窗口(借鼠标 / 卡住优先,不算排队)。"""
+    """同 Mac:在排队等别的任务用完同一个窗口(借鼠标 / 卡住优先,不算排队)。"""
     return bool(t.get("queued")) and not t.get("borrow") and not t.get("why")
 
 
@@ -748,7 +748,7 @@ def zz_alpha(tm):
 
 
 def kept_t(t):
-    """1 小时从什么时候数起:卡住那一刻,或你最后一次碰悬浮窗(11-25 三端统一,同 Mac)。"""
+    """1 小时从什么时候数起:卡住那一刻,或你最后一次碰悬浮窗(三端统一,同 Mac)。"""
     return max(t["last"], t.get("touch") or 0)
 
 
@@ -864,7 +864,7 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
     dark = theme == "dark"
     sub = 0.72 if dark else 0.6
     lead, rest = a[0], a[1:]
-    col = lambda t_: ORANGE if t_.get("borrow") else (t_.get("color") or T["dot"])   # noqa: E731   卡住不靠红色,靠文字说(同 Mac 10-27);11-17 圆点用任务光标色
+    col = lambda t_: ORANGE if t_.get("borrow") else (t_.get("color") or T["dot"])   # noqa: E731   卡住不靠红色,靠文字说(同 Mac);圆点用任务光标色
     notes = []
     if lead.get("borrow"):
         notes.append(tr(BORROW_TEXT.get(lead["borrow"], BORROW_TEXT["mouse"])[1]))
@@ -874,7 +874,7 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
         notes.append(tr(ISEE_NOTE))
     steps = [x for x in (lead.get("steps") or [])[1:3] if x]
     card_h = 14 + 16 + 28 + 20 * len(notes) + (18 * len(steps) + 8 if steps else 0) + 8
-    qrest = sorted((r_ for r_ in rest if queued(r_)), key=lambda r_: (r_.get("queued") or {}).get("t", 0))   # 11-17:排队的放下段,先排的在前
+    qrest = sorted((r_ for r_ in rest if queued(r_)), key=lambda r_: (r_.get("queued") or {}).get("t", 0))   # 排队的放下段,先排的在前
     rest = [r_ for r_ in rest if not queued(r_)]
     nq = len(qrest) + (1 if queued(lead) else 0)
     more_row = len(rest) > MAX_ROWS
@@ -894,7 +894,7 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
     bs, ba = breath(tm)
     a0 = max(0.0, 1 - 2.5 * k)
     a1 = max(0.0, min(1.0, (k - 0.35) / 0.5))
-    if a0 > 0:                                    # 收起:只写 SeeU,多任务也不写个数(用户 10-27 定)
+    if a0 > 0:                                    # 收起:只写 SeeU,多任务也不写个数
         if isee_on:
             prims.append(("eye", x + 16, y + 16, 5.2, _a(col(lead), 255 * a0 * ba)))
         else:
@@ -975,7 +975,7 @@ def island(k, tm, theme, measure, a, now, hover=False, ui=None):
 
 
 def _draw_queue(prims, hits, qshown, qfold, nq, bx, ry, W, tm, ink, sub, row_a, A, measure, box, col):
-    """11-17 C-2.6 岛下段「排队中」(同 Mac draw_queue,用户在小样里定):分隔线 + 一行一个,整行变暗;
+    """岛下段「排队中」(同 Mac draw_queue):分隔线 + 一行一个,整行变暗;
     最右边(正在做的行写「刚刚」的那一栏)写 zZ,3 秒轻轻一亮一暗;超过 Q_FOLD 个折成「还有 N 个在排队」,点开看全部。返回画完的 y。"""
     lab = q_label()
     lw = measure(lab, 10.5, False)
@@ -1113,7 +1113,7 @@ def serve():
               h_tgt=None, h_from=None, h_t0=-9.0, h_show=None, shim=False, solo=None, multi=False,
               w_tgt=None, w_from=None, w_show=None, rs=None, pic_on=False, view_geo=None)
     tasks = {}                # 任务名 -> 状态(多任务岛用;只有一个在跑时照旧是单任务卡片)
-    tint_cache = {}           # 11-17:任务还没上岛时先收到的光标色,上岛时用
+    tint_cache = {}           # 任务还没上岛时先收到的光标色,上岛时用
     ost = {}                  # 岛上谁排在顶上(ordered() 用)
     glow = dict(hwnd=None, mem=None, color=None, until=0.0, env=0.0, shown=False, alpha=-1, last=0.0, t=time.time())
     pos = wt.POINT()          # 浮标窗口(整块画布)现在在屏幕哪,每帧由悬浮标位置 cap + 展开方式算出来
@@ -1250,7 +1250,7 @@ def serve():
         gp.GdipCreateBitmapFromScan0(pw, ph, pw * 4, 0x000E200B, bits, ctypes.byref(bmp))   # 32 位预乘透明度,直接指向位图像素
         gp.GdipGetImageGraphicsContext(bmp, ctypes.byref(gr))
         gp.GdipSetSmoothingMode(gr, 4)
-        # 透明底上用普通抗锯齿,别用 ClearType。100% / 125% 缩放时字小,不对齐像素会发虚(11-13 用户报)→ 对齐像素;高分屏不用对齐
+        # 透明底上用普通抗锯齿,别用 ClearType。100% / 125% 缩放时字小,不对齐像素会发虚(用户报)→ 对齐像素;高分屏不用对齐
         gp.GdipSetTextRenderingHint(gr, 3 if s < 1.5 else 4)
         gp.GdipSetPixelOffsetMode(gr, 4)
         pt.update(pw=pw, ph=ph, cw=w_logical, mem=mem, dib=dib, bmp=bmp, gr=gr)
@@ -1295,7 +1295,7 @@ def serve():
 
     def path(x, y, w, h, r):
         s = st["s"]
-        r = max(0.5, min(r, w / 2.0, h / 2.0))      # 圆角不能比半个边还大:大了四段弧会互相压住,两头变成直线带锯齿(11-13 用户报)
+        r = max(0.5, min(r, w / 2.0, h / 2.0))      # 圆角不能比半个边还大:大了四段弧会互相压住,两头变成直线带锯齿(用户报)
         x, y, w, h, d = x * s, y * s, w * s, h * s, 2 * r * s
         p = P()
         gp.GdipCreatePath(0, ctypes.byref(p))
@@ -1379,7 +1379,7 @@ def serve():
                 gp.GdipFillPath(gr, b, p); gp.GdipDeleteBrush(b)          # 底:第一张图还没到时先是一块暗的
                 im = pt.get("img")
                 if im and im[2] == sc.get("wid"):
-                    # 把图当「颜料」填进圆角形状里:边缘是平滑的。(原来按圆角裁剪着贴图,裁剪边不带平滑,圆角有锯齿,11-13 用户报)
+                    # 把图当「颜料」填进圆角形状里:边缘是平滑的。(原来按圆角裁剪着贴图,裁剪边不带平滑,圆角有锯齿,用户报)
                     tb, iw_, ih_ = P(), ctypes.c_uint(), ctypes.c_uint()
                     gp.GdipGetImageWidth(im[0], ctypes.byref(iw_)); gp.GdipGetImageHeight(im[0], ctypes.byref(ih_))
                     gp.GdipSetInterpolationMode(gr, 7)
@@ -1542,7 +1542,7 @@ def serve():
             if isee.active():
                 isee.off()
             elif real:
-                isee.on(by="overlay")             # 11-16:isee.on 自己也查「是不是用户亲手」,Windows 上由这里担保
+                isee.on(by="overlay")             # isee.on 自己也查「是不是用户亲手」,Windows 上由这里担保
         except Exception:   # noqa: BLE001      设置文件坏了之类:不开,样子不变
             pass
         st["isee"], st["isee_t"] = isee_active(), time.time()
@@ -1611,7 +1611,7 @@ def serve():
             u.ShowWindow(glow["hwnd"], 4)
 
     def on_hit(hwnd, name, real=False):
-        if real:                                   # 11-26 C-4.3:程序发来的(命令行换画面 / 灯光)不算你碰过
+        if real:                                   # 程序发来的(命令行换画面 / 灯光)不算你碰过
             stuck_touch(st, tasks, time.time())
         if name == "isee":
             isee_click(real)
@@ -1623,7 +1623,7 @@ def serve():
             toggle(False)
         elif name == "more":                       # 岛:叠着的那几行展开 / 折叠
             st["more"] = not st["more"]
-        elif name == "qmore":                      # 11-17:岛下段排队的那几行展开 / 折叠
+        elif name == "qmore":                      # 岛下段排队的那几行展开 / 折叠
             st["qmore"] = not st.get("qmore")
         elif name.startswith("row:"):              # 岛:点下面某一行 → 换到顶上
             ost.setdefault("pick", {})[name[4:]] = time.time()
@@ -1674,7 +1674,7 @@ def serve():
             st["info"] = t_
             st["last_msg"] = now
             if not st["shown"]:
-                st["open"], st["a_from"], st["a_t0"] = False, 0.0, -9.0      # 每次都从胶囊开始(同 Mac,10-27 用户定)
+                st["open"], st["a_from"], st["a_t0"] = False, 0.0, -9.0      # 每次都从胶囊开始(同 Mac)
             show(hwnd, True)
             glow_on("bg", 2.5)
         elif m[0] == "stuck" and len(m) >= 5:
@@ -1703,7 +1703,7 @@ def serve():
             if not st["open"]:
                 st["borrow_auto"] = True
                 toggle(True)
-        elif m[0] == "queue" and len(m) >= 3:     # 11-17 C-2.6:[queue, 程序, 开/关, 排第几, 谁占着, 任务名, 颜色](同 Mac)
+        elif m[0] == "queue" and len(m) >= 3:     # [queue, 程序, 开/关, 排第几, 谁占着, 任务名, 颜色](同 Mac)
             who_, app_ = (str(m[5]) if len(m) > 5 else ""), str(m[1] or "")
             key = task_key(who_, app_)
             t_ = tasks.get(key)
@@ -1719,10 +1719,10 @@ def serve():
             elif t_ is not None:
                 t_["queued"] = None
                 if not t_.get("step") and not t_.get("steps") and not t_.get("wid") and not t_.get("why"):
-                    tasks.pop(key, None)          # 只排过队、没动过手(排不上就走了)→ 直接从岛上撤,别挂着「等下一步」(同 Mac 复查 11-17)
+                    tasks.pop(key, None)          # 只排过队、没动过手(排不上就走了)→ 直接从岛上撤,别挂着「等下一步」(同 Mac 复查)
             if t_ is not None and len(m) > 6 and hex_rgb(m[6]):
                 t_["color"] = hex_rgb(m[6])
-        elif m[0] == "tint" and len(m) >= 3:      # 11-17:任务光标色(只记颜色,不算动作:不续命、不改步骤)
+        elif m[0] == "tint" and len(m) >= 3:      # 任务光标色(只记颜色,不算动作:不续命、不改步骤)
             key = task_key(str(m[1]), "")
             c_ = hex_rgb(m[2])
             if c_:
@@ -1805,7 +1805,7 @@ def serve():
 
     def msg_pt(lp):
         """鼠标消息里带的那一点(屏幕像素)。按下时用它、不用「光标现在在哪」:机器慢时消息处理得晚,
-        光标早挪走了,按在边上的会被当成没按在边上(11-14 Win10 旧电脑实测:从最宽往回拉,三次有两次没拉动)。"""
+        光标早挪走了,按在边上的会被当成没按在边上(Win10 旧电脑实测:从最宽往回拉,三次有两次没拉动)。"""
         return wt.POINT(pos.x + ctypes.c_short(lp & 0xFFFF).value, pos.y + ctypes.c_short((lp >> 16) & 0xFFFF).value)
 
     def edge_now(c=None):
@@ -1862,7 +1862,7 @@ def serve():
             c = msg_pt(lp)
             st["drag"], st["moved"] = (c.x, c.y, cap["x"], cap["y"]), False
             # 是不是真鼠标按下的:系统里这个键此刻真的按着(后台发来的鼠标消息不会让它按着)。左右键对调过的认另一个键
-            # 11-16 复查:SendInput / mouse_event 模拟的点击也会让键「真的按着」→ 再问系统这条消息是不是硬件来的
+            # SendInput / mouse_event 模拟的点击也会让键「真的按着」→ 再问系统这条消息是不是硬件来的
             st["real_down"] = hand_down() and bool(u.GetAsyncKeyState(2 if u.GetSystemMetrics(23) else 1) & 0x8000)
             if st["real_down"]:
                 global HAND_T
@@ -1913,7 +1913,7 @@ def serve():
     hinst = k32.GetModuleHandleW(None)
     wc = WNDCLASSW(0, proc, 0, 0, hinst, None, u.LoadCursorW(None, P(32649)), None, None, "SeeUFloat")
     u.RegisterClassW(ctypes.byref(wc))
-    # 11-16 复查:认「这次按下是不是手按的」用 GetCurrentInputMessageSource(Win8 起有;不挂全局钩子,不拖慢整机鼠标)
+    # 认「这次按下是不是手按的」用 GetCurrentInputMessageSource(Win8 起有;不挂全局钩子,不拖慢整机鼠标)
     class IMS(ctypes.Structure):
         _fields_ = [("dev", ctypes.c_int), ("origin", ctypes.c_int)]
     try:

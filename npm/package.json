@@ -1,6 +1,7 @@
 {
   "name": "seeu-computeruse",
-  "version": "1.2.2",
+  "version": "1.2.3",
+  "mcpName": "io.github.Mr-Bingoo/seeu-computeruse",
   "description": "Launcher for SeeU (background Computer Use for your Mac, Windows preview) — for AI apps that only accept `npx` MCP commands, such as Qwen (千问). Starts the SeeU you already installed.",
   "bin": {
     "seeu-computeruse": "bin/seeu-computeruse.js"

@@ -13,7 +13,7 @@ import sys
 
 
 def _ai_gate(args, what):
-    """11-06 体检:加名单、改借用鼠标这两条命令,AI 客户端自己就能跑(只有 isee on 拦了),等于绕开 MCP 那边的「先问用户」。
+    """加名单、改借用鼠标这两条命令,AI 客户端自己就能跑(只有 isee on 拦了),等于绕开 MCP 那边的「先问用户」。
     现在跟 MCP 一样:AI 在跑就要带 --user-said "用户原话",并弹提示条留痕。人自己在终端敲的不受影响。
     what:拿去掉 --user-said 之后的参数拼出「要做的事」的函数。返回 (去掉 --user-said 的参数, 能不能继续)。"""
     args = list(args)
@@ -48,7 +48,7 @@ def _ai_gate(args, what):
 
 
 def _win_stdio():
-    """11-14 复查:输出被接走(AI 客户端、管道、重定向)时 Windows 按系统代码页编码,✅ ⛔ 和中文在英文系统(cp1252)上
+    """输出被接走(AI 客户端、管道、重定向)时 Windows 按系统代码页编码,✅ ⛔ 和中文在英文系统(cp1252)上
     一打印就崩。接走时统一用 UTF-8;在真终端里只保证打不出的字不崩。"""
     for s in (sys.stdout, sys.stderr):
         try:
@@ -66,7 +66,7 @@ def _win_by_person():
     import os
     if os.environ.get("CLAUDECODE") or os.environ.get("CODEX_SANDBOX") or os.environ.get("CURSOR_TRACE_ID"):
         return False
-    # 🔴 不能用 sys.stdin.isatty():输入接到空设备(< NUL)时它也说是终端(11-14 实测,不带原话就改了设置)。
+    # 🔴 不能用 sys.stdin.isatty():输入接到空设备(< NUL)时它也说是终端(实测,不带原话就改了设置)。
     #    问系统「这是不是真的控制台」,而且输入、输出都得是(输出被接走的多半是程序在跑)。
     try:
         import ctypes
@@ -83,7 +83,7 @@ def _win_by_person():
 
 
 def _win_isee_ai():
-    """isee on 专用、比 _win_by_person 再严一层(11-16 复查):编辑器 / AI 客户端的内置终端在 Windows 上是伪控制台,
+    """isee on 专用、比 _win_by_person 再严一层:编辑器 / AI 客户端的内置终端在 Windows 上是伪控制台,
     _win_by_person 会当成人。这里再看①编辑器、AI 命令行留下的环境变量 ②父进程链里有没有 AI 客户端 / 编辑器。
     查不了进程表就当是 AI(宁可拦错,用户可以点浮标上的 I See 按钮)。"""
     import os
@@ -112,7 +112,7 @@ def _win_isee_ai():
 
 
 def _win_key_confirm(lg, secs=60):
-    """isee on 的现场确认(11-16 复查):随机一个字母,要人在这个控制台的键盘上按。读的是控制台键盘(msvcrt),不是 stdin,
+    """isee on 的现场确认:随机一个字母,要人在这个控制台的键盘上按。读的是控制台键盘(msvcrt),不是 stdin,
     AI 在新开的窗口里跑这条命令也答不上来。最多等 secs 秒,超时算取消(别让藏着的窗口一直挂着)。"""
     import msvcrt
     import random
@@ -156,7 +156,7 @@ def _win_gate_log(what, said):
 if __name__ == "__main__":
     args = sys.argv[1:]
     cmd = args[0] if args else ""
-    # 11-22 C-3.7:插件版已经由 Claude Code / Codex 接好了,再「接入」会多出一份同样的工具 → 说清楚、不做(「看接了没有」照常)
+    # 插件版已经由 Claude Code / Codex 接好了,再「接入」会多出一份同样的工具 → 说清楚、不做(「看接了没有」照常)
     if cmd in ("接入", "install") and len(args) > 1:
         try:
             from seeu.where import as_plugin as _asp
@@ -167,9 +167,9 @@ if __name__ == "__main__":
             from seeu.i18n import T as _T
             print(_T("inst.plugin"))
             sys.exit(1)
-    if sys.platform.startswith("linux"):   # 11-18:Linux 预览版(第 1 段),命令都在 seeu/linux/
+    if sys.platform.startswith("linux"):   # Linux 预览版(第 1 段),命令都在 seeu/linux/
         import seeu as _seeu                 # 包里没有 linux/ 时,这一行会给「只支持 macOS」的话
-        if cmd == "mcp":                     # 11-18 第 2 段
+        if cmd == "mcp":                     # 第 2 段
             from seeu.linux import mcp_server as _lmcp
             _lmcp.main()
             sys.exit(0)
@@ -195,7 +195,7 @@ if __name__ == "__main__":
                 _aejs.allow(u, on=(cmd == "allow"))
                 print(("已加进允许名单:" if cmd == "allow" else "已从允许名单拿掉:") + u)
             sys.exit(0)
-        if cmd in ("更新", "update"):            # 11-18 C-3.0
+        if cmd in ("更新", "update"):
             from seeu import update as _upd
             sys.exit(_upd.main(args[1:]))
         if cmd in ("检查", "check", "doctor"):
@@ -207,7 +207,7 @@ if __name__ == "__main__":
             sys.exit(0)
         from seeu.linux import act as _lact
         sys.exit(_lact.main(args))
-    if sys.platform == "win32":          # 11-11:Windows 预览版,命令都在 seeu/win/
+    if sys.platform == "win32":          # Windows 预览版,命令都在 seeu/win/
         if cmd == "mcp":
             from seeu.win import mcp_server as _wmcp
             _wmcp.main()
@@ -233,7 +233,7 @@ if __name__ == "__main__":
                 said = (rest[i + 1] if i + 1 < len(rest) else "").strip()
                 del rest[i:i + 2]
             # 人在终端里敲的(有终端)直接做;程序 / AI 调的(没有终端)要带用户原话(跟 Mac 版 _ai_gate 一个意思)
-            # 11-16 复查:编辑器 / AI 客户端的内置终端是伪控制台,_win_by_person 会当成人 → 跟 isee on 一样再查父进程链
+            # 编辑器 / AI 客户端的内置终端是伪控制台,_win_by_person 会当成人 → 跟 isee on 一样再查父进程链
             if cmd == "allow" and not said and (not _win_by_person() or _win_isee_ai()):
                 print(_lg.L("没做:这条命令不是人在终端里敲的。要先问用户,答应了带上 --user-said \"用户的原话\" 重跑"
                             "(有 seeu_allow_site 工具就用工具)。就是你本人的话:在 cmd / PowerShell 窗口里直接运行,别把输出接走。",
@@ -248,7 +248,7 @@ if __name__ == "__main__":
                 _win_gate_log("allow " + rest[0], said)
             print(_lg.L("允许名单:", "Allow list:"), aejs.allow(rest[0], on=cmd == "allow"))
             sys.exit(0)
-        if cmd == "isee":                    # 11-16:照 Mac 版 isee on|off|status|report
+        if cmd == "isee":                    # 照 Mac 版 isee on|off|status|report
             from seeu import isee
             from seeu.win import lang as _lg
             sub = args[1] if len(args) > 1 else "status"
@@ -272,7 +272,7 @@ if __name__ == "__main__":
                                 "Usage: python -m seeu isee on [hours] (0 = never turns off by itself; 1 minute to 1 year)"), file=sys.stderr)
                     sys.exit(2)
                 try:
-                    isee.on(hours, by="console")      # 11-16 复查:三道门(含现场按键)在 isee.on 里自己再查,不信这里
+                    isee.on(hours, by="console")      # 三道门(含现场按键)在 isee.on 里自己再查,不信这里
                     st = isee.status()
                 except PermissionError:
                     print(_lg.L("没开:没有按对确认键(或不是在 cmd / PowerShell 窗口里直接运行)。",
@@ -311,10 +311,10 @@ if __name__ == "__main__":
                             "Usage: python -m seeu isee on [hours] | off | status | report"), file=sys.stderr)
                 sys.exit(2)
             sys.exit(0)
-        if cmd in ("探一下", "probe"):        # 11-12
+        if cmd in ("探一下", "probe"):
             from seeu.win import probe as _wprobe
             sys.exit(_wprobe.main(args[1:]))
-        # 11-14:检查 / 设置 / 更新 / 取证(照 Mac 版)
+        # 检查 / 设置 / 更新 / 取证(照 Mac 版)
         if cmd in ("检查", "check", "doctor"):
             from seeu.win import doctor as _wdoc
             sys.exit(_wdoc.main(args[1:]))
@@ -326,7 +326,7 @@ if __name__ == "__main__":
                 said = (rest[i + 1] if i + 1 < len(rest) else "").strip()
                 del rest[i:i + 2]
             # 改设置跟加名单一个规矩:人在终端里敲的直接做;程序 / AI 调的要带用户原话。只看不改不用
-            if rest and not said and (not _win_by_person() or _win_isee_ai()):     # 11-16:同 allow
+            if rest and not said and (not _win_by_person() or _win_isee_ai()):     # 同 allow
                 from seeu.win import lang as _lg
                 print(_lg.L("没做:这条命令不是人在终端里敲的。改设置要先问用户,答应了带上 --user-said \"用户的原话\" 重跑。"
                             "就是你本人的话:在 cmd / PowerShell 窗口里直接运行,别把输出接走。",

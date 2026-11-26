@@ -1,17 +1,17 @@
-"""SeeU · 浏览器模块(C-1.4 起,SeeU C-0.1 10-20 改成「本地优先」)
+"""SeeU · 浏览器模块(本地优先)
 
-四块之一(Mac 原生 App / **Mac 浏览器** / iPhone 镜像 / 以上都不是)。不用登录、SeeU 不联网;四条路(10-20 用户定,C-1.0 加调试端口):
+四块之一(Mac 原生 App / **Mac 浏览器** / iPhone 镜像 / 以上都不是)。不用登录、SeeU 不联网;四条路(含调试端口):
   调试端口(SeeU 专用那份)   隐身 Chrome、cdp.launch 拉起的网页壳 App(VS Code…)在跑就排第一,全程藏着读写(见 seeu/cdp.py);
                             用户自己开着的那份接不上、不碰。浏览器照样守允许名单(I See 下不查)
   插件(Chrome 内核,可选)   装了就优先;没允许的网站 → refused 提示去允许(🔴 不退回)
-                            C-0.5 起名单跟开关合成一份(allow.json),插件 = Chrome 授权 且 在名单里才碰
+                            名单跟开关合成一份(allow.json),插件 = Chrome 授权 且 在名单里才碰
                             ——I See 模式下改成换下一条路;Chrome 不许插件碰的页面(应用商店等)→ 换下一条路并带 note
   开关(Safari / Chrome 内核) 浏览器的「允许来自 Apple 事件的 JavaScript」开着就用,见 aejs.py;
                             开关没有网站范围,SeeU 自守允许名单(没允许的网站这条路不用,I See 下不查)
   辅助功能(所有浏览器打底)  只能看/点/打当前显示的标签页;选下拉框、后台标签页做不了
 不再主动建议装插件/换浏览器:只有这一步真做不了时,reason 的「怎么办」和结果里的 unlock 说开什么能做。
 失败的 reason 一律三段:「卡在:哪一步。原因:为什么。怎么办:……」,给调用 SeeU 的 AI 照着转述。
-密码框/银行卡框不碰、不替调用方提交表单(两条网页脚本路一样);C-0.5 起验证码框、新密码框也不碰(三条路一样)。插件隐私说明见 extension/privacy.html。
+密码框/银行卡框不碰、不替调用方提交表单(两条网页脚本路一样);验证码框、新密码框也不碰(三条路一样)。插件隐私说明见 extension/privacy.html。
 
 用法(seeu.see / seeu.tap 等遇到浏览器会自动转到这里,也可以直接用):
     from seeu import web
@@ -33,7 +33,7 @@ import time
 from seeu import isee
 from seeu.web import aejs
 
-DIR = os.path.expanduser("~/.seeu/seeu_web")   # 不跟 SEEU_HOME:中转程序是浏览器拉起的,读不到用户的环境变量,三处要对得上就都写死(11-01)
+DIR = os.path.expanduser("~/.seeu/seeu_web")   # 不跟 SEEU_HOME:中转程序是浏览器拉起的,读不到用户的环境变量,三处要对得上就都写死
 CHROMIUM = {"Google Chrome": "chrome", "Chrome": "chrome", "Microsoft Edge": "edge", "Brave Browser": "brave",
             "Arc": "arc", "Chromium": "chromium", "Vivaldi": "vivaldi"}
 OTHERS = {"Safari", "Safari Technology Preview", "Firefox", "Orion"}
@@ -63,7 +63,7 @@ def is_browser(app):
     return _name(app) in CHROMIUM or _name(app) in OTHERS
 
 
-# 11-06 二次复查:浏览器写成「Google Chrome「标题」」、包名、进程号时,原来不算浏览器 → 走原生路线,
+# 浏览器写成「Google Chrome「标题」」、包名、进程号时,原来不算浏览器 → 走原生路线,
 # 允许名单、「打字必须给 target」、银行卡框判断全绕开。动手前先归成网页层认的名字。
 BUNDLES = {"com.apple.Safari": "Safari", "com.apple.SafariTechnologyPreview": "Safari Technology Preview",
            "com.google.Chrome": "Google Chrome", "com.microsoft.edgemac": "Microsoft Edge",
@@ -111,7 +111,7 @@ def canon(app):
 
 def _gate(app):
     """网页工具动手 / 读之前:只碰浏览器和 SeeU 专用那份,而且过安全底线(宿主、密码 App、终端…)。
-    11-06 二次复查:read / tabs 原来不查,app 传宿主或网页技术做的密码 App 能读到整页文字。"""
+    read / tabs 原来不查,app 传宿主或网页技术做的密码 App 能读到整页文字。"""
     if not (is_browser(app) or is_cdp(app)):
         raise WebError(f"{app} 不是浏览器,SeeU 的网页工具不碰它", "refused")
     from seeu import safety
@@ -231,12 +231,12 @@ def decline_plugin(app, on=True):
 
 
 def suggestion(app, hard=False):
-    """老接口(10-20 前一天一次建议装插件)。现在不主动建议:hard=False 恒为 None;hard=True = unlock(app)。"""
+    """老接口(以前一天一次建议装插件)。现在不主动建议:hard=False 恒为 None;hard=True = unlock(app)。"""
     return unlock(app) if hard else None
 
 
 def allow_how(o):
-    """不在允许名单时怎么办(11-02 用户定:先让 AI 在聊天里问、答应了 AI 自己加;终端命令放后面当后备)。
+    """不在允许名单时怎么办(先让 AI 在聊天里问、答应了 AI 自己加;终端命令放后面当后备)。
     MCP 按里面的「seeu allow 网址」认出网站,提示 AI 去问用户。"""
     return f"把这个网站加进 SeeU 允许名单(AI 问你时答应就行;也可以终端 python3 -m seeu allow {o or '网址'})"
 
@@ -330,7 +330,7 @@ def see(app, tab=None, max_items=400):
         try:
             out = _cd_see(app, h, tab, max_items, free)
         except WebError as ex:
-            # 11-06 用户定:SeeU 专用的隐身 Chrome 上,名单外的页面直接不读(原来记一句 note 就退到辅助功能把整页读出来;
+            # SeeU 专用的隐身 Chrome 上,名单外的页面直接不读(原来记一句 note 就退到辅助功能把整页读出来;
             # 这份是 AI 自己在开、自己在用,名单应该完全管住)。用户自己的浏览器照旧。
             if tab is not None or ex.code in ("refused", "called_out", "not_allowed_ae"):
                 raise WebError(str(ex) if str(ex).startswith("卡在:") else _explain(ex, "读网页", app), ex.code)
@@ -340,7 +340,7 @@ def see(app, tab=None, max_items=400):
             r = call(app, "snapshot", tab=tab, max=max_items)
             out = dict(route="插件", items=_items(r), text=r["text"], url=r["url"], title=r["title"], tab=r["tab"])
         except WebError as ex:
-            # Chrome 不许任何插件碰的页面(应用商店、chrome:// 设置页等,10-20 实测应用商店)→ 换下一条路
+            # Chrome 不许任何插件碰的页面(应用商店、chrome:// 设置页等,实测应用商店)→ 换下一条路
             blocked = "cannot be scripted" in str(ex) or "Cannot access" in str(ex)
             if not blocked and not (free and ex.code == "not_allowed"):
                 raise WebError(_explain(ex, "读网页", app), ex.code)
@@ -375,7 +375,7 @@ def see(app, tab=None, max_items=400):
         try:
             out = _ax_see(app)
         except WebError as ex:
-            # 10-30:前面几条路为什么没走通也带上(实测 open 开在后台标签、当前页是起始页 → 只报"读不到网页结构",看不出原因)
+            # 前面几条路为什么没走通也带上(实测 open 开在后台标签、当前页是起始页 → 只报"读不到网页结构",看不出原因)
             msg = _explain(ex, "读网页", app) + (f"(前面:{note})" if note else "")
             raise WebError(msg + "。要读后台标签:see(App, tab=open() 返回的 id)", ex.code)
     if note:
@@ -392,7 +392,7 @@ def _is_active(app, tab):
 
 
 def _secret_name(it):
-    """secret 老版本是 True(只有密码框/银行卡框),C-0.5 起是框的种类(密码框/新密码框/验证码框/银行卡框)。"""
+    """secret 老版本是 True(只有密码框/银行卡框),是框的种类(密码框/新密码框/验证码框/银行卡框)。"""
     k = it.get("secret")
     return k if isinstance(k, str) else "密码框/银行卡框"
 
@@ -414,7 +414,7 @@ def describe(items):
 
 
 def read(app, tab=None):
-    """整页文字(比价、看文案用)。tab 是开关那条路的编号("窗口:序号")就不走插件(C-0.5 实测修)。"""
+    """整页文字(比价、看文案用)。tab 是开关那条路的编号("窗口:序号")就不走插件(实测修)。"""
     _gate(app)
     if _cdp(app):
         return {k: v for k, v in see(app, tab=tab).items() if k in ("text", "url", "title")}
@@ -455,12 +455,12 @@ def _result(route, outcome, reason=None, **kw):
 
 
 def _watch(app, step):
-    """浏览器操作时弹监看悬浮标(10-20 用户定;后台标签页没画面,只写这一步)。规矩同 act._watch:
+    """浏览器操作时弹监看悬浮标(后台标签页没画面,只写这一步)。规矩同 act._watch:
     设置.json「监看小窗」= 关 / SEEU_NO_WATCH=1 就不弹。异常吞掉,不影响操作。"""
     if os.environ.get("SEEU_NO_WATCH"):
         return
     try:
-        from seeu.where import settings_file   # 11-22 C-3.7:插件版存用户文件夹
+        from seeu.where import settings_file   # 插件版存用户文件夹
         cfg = json.load(builtins.open(settings_file(), encoding="utf-8"))
         if str(cfg.get("监看小窗", "开")).strip() in ("关", "off"):
             return
@@ -468,14 +468,14 @@ def _watch(app, step):
         fn = getattr(ww, "browser", None)          # 长进程里可能是旧版 watch_window
         if fn:
             fn(_name(app), step)
-        from seeu import act                        # 10-21:屏幕光圈(被控提示开着才亮,规则同 act)
+        from seeu import act                        # 屏幕光圈(被控提示开着才亮,规则同 act)
         act._halo("bg")
     except Exception:
         pass
 
 
 def _stuck(app, step, r):
-    """普通模式卡住:悬浮卡片自动展开说清楚(10-20 用户定)。I See 能解决的(允许名单 / 插件没允许)提示开 I See、按钮闪;
+    """普通模式卡住:悬浮卡片自动展开说清楚。I See 能解决的(允许名单 / 插件没允许)提示开 I See、按钮闪;
     解决不了的照实写该开什么。密码框这类底线不算卡住,不弹。"""
     reason = r.get("reason") or ""
     if "SeeU 不碰" in reason or os.environ.get("SEEU_NO_WATCH"):
@@ -483,7 +483,7 @@ def _stuck(app, step, r):
     why = reason.split("原因:", 1)[-1].split("。怎么办:")[0] if "原因:" in reason else reason
     todo = reason.split("怎么办:", 1)[-1] if "怎么办:" in reason else (r.get("unlock") or "这一步你自己来")
     helps = r.get("code") in ("not_allowed", "not_allowed_ae") or "I See" in (r.get("unlock") or "")
-    if r.get("code") == "not_allowed_ae":     # 11-02:加名单比开 I See 安全,先说这个
+    if r.get("code") == "not_allowed_ae":     # 加名单比开 I See 安全,先说这个
         todo = "回对话里答应 AI 把这个网站加进名单;或点上面的「I See」"
     elif r.get("code") == "not_allowed":
         todo = "在网页上点 SeeU 图标「允许这个网站」;或点上面的「I See」"
@@ -502,11 +502,11 @@ def _guard(fn):
     """把 WebError / AEError 变成 SeeU 统一的结果(refused / failed),不往外抛。
     I See 开着:页面变了(编号失效)自动重看一次再做;每步记日志(打的字只记长度),供 isee.report() 出报告。"""
     def wrap(app, *a, **kw):
-        _gate(app)                          # 11-06 二次复查:不是浏览器 / 安全底线拦的,直接抛(不记成「卡住」)
+        _gate(app)                          # 不是浏览器 / 安全底线拦的,直接抛(不记成「卡住」)
         step = STEP.get(fn.__name__, fn.__name__)
         _watch(app, step)
-        _step[app] = step                   # 动作里顺带读页面时,悬浮标上别被「读网页」盖掉(10-20 用户实测看到)
-        tries = isee.MAX_TRIES if isee.active() else 1      # I See:页面变了最多重看几次(10-24 定上限 3)
+        _step[app] = step                   # 动作里顺带读页面时,悬浮标上别被「读网页」盖掉(用户实测看到)
+        tries = isee.MAX_TRIES if isee.active() else 1      # I See:页面变了最多重看几次(定上限 3)
         for k in range(tries):
             try:
                 r = fn(app, *a, **kw)
@@ -544,7 +544,7 @@ def _guard(fn):
 
 
 def _tab_url(app, route, tid):
-    """这个标签页现在的网址,问浏览器自己(11-23 C-4.0 Fable 复查:原来用网页里跑的 location.href,坏网页能改掉 JSON.stringify
+    """这个标签页现在的网址,问浏览器自己(原来用网页里跑的 location.href,坏网页能改掉 JSON.stringify
     回一个名单内的网址)。浏览器那头问不到才退回网页自己报的;都问不到返回 None(调用方当不让做)。"""
     try:
         if route == "调试端口":
@@ -568,7 +568,7 @@ def _tab_url(app, route, tid):
 
 def _ae_act(app, cur, it, action, value=None, mode="replace"):
     """开关 / 调试端口两条路的 pageAct(按这一页实际走的路)。
-    11-23 C-3.9 整体复查:名单原来只在 see 时查一次;see 之后页面跳到名单外(定时跳转、用户在那个标签里点走了),
+    名单原来只在 see 时查一次;see 之后页面跳到名单外(定时跳转、用户在那个标签里点走了),
     新页面自己摆一个 window.__seeuEls 就能接住 AI 按编号写的字。插件那条路每步都查(background.js),这两条路动手前也现查一次网址。"""
     tid = cur["tab"]["id"]
     if not isee.active():
@@ -640,7 +640,7 @@ def check(app, target, on=True, tab=None):
 
 
 def _typed_ok(st, text):
-    """打字后核对:网页里比好的 has(11-06 加)优先;老插件没有 has 就照旧拿回传的前 200 字比(超过 200 字的只比前 200)。"""
+    """打字后核对:网页里比好的 has 优先;老插件没有 has 就照旧拿回传的前 200 字比(超过 200 字的只比前 200)。"""
     if isinstance(st.get("has"), bool):
         return st["has"]
     v, t = st.get("value") or "", str(text)
@@ -692,7 +692,7 @@ def can_scroll(app, tab=None):
 @_guard
 def scroll(app, dy=None, tab=None):
     cur = _last.get(app) or see(app, tab=tab)
-    if cur["route"] == "插件":           # 按这一页实际走的路,不按插件在不在(开关编号时 see 走的是开关,C-0.5 实测修)
+    if cur["route"] == "插件":           # 按这一页实际走的路,不按插件在不在(开关编号时 see 走的是开关,实测修)
         st = call(app, "act", tab=(cur.get("tab") or {}).get("id"), i=-1, action="scroll", value=dy)
         _last.pop(app, None)
         return _result("插件", "delivered", state=st)
@@ -752,14 +752,14 @@ def _wait_screen_free(timeout=60):
 
 def open(app, url, active=False, timeout=20, ask=True):
     """后台开一个标签页(active=False 不切过去),等加载完。返回 {id, allowed, loaded}。
-    11-02 用户定:网站不在名单、AI 要回对话里问用户时,悬浮窗展开卡片写「等你答应」(下一步动作会自动清掉)。"""
-    # 11-06 体检:只有浏览器 / SeeU 专用那份能开网页(原来不查,app 传终端之类也照样 open -a),网址只收 http / https
+    网站不在名单、AI 要回对话里问用户时,悬浮窗展开卡片写「等你答应」(下一步动作会自动清掉)。"""
+    # 只有浏览器 / SeeU 专用那份能开网页(原来不查,app 传终端之类也照样 open -a),网址只收 http / https
     if not (is_browser(app) or is_cdp(app)):
         return dict(id=None, allowed=None, loaded=False, outcome="refused",
                     reason=f"{_name(app)} 不是浏览器,SeeU 不用它开网址")
     if not str(url or "").strip().lower().startswith(("http://", "https://")) or (is_browser(app) and not aejs.origin(url)):
         return dict(id=None, allowed=None, loaded=False, outcome="refused", reason="只能打开 http / https 网址")
-    # 11-06 用户定:名单外的网站「先问、答应了再开」(原来先加载再问 —— 一加载就已经带着用户的登录状态访问过了)。
+    # 名单外的网站「先问、答应了再开」(原来先加载再问 —— 一加载就已经带着用户的登录状态访问过了)。
     # I See 开着照旧直接开。只管浏览器;网页壳 App(VS Code 等)没有名单。
     # ask=False:只给 stealth.restart 用 —— 把重开前本来就开着的标签照原样开回来(重开这件事本身已经问过用户)。
     if ask and is_browser(app) and not isee.active() and not aejs.is_allowed(url):
@@ -771,7 +771,7 @@ def open(app, url, active=False, timeout=20, ask=True):
     if r.get("allowed") is False and r.get("route") in ("开关", "调试端口", None):
         try:
             from seeu import bgclick as _bg
-            if not _bg._watch_on():         # 11-06:监看小窗关了 / SEEU_NO_WATCH 时不弹卡片(离线测试弹到了用户桌面上)
+            if not _bg._watch_on():         # 监看小窗关了 / SEEU_NO_WATCH 时不弹卡片(离线测试弹到了用户桌面上)
                 raise RuntimeError("watch off")
             from seeu_lib import watch_window as ww
             from seeu.i18n import lang
@@ -810,7 +810,7 @@ def _open(app, url, active=False, timeout=20):
         loaded = aejs.wait_loaded(n, tid, timeout)
         _last.pop(app, None)
         return dict(id=tid, allowed=isee.active() or aejs.is_allowed(url), loaded=loaded, route="开关")
-    aejs.open_bg(n, url)                # 浏览器没开着:冷启动会抢前台,抢了就切回去(11-02 用户实测)
+    aejs.open_bg(n, url)                # 浏览器没开着:冷启动会抢前台,抢了就切回去(用户实测)
     if n in aejs.SAFARI and _ae_on(app):   # 刚拉起来开关才查得到:接着按开关那条路给标签编号
         try:
             cur = aejs.current(n)
@@ -844,7 +844,7 @@ def _ax_app(app):
         el, pid = ax.app_element(_name(app))
     except Exception:
         raise WebError(f"{_name(app)} 没在运行", "no_app")
-    # 🔴 Chrome 要两个开关都写一遍(都会报"不支持",但会生效),约 2 秒后网页结构才出来(10-20 实测)
+    # 🔴 Chrome 要两个开关都写一遍(都会报"不支持",但会生效),约 2 秒后网页结构才出来
     for k in ("AXManualAccessibility", "AXEnhancedUserInterface"):
         try:
             ax.set_attr(el, k, True)
@@ -854,7 +854,7 @@ def _ax_app(app):
 
 
 def _ax_windows(ax, el):
-    """浏览器的窗口,当前窗口排最前。11-17 C-2.8 实测:AXWindows 只列当前桌面上的窗口,浏览器窗口在别的桌面时
+    """浏览器的窗口,当前窗口排最前。实测:AXWindows 只列当前桌面上的窗口,浏览器窗口在别的桌面时
     一个都没有(当前桌面有这个浏览器的别的窗口时还会读成那个);AXFocusedWindow / AXMainWindow 跨桌面也拿得到
     (原生 App 的 ax.main_window 一直这么取)。"""
     out = []
@@ -910,7 +910,7 @@ def _ax_see(app):
             if v:
                 texts.append(v)
         elif role == "AXImage":
-            # 图片的说明文字也算页面文字:评分这类常藏在图里(10-20 应用商店「Average rating 4.2 out of 5 stars.」)
+            # 图片的说明文字也算页面文字:评分这类常藏在图里(应用商店「Average rating 4.2 out of 5 stars.」)
             v = str(ax.attr(e, "AXDescription") or ax.attr(e, "AXTitle") or "").strip()
             if v:
                 texts.append(f"[图:{v}]")
@@ -944,7 +944,7 @@ def _ax_tap(app, it):
 
 
 def _ax_type(app, it, text, mode):
-    """先直接写值(读回核实),不行再聚焦 + 后台键盘(跟 seeu.type 同一条路)。10-20 实测两条都能进中文。"""
+    """先直接写值(读回核实),不行再聚焦 + 后台键盘(跟 seeu.type 同一条路)。实测两条都能进中文。"""
     from seeu import ax, bgkey as bk
     el = it["el"]
     old = str(ax.attr(el, "AXValue") or "")
@@ -986,7 +986,7 @@ def _ax_tabs(app):
     return out
 
 
-# 11-17 C-2.5 多任务调度:网页里打字会碰浏览器的焦点,同一个浏览器一次一个任务打(点、滚动走网页脚本,不用排)。
+# 多任务调度:网页里打字会碰浏览器的焦点,同一个浏览器一次一个任务打(点、滚动走网页脚本,不用排)。
 try:
     from seeu import sched as _sched
     type = _sched.scheduled("web_type")(type)            # noqa: A001

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 后台打开 App(11-18 C-3.0,照 Windows 版 win/openapp.py / Mac 版 seeu/openapp.py)。
+"""SeeU Linux 版 · 后台打开 App(照 Windows 版 win/openapp.py / Mac 版 seeu/openapp.py)。
 
 规则跟 Mac / Windows 一样:只给自己打不开 App 的客户端用(工具清单里平时没有它;SEEU_OPEN_APP=1 强制给,测试用);
 只开不关;终端 / 命令行、系统设置和管理工具、密码程序、浏览器(网页走 seeu_web_open)、AI 客户端和远程协助、虚拟机都不开;

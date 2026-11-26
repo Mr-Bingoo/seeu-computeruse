@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 一键接入 / 移除(第 2 段先做 Claude,11-11)。
+"""SeeU Windows 版 · 一键接入 / 移除(第 2 段先做 Claude)。
 
     python -m seeu 接入            # 看接了没有
     python -m seeu 接入 claude     # Claude 桌面版(聊天页)+ Claude Code(装了 claude 命令才接)
@@ -13,9 +13,9 @@
   ③ 试连一次(起服务、问工具列表)。
 记录放 <SEEU_HOME>\\seeu_接入_win.json,备份放 <SEEU_HOME>\\seeu_接入备份\\。
 
-11-12 加 Codex(命令行和 Codex App 共用一份 %USERPROFILE%\\.codex\\config.toml,设了 CODEX_HOME 就用那个):
+加 Codex(命令行和 Codex App 共用一份 %USERPROFILE%\\.codex\\config.toml,设了 CODEX_HOME 就用那个):
     python -m seeu 接入 codex      /  python -m seeu 移除 codex
-  ① 直接往 config.toml 末尾追加一节 [mcp_servers.seeu](不用 `codex mcp add`:它会重写整份文件、打乱顺序,Mac 10-30 实测);
+  ① 直接往 config.toml 末尾追加一节 [mcp_servers.seeu](不用 `codex mcp add`:它会重写整份文件、打乱顺序,Mac 实测);
      移除时只删这一节,别的一个字不动。写完自己核对一遍,读不懂就拿备份还原。
   ② Skill 复制到 .codex\\skills\\seeu(带记号文件,移除只删带记号的)。
   ③ 试连一次。Codex 开着的话要退出再开才读得到。
@@ -39,9 +39,9 @@ NAME = "seeu"
 MARK = ".seeu_installed"
 
 
-# 英文界面时在出口换(11-14;提示本身照旧写中文,见 win/lang.py)。片段按长的先换,所以整句和它的半句可以同时列
+# 英文界面时在出口换(提示本身照旧写中文,见 win/lang.py)。片段按长的先换,所以整句和它的半句可以同时列
 POINTER = os.path.normpath(home("seeu_server.json"))
-# 11-15 C-2.1(照 Mac 版 install.QIANWEN_HOW):千问只认 npx 启动的工具,设置在它界面上加
+# 照 Mac 版 install.QIANWEN_HOW:千问只认 npx 启动的工具,设置在它界面上加
 QIANWEN_HOW_ZH = ("千问的设置不在文件里,要在它界面上加一次:\n"
                   "  左上切到「工作」→ 左栏「连接」→ 右上「+ 添加」→「手动填写配置」\n"
                   "  服务器名称:seeu    命令:npx -y seeu-computeruse\n"
@@ -57,12 +57,12 @@ QIANWEN_REMOVE_EN = ("Remove it inside Qwen (千问): \"Work\" (top left) → \"
 
 
 def write_pointer():
-    """11-15 C-2.1(照 Mac 版 install.write_pointer):留「SeeU 装在这儿」的纸条给 npm 启动包 seeu-computeruse 找。
+    """照 Mac 版 install.write_pointer:留「SeeU 装在这儿」的纸条给 npm 启动包 seeu-computeruse 找。
     接入 / 每次 MCP 服务启动都写一次;写不了就算了。"""
     try:
         from seeu.where import as_plugin
         if as_plugin():
-            # 11-23 复查:插件版不写。纸条是给千问的 npx 启动包找 git 版用的;插件版一写,千问就被改去跑插件缓存里那份
+            # 插件版不写。纸条是给千问的 npx 启动包找 git 版用的;插件版一写,千问就被改去跑插件缓存里那份
             # (换了设置文件),插件一更新旧缓存被删,千问直接启动失败
             return
     except Exception:   # noqa: BLE001
@@ -286,7 +286,7 @@ def install_claude():
         elif servers is not None and not isinstance(servers, dict):
             _p(f"① Claude 桌面版:设置里「mcpServers」不是一组键值,没动:{cfg}")
         elif NAME in (servers or {}) and not _json_mine(st.get("claude_desktop"), servers[NAME]):
-            # 11-15 复查:叫 seeu 但不指着这份(跟 install_json 一样,别说「接过了」)
+            # 叫 seeu 但不指着这份(跟 install_json 一样,别说「接过了」)
             _p(f"① Claude 桌面版:{cfg} 里已经有一条叫 seeu 的,但不指着这份 SeeU,没动。\n"
                f"   打开这个文件,手动删掉「mcpServers」里的 seeu,再运行一次接入")
         elif NAME in (servers or {}):
@@ -294,7 +294,7 @@ def install_claude():
             done = True
         else:
             b = _backup(cfg, "claude_desktop")
-            if not isinstance(servers, dict):          # 没有这一项,或写着 null(11-15 复查)
+            if not isinstance(servers, dict):          # 没有这一项,或写着 null
                 d["mcpServers"] = {}
             d["mcpServers"][NAME] = _entry()
             if _json_write(cfg, d):
@@ -306,7 +306,7 @@ def install_claude():
         _p("① 没找到 Claude 桌面版(%APPDATA%\\Claude 不在)。要用的话先装:https://claude.ai/download")
     claude = shutil.which("claude")
     if claude:
-        # 11-23 C-3.9 整体复查:① 用 which 找到的完整路径当命令(npm 装的是 claude.cmd,直接写 "claude" 系统找不到、整个接入崩掉);
+        # ① 用 which 找到的完整路径当命令(npm 装的是 claude.cmd,直接写 "claude" 系统找不到、整个接入崩掉);
         # ② 这一步出错 / 卡住也接着往下走(原来崩在这,第 ① 步已经改了桌面版设置却没存记录);
         # ③「already exists」= 已经有一条叫 seeu 的:查得出指着这份才记成自己接的(以前接过的照旧算),不然不记、移除时不会去删它
         try:
@@ -356,7 +356,7 @@ def _claude_code_mine(claude):
 
 def uninstall_claude():
     st = _load()
-    bad = False                       # 11-15 第五轮复查:桌面版这步失败也把 Claude Code、Skill 照常拆完,最后返回 1
+    bad = False                       # 桌面版这步失败也把 Claude Code、Skill 照常拆完,最后返回 1
     cfg = (st.get("claude_desktop") or {}).get("config") or _desktop_cfg()
     if cfg and os.path.exists(cfg):
         d = _json_read_safe(cfg)
@@ -365,7 +365,7 @@ def uninstall_claude():
             _p(f"· Claude 桌面版:设置文件读不懂,没动:{cfg}。请手动删掉「mcpServers」里的 seeu")
             bad = True
         elif isinstance(servers, dict) and NAME in servers and not _json_mine(st.get("claude_desktop"), servers[NAME]):
-            # 11-23 C-3.9 整体复查(照 uninstall_json):叫 seeu 但不是这份接的(没有接入记录、也没指着这份),不删
+            # 照 uninstall_json:叫 seeu 但不是这份接的(没有接入记录、也没指着这份),不删
             _p(f"· Claude 桌面版:设置里有一条叫 seeu 的,但不是这份 SeeU 接的,没动。真要删:打开 {cfg},手动删掉「mcpServers」里的 seeu")
         elif isinstance(servers, dict) and NAME in servers:
             _backup(cfg, "claude_desktop_before_remove")
@@ -376,9 +376,9 @@ def uninstall_claude():
                 bad = True            # 写不进:接入记录留着
     if not bad:
         st.pop("claude_desktop", None)
-    claude = shutil.which("claude")   # 11-23 C-3.9 整体复查:用找到的完整路径当命令(npm 装的是 claude.cmd)
+    claude = shutil.which("claude")   # 用找到的完整路径当命令(npm 装的是 claude.cmd)
     if st.get("claude_code") and claude:
-        try:                          # 11-15 快速复查:看结果、接住超时;失败照实说、记录留着
+        try:                          # 看结果、接住超时;失败照实说、记录留着
             r = subprocess.run([claude, "mcp", "remove", "-s", "user", NAME], capture_output=True, text=True, timeout=60)
             gone = r.returncode == 0 or "not found" in (r.stdout + r.stderr).lower()
         except (subprocess.TimeoutExpired, OSError):
@@ -403,7 +403,7 @@ def uninstall_claude():
     return 0
 
 
-# ---------------------------------------------------------------- Codex(11-12)
+# ---------------------------------------------------------------- Codex
 
 def _codex_home():
     return os.environ.get("CODEX_HOME") or os.path.join(os.path.expanduser("~"), ".codex")
@@ -418,7 +418,7 @@ def _codex_skill_dir():
 
 
 def _codex_app():
-    """装了 Codex App(微软商店里叫 ChatGPT,包名 OpenAI.Codex)就返回版本号。11-12 虚拟机实测:刚装完、没打开过时
+    """装了 Codex App(微软商店里叫 ChatGPT,包名 OpenAI.Codex)就返回版本号。虚拟机实测:刚装完、没打开过时
     还没有 .codex 文件夹,也没有 codex 命令,只能这样认。"""
     if sys.platform != "win32":
         return None
@@ -622,7 +622,7 @@ def uninstall_codex():
     return 0
 
 
-# ---------------------------------------------------------------- 改 mcp.json 的三家(Cursor / Trae / VS Code;11-14,照 Mac 版 install_json)
+# ---------------------------------------------------------------- 改 mcp.json 的三家(Cursor / Trae / VS Code;照 Mac 版 install_json)
 # 这三家没有命令行,接入 = 往它的 mcp.json 里加一条 seeu(别的不动)。root = 放服务的键(VS Code 叫 servers,别家 mcpServers)。
 # 🔴 路径是照各家公开说明 + Mac 版对应位置写的,Windows 上还没拿真客户端验收过(见 win/README.md)。
 
@@ -757,7 +757,7 @@ def install_json(key):
         _pl(f"② 设置文件里「{c['root']}」不是一组键值,没动:{cfg}", f"② \"{c['root']}\" in the config is not an object, left untouched: {cfg}")
         return 1
     if NAME in (servers or {}):
-        if not _json_mine(None, servers[NAME]):     # 11-14 复查:叫 seeu 但不指着这份(文件夹挪过、别人手写的)→ 别说「接过了」
+        if not _json_mine(None, servers[NAME]):     # 叫 seeu 但不指着这份(文件夹挪过、别人手写的)→ 别说「接过了」
             _pl(f"② {cfg} 里已经有一条叫 seeu 的,但不指着这份 SeeU,没动。\n   打开这个文件,手动删掉「{c['root']}」里的 seeu,再运行一次接入",
                 f"② {cfg} already has an entry named seeu, but it doesn't point at this copy of SeeU; left untouched.\n"
                 f"   Open that file, delete seeu from \"{c['root']}\" by hand, then run the install again")
@@ -814,7 +814,7 @@ def uninstall_json(key):
             f"  To remove it anyway: open {cfg} and delete seeu from \"{c['root']}\"\n\nNothing to remove.")
         return 0
     else:
-        bak = _backup(cfg, key + "-before-remove")      # 11-14 复查:移除也先备份(会整份重写)
+        bak = _backup(cfg, key + "-before-remove")      # 移除也先备份(会整份重写)
         if bak:
             _pl(f"· 已备份设置 → {bak}", f"· Config backed up → {bak}")
         servers.pop(NAME)

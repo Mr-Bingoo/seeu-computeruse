@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU 检查授权(C-0.9,10-24):一条命令看本机缺哪些授权/开关,缺的逐项写怎么开。
+"""SeeU 检查授权:一条命令看本机缺哪些授权/开关,缺的逐项写怎么开。
 
     python3 -m seeu 检查            # 只查不改;没开着的浏览器不会被打开
     python3 -m seeu 检查 --open     # 另外把缺的那几项的系统设置页打开(只打开,勾选要你亲手)
@@ -21,7 +21,7 @@ OK, BAD, NA = "✅", "❌", "—"
 
 
 def _bundle_name(app_dir):
-    """系统设置授权列表里显示的名字:实测是 .app 文件名(10-31:Claude 自带的 claude.app 包名叫「Claude Code」,设置里却显示「claude」)。"""
+    """系统设置授权列表里显示的名字:实测是 .app 文件名(Claude 自带的 claude.app 包名叫「Claude Code」,设置里却显示「claude」)。"""
     return os.path.basename(app_dir)[:-4]
 
 
@@ -42,7 +42,7 @@ def _responsible():
 def host_app():
     """授权对象 = 系统认的"负责进程"。找不到返回 None。
     默认是父进程链里最外层的 .app(终端、Claude);但链里有 Claude 的 disclaimer 时,它下面那一个才是负责进程
-    (10-31 实测:Code 页 = Claude 自带的 claude.app;聊天页直接拉起 Python → 授权要给 Python;接 SeeU 小程序后 = SeeU)。"""
+    (实测:Code 页 = Claude 自带的 claude.app;聊天页直接拉起 Python → 授权要给 Python;接 SeeU 小程序后 = SeeU)。"""
     chain, pid = [], os.getpid()
     for _ in range(20):
         try:
@@ -67,7 +67,7 @@ def host_app():
     if not pick:
         return None
     if "python" in os.path.basename(pick).lower():
-        return "python3"            # 10-31:聊天页直接拉起 Python 后,设置里出现的是「python3」
+        return "python3"            # 聊天页直接拉起 Python 后,设置里出现的是「python3」
     if ".app/" in pick:
         return _bundle_name(pick.rsplit(".app/", 1)[0] + ".app")
     return os.path.basename(pick)
@@ -84,21 +84,21 @@ def _fix(key):
 
 
 def _row(rows, ok, name, note="", fix=None, can_fix=True):
-    """can_fix=False:标 ❌ 但用户没法照办(只是降级提示),结尾不算进「还缺」(11-23 复查)。"""
+    """can_fix=False:标 ❌ 但用户没法照办(只是降级提示),结尾不算进「还缺」。"""
     rows.append(dict(ok=ok, name=name, note=note, fix=fix, can_fix=can_fix))
 
 
 def check():
     """返回 [{ok: ✅/❌/—, name, note, fix(FIXES 键或 None)}]。"""
     rows = []
-    try:                                 # 11-23 C-3.9 整体复查:用 Homebrew / pyenv / conda 的 python3 跑检查,查的是那个 Python 的库,
+    try:                                 # 用 Homebrew / pyenv / conda 的 python3 跑检查,查的是那个 Python 的库,
         from seeu import install as _ins  # 跟 SeeU 真用的系统 Python 对不上(照着装了也一直是 ❌)→ 先说清
         if not _ins.system_python():
             _row(rows, BAD, "Python", f"你现在用的是 {sys.executable},不是系统自带的。SeeU 在 Mac 上用 /usr/bin/python3:"
                  "请改运行 /usr/bin/python3 -m seeu check(接入也用 /usr/bin/python3 -m seeu install auto)", can_fix=False)
     except Exception:
         pass
-    try:                                 # 11-22 Intel Mac:pyobjc 没装时下面两行只显示「查不到(ModuleNotFoundError)」,结尾还说「都齐了」
+    try:                                 # Intel Mac:pyobjc 没装时下面两行只显示「查不到(ModuleNotFoundError)」,结尾还说「都齐了」
         from seeu import deps
         lack = [p for p in deps.missing() if p.startswith("pyobjc-")]
     except Exception:
@@ -123,7 +123,7 @@ def check():
     except Exception as e:
         _row(rows, NA, "屏幕录制", f"查不到({e.__class__.__name__})")
 
-    try:                                 # 11-06 二次复查:截图、核实画面变没变都要这两个库,原来安装说明没写、这里也不查
+    try:                                 # 截图、核实画面变没变都要这两个库,原来安装说明没写、这里也不查
         import cv2, numpy  # noqa: F401
         _row(rows, OK, "图像库(OpenCV、numpy)", "已装")
     except Exception:
@@ -206,7 +206,7 @@ def browsers():
 
 
 def cdp_apps(rows):
-    """C-1.0:本机哪些网页壳 App 能走调试端口(看 App 里带不带 Electron / CEF;不拉起,能不能真开端口要用时才知道)。"""
+    """本机哪些网页壳 App 能走调试端口(看 App 里带不带 Electron / CEF;不拉起,能不能真开端口要用时才知道)。"""
     try:
         from seeu import cdp, safety
         apps = [(n, k, b) for n, k, b in cdp.installed() if n != "Google Chrome"]
@@ -239,13 +239,13 @@ def stealth_chrome(rows):
         _row(rows, NA, "隐身 Chrome 开关", "查不到")
     else:
         _row(rows, OK if on else NA, "隐身 Chrome 开关",
-             "开着(后备)" if on else "没开:不要紧,C-1.0 起隐身 Chrome 读写页面走调试端口,这个开关只当后备")
+             "开着(后备)" if on else "没开:不要紧,隐身 Chrome 读写页面走调试端口,这个开关只当后备")
 
 
 def _register(rows):
     """经 SeeU 小程序跑、又缺授权时,向系统申请一次 → 「SeeU」出现在辅助功能 / 屏幕录制列表里(开关要用户亲手开)。"""
     miss = {r["fix"] for r in rows if r["fix"]}
-    # 11-24:原来 import ApplicationServices(依赖里没有,本机和 Sonoma 虚拟机都没装)→ 报错被吞,两项都没申请成。
+    # 原来 import ApplicationServices(依赖里没有,本机和 Sonoma 虚拟机都没装)→ 报错被吞,两项都没申请成。
     # 改成直接从系统框架加载;两项分开,一项不成不连累另一项。
     try:
         if "accessibility" in miss:
@@ -267,7 +267,7 @@ def _register(rows):
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
-    # 11-01:清单是给人看的,语言设成 English 时按 reason_en 的表转英文(中文时原样,不影响别的调用方)
+    # 清单是给人看的,语言设成 English 时按 reason_en 的表转英文(中文时原样,不影响别的调用方)
     from seeu.i18n import lang
     if lang() == "en":
         from seeu.reason_en import to_en as _t
@@ -280,7 +280,7 @@ def main(argv=None):
         print(_t(f"SeeU 检查授权 · 授权对象:{who or '运行这条命令的程序'}(授权给它,不是给 Python)") + "\n")
     from seeu import version
     from seeu.i18n import T
-    print("  " + T("ver.line", v=version.current()) + "\n")   # 11-01:报问题时一眼看出是哪版
+    print("  " + T("ver.line", v=version.current()) + "\n")   # 报问题时一眼看出是哪版
     rows = check()
     for r in rows:
         r["name"], r["note"] = _t(r["name"]), _t(r["note"])
@@ -290,7 +290,7 @@ def main(argv=None):
     for r in rows:
         print(f"  {r['ok']} {r['name']}{' ' * (w - _w(r['name']))}  {r['note']}")
     todo = [r for r in rows if r["fix"]]
-    bad = [r for r in rows if r["ok"] == BAD and not r["fix"] and r.get("can_fix", True)]   # 11-22:缺库这类 ❌ 没有「去哪开」,原来漏算、照样说「都齐了」
+    bad = [r for r in rows if r["ok"] == BAD and not r["fix"] and r.get("can_fix", True)]   # 缺库这类 ❌ 没有「去哪开」,原来漏算、照样说「都齐了」
     if not todo and not bad:
         print("\n" + _t("都齐了(— 是没装/没开着、查不了的,不算缺)。"))
         return 0

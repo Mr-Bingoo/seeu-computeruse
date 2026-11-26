@@ -25,7 +25,7 @@ class UserBusy(RuntimeError):
 
 
 class SeeUBusy(UserBusy):
-    """别的 SeeU 任务正在借鼠标键盘,排队等到上限还没轮到(11-17 C-2.6 多任务调度)。不是被拦:稍后重试。"""
+    """别的 SeeU 任务正在借鼠标键盘,排队等到上限还没轮到(多任务调度)。不是被拦:稍后重试。"""
 
 
 class MOUSEINPUT(ctypes.Structure):
@@ -101,7 +101,7 @@ def wait_idle():
 def _bring(top):
     if u.IsIconic(top):
         raise RuntimeError("窗口最小化了,SeeU 不把它拉出来(请先把窗口打开)")
-    if W.other_desktop(top):        # 11-14:拉别的虚拟桌面上的窗口,系统会把用户切过去
+    if W.other_desktop(top):        # 拉别的虚拟桌面上的窗口,系统会把用户切过去
         raise RuntimeError(W.OTHER_DESKTOP)
     if W.foreground() == top:
         return
@@ -120,13 +120,13 @@ def _bring(top):
 def _check_point(top, sx, sy):
     h = u.WindowFromPoint(wt.POINT(int(sx), int(sy)))
     root = W.top_of(int(h)) if h else 0
-    if root and root != int(top) and W.cls(root) == "SeeUFloat":    # 11-13:挡在上面的是 SeeU 自己的浮标 → 让它先收起来再看
+    if root and root != int(top) and W.cls(root) == "SeeUFloat":    # 挡在上面的是 SeeU 自己的浮标 → 让它先收起来再看
         from seeu.win import floatwin
         floatwin.send("hide")
         time.sleep(0.25)
         h = u.WindowFromPoint(wt.POINT(int(sx), int(sy)))
         root = W.top_of(int(h)) if h else 0
-    if root and root != int(top) and W.cls(root) == "SeeUToast":    # 11-14 复查:挡在上面的是 SeeU 自己的提示条 → 收掉再看
+    if root and root != int(top) and W.cls(root) == "SeeUToast":    # 挡在上面的是 SeeU 自己的提示条 → 收掉再看
         from seeu.win import cursor
         cursor.send("untoast")
         time.sleep(0.25)
@@ -175,7 +175,7 @@ def borrow(top, act, kind="mouse"):
     """让路 → 拉前台 → act() → 还原前台和鼠标。返回 dict(held_ms, back)。kind = 借的是鼠标还是键盘(浮标上的提示用)。"""
     if W.other_desktop(top):        # 先查再让路、再亮浮标:不借就别打扰
         raise RuntimeError(W.OTHER_DESKTOP)
-    # 11-17 C-2.6:几个 SeeU 任务同时要借真鼠标 → 排队,一次一个(同 Mac 的 sched.real_wait,最多等 15 秒)
+    # 几个 SeeU 任务同时要借真鼠标 → 排队,一次一个(同 Mac 的 sched.real_wait,最多等 15 秒)
     try:
         from seeu import sched
         slot = sched.real_slot()
@@ -198,7 +198,7 @@ def borrow(top, act, kind="mouse"):
         slot.__exit__(None, None, None)
 
 
-REBASE = threading.local()      # 11-17 C-2.8:act._verify 放进来的「重拍动作前」函数
+REBASE = threading.local()      # act._verify 放进来的「重拍动作前」函数
 
 
 def rebase():
@@ -219,7 +219,7 @@ def _borrow(top, act, kind):
     t0 = time.time()
     try:
         _bring(top)
-        # 之前后台动作补发的「失去激活」可能比真切前台的消息还晚处理,把 Chromium 窗口又弄成「未激活」(11-11 真机:真键盘打字落空)
+        # 之前后台动作补发的「失去激活」可能比真切前台的消息还晚处理,把 Chromium 窗口又弄成「未激活」(真机:真键盘打字落空)
         # → 真到前台后再补一次「激活」
         if W.cls(top) in inputs.CHROMIUM_TOPS:
             u.PostMessageW(top, inputs.WM_NCACTIVATE, 1, 0)
@@ -249,7 +249,7 @@ def click(top, sx, sy, right=False):
 def type_text(top, text):
     """真键盘打字(Unicode 输入,跟输入法无关)。换行按 Shift+回车。"""
     text = str(text).replace("\r\n", "\n").replace("\r", "\n")
-    plain = not inputs._newline_mods(top)      # 11-23 C-4.0:VS Code / Jupyter / 表格按单独回车(seeu/newline.py)
+    plain = not inputs._newline_mods(top)      # VS Code / Jupyter / 表格按单独回车(seeu/newline.py)
 
     def act():
         items = []
@@ -258,7 +258,7 @@ def type_text(top, text):
                 items += [_key(0x0D), _key(0x0D, flags=KEYUP)]
                 continue
             if ch == "\n":
-                # 11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
+                # 换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
                 items += [_key(0x10), _key(0x0D), _key(0x0D, flags=KEYUP), _key(0x10, flags=KEYUP)]
                 continue
             b = ch.encode("utf-16-le")
@@ -272,7 +272,7 @@ def type_text(top, text):
 
 
 def long_press(top, sx, sy, ms=1000):
-    """真鼠标长按(11-12)。"""
+    """真鼠标长按。"""
     ms = max(50, min(int(ms), inputs.LONG_MAX_MS))
 
     def act():
@@ -289,7 +289,7 @@ def long_press(top, sx, sy, ms=1000):
 
 
 def drag(top, pts, hold_ms=0):
-    """真鼠标拖动(11-12):起点、终点都要在目标窗口上(最上面就是它)才拖。"""
+    """真鼠标拖动:起点、终点都要在目标窗口上(最上面就是它)才拖。"""
     def act():
         _check_point(top, *pts[0])
         _check_point(top, *pts[-1])
@@ -299,7 +299,7 @@ def drag(top, pts, hold_ms=0):
         _send(_mouse(LEFTDOWN))
         try:
             time.sleep(max(0, hold_ms) / 1000 + 0.05)
-            # 11-12 画图实测:中间点用 SetCursorPos 挪,画图(WinUI 指针输入)不当成「按着移动」,L 形拖成了起点到终点的斜线
+            # 画图实测:中间点用 SetCursorPos 挪,画图(WinUI 指针输入)不当成「按着移动」,L 形拖成了起点到终点的斜线
             # → 中间点改用 SendInput 发真的鼠标移动(绝对坐标,按整个虚拟桌面换算到 0~65535)
             for (ax, ay), (bx, by) in zip(pts, pts[1:]):
                 n = max(2, int(max(abs(bx - ax), abs(by - ay)) / 20))

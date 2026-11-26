@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 网页(第 2 段,11-18):SeeU 专用的那份 Chrome / Chromium,无界面运行(--headless=new),走调试端口。
+"""SeeU Linux 版 · 网页(第 2 段):SeeU 专用的那份 Chrome / Chromium,无界面运行(--headless=new),走调试端口。
 
 为什么要它:Linux 上 Chrome / Electron 的输入框不给 AT-SPI「改文字」接口(第 1 段实测),用户自己的 Chrome 里写不进字;
 专用那份走调试端口,直接读网页结构、按编号点和填、读回核对,完全不碰桌面、不抢前台,也不需要借键盘。
@@ -27,7 +27,7 @@ BROWSERS = {
 }
 LAUNCH_WAIT = 30
 CallErr = cdp.CDPError
-_fopen = builtins.open      # 下面定义了 open(网址):读写状态文件要用内置的(Windows 版 11-11 真机栽过)
+_fopen = builtins.open      # 下面定义了 open(网址):读写状态文件要用内置的(Windows 版真机栽过)
 
 
 class WebError(cdp.CDPError):
@@ -81,7 +81,7 @@ def _save(browser, d):
 
 
 def _profile_pids(browser):
-    """还占着专用配置的进程(命令行里带这份配置的路径)。同一份配置只许一个主进程,旧的还在新的就起不来(Windows 版 11-11 踩过)。"""
+    """还占着专用配置的进程(命令行里带这份配置的路径)。同一份配置只许一个主进程,旧的还在新的就起不来(Windows 版踩过)。"""
     prof = "--user-data-dir=" + _profile(browser)
     out = []
     for d in os.listdir("/proc"):
@@ -218,13 +218,13 @@ def _fn(d, tab, fn, args):
     if r is None:
         raise WebError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise WebError(*aejs.page_err(r))      # 11-23 C-3.9 整体复查:网页说的话不当 SeeU 的提示(见 seeu/web/aejs.page_err)
+        raise WebError(*aejs.page_err(r))      # 网页说的话不当 SeeU 的提示(见 seeu/web/aejs.page_err)
     return r
 
 
 def _wait_loaded(d, tab, timeout=10.0):
     # 新标签页先是 about:blank(它的 readyState 一上来就是 complete),要等地址换掉再看;
-    # 11-12 旧 Intel Mac 的 Win10(2 核)上没等到就返回,see 读到 0 项。
+    # 旧 Intel Mac 的 Win10(2 核)上没等到就返回,see 读到 0 项。
     t0 = time.time()
     while time.time() - t0 < timeout:
         try:
@@ -249,7 +249,7 @@ def open(url, browser="chrome"):
         raise WebError("只能打开 http / https 网址", "bad_url")
     if not _allowed(u):
         raise _not_allowed(u)
-    # 11-23 C-3.9 整体复查:原来固定 start(无界面)→ 用户正在叫出来的窗口里登录时,AI 一调 open 就把那个窗口关掉重启成无界面
+    # 原来固定 start(无界面)→ 用户正在叫出来的窗口里登录时,AI 一调 open 就把那个窗口关掉重启成无界面
     # (登录到一半没了)。现在:专用那份正以「看得见」的样子开着就直接用它,等用户说登完(hide)再回无界面
     d = _load(browser)
     if not (d and d.get("visible")):
@@ -416,7 +416,7 @@ def close_tab(tab, browser="chrome"):
         cdp._http(d["port"], f"/json/close/{tab}")
 
 
-# 11-17 C-2.8(照 Mac web/__init__.py 末尾):专用浏览器里打字(含写完按回车)同一个浏览器一次一个任务,
+# 照 Mac web/__init__.py 末尾:专用浏览器里打字(含写完按回车)同一个浏览器一次一个任务,
 # 别的任务的回车 / 打字插进来会落到别的框里。占用键「web:chrome」(没有可找的窗口,见 sched._win_key)。调度模块出问题就不排。
 try:
     from seeu import sched as _sched
@@ -427,7 +427,7 @@ try:
         return _type_s(_sched.WEB_KEY + str(browser), target, text, tab=tab, browser=browser, mode=mode, enter=enter)
     type.__doc__ = _type_raw.__doc__
 
-    # 复查 11-17:按键(回车等)也按标签页投给网页里当前的框,别的任务正在打字时插进来会落进它的框 → 同一把(Mac 浏览器按键也跟打字同一个占用键)
+    # 按键(回车等)也按标签页投给网页里当前的框,别的任务正在打字时插进来会落进它的框 → 同一把(Mac 浏览器按键也跟打字同一个占用键)
     _key_raw = key
     _key_s = _sched.scheduled("web_press")(lambda app, *a, **k: _key_raw(*a, **k))
 

@@ -1,10 +1,10 @@
 """更新 SeeU:python3 -m seeu 更新 [--check]   (英文别名 update)
 
 只管用 git clone 装的那份(开源仓库 seeu-computeruse):拉 GitHub 上的新版,只快进、不合并、不覆盖用户改过的文件。
-  例外:只改过 seeu/设置.json(改设置、点 I See 都会改它)不算挡路 —— 先收起用户那份,更新完把用户改过的项放回新版的设置里(11-07)。
+  例外:只改过 seeu/设置.json(改设置、点 I See 都会改它)不算挡路 —— 先收起用户那份,更新完把用户改过的项放回新版的设置里。
   --check  只看有没有新版,不动文件。
 更新后:SeeU 小程序(seeu/launcher)源码变了、而且本机生成过小程序 → 重新生成并提醒用户重开授权(自签名,签名一变系统当新程序);
-没变就不碰,省得用户白白重开授权(11-01 定)。最后提醒重开 AI 客户端,再跑一遍检查授权。
+没变就不碰,省得用户白白重开授权。最后提醒重开 AI 客户端,再跑一遍检查授权。
 每个 git 调用都有超时,出错就停手说原因,不重试。
 """
 import json
@@ -32,7 +32,7 @@ class _Stop(Exception):
 
 def _git(*args, timeout=GIT_TIMEOUT_S):
     # core.quotepath=false:中文文件名(设置.json)原样给,不转成 \350\256… 这种写法
-    # encoding 写死 utf-8(11-14):Windows 上不写会按系统代码页解,中文文件名(设置.json)变乱码 → 认不出「只改了设置」
+    # encoding 写死 utf-8:Windows 上不写会按系统代码页解,中文文件名(设置.json)变乱码 → 认不出「只改了设置」
     r = subprocess.run(["git", "-C", ROOT, "-c", "core.quotepath=false", *args], capture_output=True, text=True, timeout=timeout,
                        encoding="utf-8", errors="replace",
                        env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"})
@@ -81,7 +81,7 @@ def _rm(path):
 
 def _dirty_paths(dirty):
     """改过的文件(跟 HEAD 比)。不从 status 那几行里切:_git 会去掉整段开头的空格,第一行切出来少一个字。
-    工作区和暂存区各问一次再合起来(11-07 复查:文件 git add 过、工作区又改回原样时,只问工作区看不到它)。
+    工作区和暂存区各问一次再合起来(文件 git add 过、工作区又改回原样时,只问工作区看不到它)。
     万一都给不出来(少见状态),退回 status 每行最后一段。"""
     paths = []
     for extra in ((), ("--cached",)):
@@ -167,8 +167,8 @@ def _linux_ext():
     """Linux:GNOME 小插件文件变了 → 拷进用户自己的扩展目录(不要管理员密码);GNOME 只在登录时读扩展,要注销重登。"""
     try:
         from seeu.linux import shell
-        if shell.is_gnome() and shell.installed():   # 11-21 C-3.5(复查):用户已全部移除、小插件删了的,更新不再装回
-            r = shell.install(touch_master=False)      # 用户 11-26 定:更新不替用户打开「扩展」总开关
+        if shell.is_gnome() and shell.installed():   # 用户已全部移除、小插件删了的,更新不再装回
+            r = shell.install(touch_master=False)      # 更新不替用户打开「扩展」总开关
             if r.get("all_off"):
                 from seeu.linux import lang
                 lang.say(shell.ALL_OFF_NOTE)
@@ -179,7 +179,7 @@ def _linux_ext():
 
 def main(args=()):
     check_only = "--check" in args
-    from seeu.where import as_plugin            # 11-22 C-3.7:插件版由 Claude Code / Codex 自己的插件管理更新,没有 git
+    from seeu.where import as_plugin            # 插件版由 Claude Code / Codex 自己的插件管理更新,没有 git
     if as_plugin(ROOT):
         print(T("upd.plugin_codex" if "/.codex/" in ROOT.replace(os.sep, "/").lower() else "upd.plugin_claude"))
         return 1
@@ -187,7 +187,7 @@ def main(args=()):
         print(T("upd.no_git_win" if sys.platform == "win32" else "upd.no_git_linux" if sys.platform.startswith("linux") else "upd.no_git"))
         return 1
     if not _is_clone():
-        # 11-01 实测:npx skills add 把整个仓库(不带 .git)拷进 ~/.claude/skills/seeu 这类技能目录,更新要走 npx skills update
+        # 实测:npx skills add 把整个仓库(不带 .git)拷进 ~/.claude/skills/seeu 这类技能目录,更新要走 npx skills update
         in_skills = os.sep + "skills" + os.sep in ROOT + os.sep
         print(T("upd.npx") if in_skills else T("upd.not_git", url=REPO_URL))
         return 1
@@ -209,7 +209,7 @@ def main(args=()):
         new_ver = _show("seeu/VERSION").strip() or old_ver
         text = _show("CHANGELOG.en.md" if lang() == "en" else "CHANGELOG.md")
         notes = version.notes(text, since=old_ver) if new_ver != old_ver else ""
-        if notes:                                           # 11-01:有更新说明就给说明,没有(没改版本号的小修)才列提交
+        if notes:                                           # 有更新说明就给说明,没有(没改版本号的小修)才列提交
             print(T("upd.notes", new=new_ver, old=old_ver, notes=notes))
         else:
             log = _git("log", "--oneline", "--no-decorate", "-n", "10", "HEAD..@{u}")
@@ -273,12 +273,12 @@ def main(args=()):
     if sys.platform == "darwin" and any(p.startswith("seeu/launcher/") for p in changed) and os.path.isdir(os.path.join(HERE, "launcher", "SeeU.app")):
         _rebuild_launcher()
     if sys.platform.startswith("linux") and any(p.startswith("seeu/linux/ext/seeu@seeu-computeruse/") for p in changed):
-        _linux_ext()                                        # 11-18 C-3.0:小插件变了 → 装上新版,提醒注销重登
+        _linux_ext()                                        # 小插件变了 → 装上新版,提醒注销重登
     print(T("upd.restart"))
     print("\n" + T("upd.check_win" if sys.platform in ("win32",) or sys.platform.startswith("linux") else "upd.check"))
-    if sys.platform == "win32":                             # 11-14:Windows 预览版有自己的检查
+    if sys.platform == "win32":                             # Windows 预览版有自己的检查
         from seeu.win import doctor
-    elif sys.platform.startswith("linux"):                  # 11-18:Linux 预览版也有自己的检查
+    elif sys.platform.startswith("linux"):                  # Linux 预览版也有自己的检查
         from seeu.linux import doctor
     else:
         from seeu import doctor

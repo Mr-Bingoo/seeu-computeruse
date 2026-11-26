@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 探一下某个程序能不能用 SeeU 自动化(11-18 C-3.0,照 Windows 版 win/probe.py):
+"""SeeU Linux 版 · 探一下某个程序能不能用 SeeU 自动化(照 Windows 版 win/probe.py):
     python3 -m seeu 探一下 featherpad      (英文 probe;MCP 工具 seeu_probe)
 
 只读:不点、不打字、不切前台。程序要开着。一次看完:程序路径、版本(系统软件包 / snap / flatpak);安全底线碰不碰;
@@ -73,7 +73,7 @@ def version_of(path, pid=0):
     if pkg and " " not in pkg:
         v = _run(["dpkg-query", "-W", "-f=${Version}", pkg])
         return f"{v} ({pkg})" if v else None
-    out = _run(["rpm", "-qf", "--qf", "%{NAME} %{VERSION}-%{RELEASE}", path])   # Fedora 一家(11-21 C-3.4)
+    out = _run(["rpm", "-qf", "--qf", "%{NAME} %{VERSION}-%{RELEASE}", path])   # Fedora 一家
     if out and "not owned" not in out and len(out.split()) == 2:
         n, v = out.split()
         return f"{v} ({n})"

@@ -76,8 +76,8 @@ OTHER_DESKTOP = ("窗口在另一个虚拟桌面上:后台点不动时不借鼠�
 
 
 def other_desktop(h):
-    """这个窗口在不在「别的虚拟桌面」上(11-14 虚拟机实测):系统把别的桌面的窗口藏起来(DWM 隐身标记 = 2,shell 藏的)。
-    这种窗口:后台截图、打字照常;控件清单从顶层读只剩边框 / 菜单那几项(uia._child_items 从子窗口补得回来,11-18 Win10 / Win11 记事本实测);一拉前台(借鼠标 / 借前台按下)系统就把用户切到那个桌面。
+    """这个窗口在不在「别的虚拟桌面」上(虚拟机实测):系统把别的桌面的窗口藏起来(DWM 隐身标记 = 2,shell 藏的)。
+    这种窗口:后台截图、打字照常;控件清单从顶层读只剩边框 / 菜单那几项(uia._child_items 从子窗口补得回来,Win10 / Win11 记事本实测);一拉前台(借鼠标 / 借前台按下)系统就把用户切到那个桌面。
     最小化的不算(那是另一回事)。查不到当「不是」。"""
     try:
         if u.IsIconic(h):
@@ -104,9 +104,9 @@ SEEU_OVERLAYS = ("SeeUFloat", "SeeUToast", "SeeUCursor")
 
 
 def _clear_layer(h):
-    """分层窗口里哪些不算实心盖住(11-15 复查):整体透明度 < 200 的半透明遮罩;SeeU 自己的浮标 / 提示条;
+    """分层窗口里哪些不算实心盖住:整体透明度 < 200 的半透明遮罩;SeeU 自己的浮标 / 提示条;
     逐像素透明、又是「不抢焦点的工具浮层」的(录屏框、桌面挂件这类)。
-    🔴 逐像素透明的普通窗口照算盖住:微信、QQ、钉钉用它画阴影圆角,窗口本身是实心的(快速复查)。"""
+    🔴 逐像素透明的普通窗口照算盖住:微信、QQ、钉钉用它画阴影圆角,窗口本身是实心的。"""
     try:
         ex = u.GetWindowLongW(h, -20)
         if not (ex & 0x80000):                                 # WS_EX_LAYERED
@@ -135,7 +135,7 @@ def _cloaked(h):
 
 
 def visible_part(h, n=24):
-    """窗口有多少露在屏幕上(0~1,11-15):在窗口里取 n×n 个点,看有几个点没被它上面的窗口盖住、也没跑出屏幕。
+    """窗口有多少露在屏幕上(0~1):在窗口里取 n×n 个点,看有几个点没被它上面的窗口盖住、也没跑出屏幕。
     上面的窗口只算看得见、没最小化、没隐身(别的虚拟桌面的窗口是隐身的)、不是「点得穿」的(SeeU 的光标、提示条这类)。"""
     x, y, w, hh = rect(h)
     if w <= 0 or hh <= 0 or u.IsIconic(h):
@@ -144,7 +144,7 @@ def visible_part(h, n=24):
     vw, vh = u.GetSystemMetrics(78), u.GetSystemMetrics(79)
     gw = u.GetWindow
     above, cur, n_up = [], gw(h, 3), 0       # GW_HWNDPREV:叠放次序里往上走
-    while cur and n_up < 500:               # 加上限(11-15 复查)
+    while cur and n_up < 500:               # 加上限
         n_up += 1
         if u.IsWindowVisible(cur) and not u.IsIconic(cur) and not _cloaked(cur) \
                 and not (u.GetWindowLongW(cur, -20) & 0x20) and not _clear_layer(cur):      # WS_EX_TRANSPARENT、全透明
@@ -168,7 +168,7 @@ STALE_CLASSES = ("Chrome_WidgetWin_",)      # Chrome、Edge、Electron 程序(VS
 
 
 def stale_shot(h):
-    """后台截到的会不会是旧画面(11-15 Win10 实测):Chrome / Electron 窗口整个被盖住(或全在屏幕外)时不重画,
+    """后台截到的会不会是旧画面(Win10 实测):Chrome / Electron 窗口整个被盖住(或全在屏幕外)时不重画,
     PrintWindow 拿到的是最后一次画的那一帧 —— 照它按位置点会点错(Win10 上照旧图点 WorkBuddy,点中了别的卡片)。"""
     try:
         return cls(h).startswith(STALE_CLASSES) and visible_part(h) == 0.0
@@ -252,10 +252,10 @@ def find(app):
         return info(h)
     name, title = split_target(a)
     wins = list_windows()
-    if title is not None and name.lower() in ("", "app"):     # 11-20:AI 照抄占位「App「标题」」→ 只按标题找
+    if title is not None and name.lower() in ("", "app"):     # AI 照抄占位「App「标题」」→ 只按标题找
         hits = [w for w in wins if title.lower() in w["title"].lower()]
         progs = {_exe_key(w["exe"]) for w in hits}
-        if len(progs) > 1:                                     # 11-20 复查:几个程序的窗口都对得上,别挑最上面那个(可能是别的程序),请 AI 写清楚
+        if len(progs) > 1:                                     # 几个程序的窗口都对得上,别挑最上面那个(可能是别的程序),请 AI 写清楚
             cands = "、".join(f"{os.path.basename(w['exe']).removesuffix('.exe').removesuffix('.EXE')}「{w['title'][:40]}」" for w in hits[:6])
             raise RuntimeError(f"「{a}」对得上好几个程序的窗口:{cands};请写成「程序名「标题里的几个字」」或「#窗口号」")
         if hits:
@@ -266,7 +266,7 @@ def find(app):
         hits = [w for w in hits if title.lower() in w["title"].lower()]
     if not hits and title is None:
         hits = [w for w in wins if name.lower() in w["title"].lower()]
-    if not hits:                      # 11-15(照 Mac 版 ax.canon_name):AI 写中文名「记事本」,英文 Windows 上叫 Notepad(反过来也认)
+    if not hits:                      # 照 Mac 版 ax.canon_name:AI 写中文名「记事本」,英文 Windows 上叫 Notepad(反过来也认)
         try:
             from seeu.win import openapp
             alt = openapp.canon(name)
@@ -274,7 +274,7 @@ def find(app):
             alt = None
         if alt:
             k2, al = _exe_key(alt.replace(" ", "")), alt.lower()
-            # 11-15 复查:原来按标题子串,「设置」→ Settings 会对上「settings.json - Visual Studio Code」
+            # 原来按标题子串,「设置」→ Settings 会对上「settings.json - Visual Studio Code」
             hits = [w for w in wins if _exe_key(w["exe"]) == k2 or w["title"].strip().lower() == al
                     or w["title"].strip().lower().endswith(" - " + al)]
             if title is not None:
@@ -329,7 +329,7 @@ def foreground():
 
 
 def cursor():
-    """真鼠标位置(物理像素;用 GetPhysicalCursorPos,11-11 踩过 GetCursorPos 单位会变)。"""
+    """真鼠标位置(物理像素;用 GetPhysicalCursorPos,踩过 GetCursorPos 单位会变)。"""
     p = wt.POINT()
     u.GetPhysicalCursorPos(ctypes.byref(p))
     return p.x, p.y
@@ -338,7 +338,7 @@ def cursor():
 # ─────────────────────────────── 截窗口 ───────────────────────────────
 
 def capture(h):
-    """PrintWindow 后台截窗口 → (w, h, BGRA 字节)。被挡着也截得到(11-10 真机);最小化的截不到 → 抛 RuntimeError。"""
+    """PrintWindow 后台截窗口 → (w, h, BGRA 字节)。被挡着也截得到(真机);最小化的截不到 → 抛 RuntimeError。"""
     if u.IsIconic(h):
         raise RuntimeError("窗口最小化了,截不到画面")
     _, _, w, hh = rect(h)

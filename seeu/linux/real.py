@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 最后一档退路:借用户的真鼠标 / 真键盘(第 3 段,11-18;跟 Mac / Windows 的「借用鼠标」同一个设置管)。
+"""SeeU Linux 版 · 最后一档退路:借用户的真鼠标 / 真键盘(第 3 段;跟 Mac / Windows 的「借用鼠标」同一个设置管)。
 
 Wayland 不让普通程序给别的窗口发键鼠,只能走系统「远程操作」授权(xdg-desktop-portal RemoteDesktop):
   - 第一次要用户在系统框里打开「允许远程操作」再点共享(python3 -m seeu 检查 --fix 带着做),系统给一个「下次免问」令牌;
@@ -85,7 +85,7 @@ def has_grant():
 # ─────────────────────────────── 设置(跟 Mac / Windows 同一个「借用鼠标」) ───────────────────────────────
 
 from seeu.where import settings_file as _sf
-_SETTINGS = _sf()   # SEEU_SETTINGS_FILE 优先(在 where 里);11-22 C-3.7:插件版存用户文件夹
+_SETTINGS = _sf()   # SEEU_SETTINGS_FILE 优先(在 where 里);插件版存用户文件夹
 _SESSION_AUTO = [False]
 
 
@@ -96,7 +96,7 @@ def settings():
         return d if isinstance(d, dict) else {"借用鼠标": "问我"}
     except FileNotFoundError:
         return {}
-    except Exception:   # noqa: BLE001   文件坏了:借用鼠标按「问我」算(同 Windows 版 11-14 复查)
+    except Exception:   # noqa: BLE001   文件坏了:借用鼠标按「问我」算(同 Windows 版复查)
         return {"借用鼠标": "问我"}
 
 
@@ -127,7 +127,7 @@ def allowed(allow=None):
 
 def settings_cmd(args):
     """python3 -m seeu 设置 [借用鼠标 开|问我|关](同 Mac / Windows):不带参数看现在的值;带了就改 设置.json(只改这一项)。"""
-    from seeu.linux.lang import say as print   # noqa: A001   打印给人看的走中英文(11-18 C-3.0)
+    from seeu.linux.lang import say as print   # noqa: A001   打印给人看的走中英文
     vals = {"开": "开", "on": "开", "问我": "问我", "ask": "问我", "关": "关", "off": "关"}
     args = list(args)
     if args and args[0].lower() == "borrow-mouse":
@@ -294,7 +294,7 @@ def _idle():
 
 def idle_seconds():
     """用户多久没动鼠标键盘(问 GNOME)。
-    11-23 C-3.9 整体复查:问不到原来返回很大的数(= 当成用户没在用,直接借);改成返回 0(按「用户在用」处理,不借)。"""
+    问不到原来返回很大的数(= 当成用户没在用,直接借);改成返回 0(按「用户在用」处理,不借)。"""
     v = _idle()
     return 0.0 if v is None else v
 
@@ -310,7 +310,7 @@ def wait_idle():
         if v is not None and v >= IDLE_NEED:
             return
         time.sleep(0.1)
-    # 11-23 C-3.9 整体复查:一次都没问到 = 不知道用户在不在用,按「在用」不借,原因照实说(别说成「用户正在用电脑」)
+    # 一次都没问到 = 不知道用户在不在用,按「在用」不借,原因照实说(别说成「用户正在用电脑」)
     raise UserBusy("用户正在用电脑,SeeU 先不借鼠标键盘(等用户停手再试)" if asked else IDLE_UNKNOWN)
 
 
@@ -342,10 +342,10 @@ OVERVIEW_WHY = ("电脑停在「活动概览」(刚开机登录、没开窗口�
 
 
 def check_modal():
-    """Shell 自己的弹框开着就不借(11-18 虚拟机实测:登录后 VS Code 要钥匙环密码,弹框盖在所有窗口上、收着键盘)。"""
+    """Shell 自己的弹框开着就不借(虚拟机实测:登录后 VS Code 要钥匙环密码,弹框盖在所有窗口上、收着键盘)。"""
     p = shell.ping()
     n, ov = int(p.get("modal") or 0), bool(p.get("overview"))
-    if ov and n <= 1:                 # 11-25:概览自己算 1 层(Debian 实测 modal=1、overview=True);多出来的才是别的弹框
+    if ov and n <= 1:                 # 概览自己算 1 层(Debian 实测 modal=1、overview=True);多出来的才是别的弹框
         raise safety.Refused(OVERVIEW_WHY)
     if n > 0:
         raise safety.Refused(MODAL_WHY)
@@ -420,7 +420,7 @@ def _slot():
 
 
 def task_cursor(mode="bg"):
-    """这个任务的光标:(名牌, 颜色 "#RRGGBB", 任务名)。11-18 C-3.0(照 Windows act._cursor):一个任务一只光标,
+    """这个任务的光标:(名牌, 颜色 "#RRGGBB", 任务名)。照 Windows act._cursor:一个任务一只光标,
     任务名 = 调度分的显示名(Claude、Claude2…);后台模式名牌写任务名、颜色用任务色(第 0 号用设置里的后台模式颜色);
     借鼠标照旧是署名 + 让路模式颜色。拿不到任务名 = None(跟老写法共用一只)。"""
     base = color("real" if mode == "real" else "bg")
@@ -473,11 +473,11 @@ def borrow(w, act, kind="mouse", at=None):
             wait_idle()
             safety.check_unlocked()
             col, name = color("real"), signature()
-            # 11-20 复查:悬浮标续命 / 光圈一亮起来就进 try,中途 pointer / focus / cursor 出错也能在 finally 里收掉(原来会一直橙色、一直穿透)
+            # 悬浮标续命 / 光圈一亮起来就进 try,中途 pointer / focus / cursor 出错也能在 finally 里收掉(原来会一直橙色、一直穿透)
             beat, old, p0, f0, back = None, False, None, 0, True
             t0 = time.time()
             try:
-                beat = _float_borrow(w, kind)        # 11-18 C-3.0:悬浮标变橙、写「正在用你的鼠标」、这几秒穿透;光圈由它按灯光档位亮
+                beat = _float_borrow(w, kind)        # 悬浮标变橙、写「正在用你的鼠标」、这几秒穿透;光圈由它按灯光档位亮
                 if beat is None:                     # 小插件老版本:老的右上角提示 + 光圈
                     old = True
                     shell.halo(col, True)
@@ -527,7 +527,7 @@ LONG_MAX_MS = 10000      # 长按上限(同 Mac / Windows)
 
 
 def long_press(w, x, y, ms=1000):
-    """借真鼠标长按(11-18 C-3.0,照 Windows real.long_press):挪过去、按下、按住 ms 毫秒、松开。"""
+    """借真鼠标长按(照 Windows real.long_press):挪过去、按下、按住 ms 毫秒、松开。"""
     ms = max(50, min(int(ms), LONG_MAX_MS))
 
     def act(sess):
@@ -543,7 +543,7 @@ def long_press(w, x, y, ms=1000):
 
 
 def drag(w, pts, hold_ms=0):
-    """借真鼠标拖动(11-18 C-3.0,照 Windows real.drag):pts = 屏幕点(起点在前),每个点都要在目标窗口上、最上面就是它。
+    """借真鼠标拖动(照 Windows real.drag):pts = 屏幕点(起点在前),每个点都要在目标窗口上、最上面就是它。
     按住后沿折线一小段一小段挪(每段约 20 像素,用相对挪动 + 读回指针对准,程序看到的是「按着移动」)。"""
     pts = [(float(p[0]), float(p[1])) for p in pts]
 
@@ -609,7 +609,7 @@ def scroll(w, x, y, dy=0, dx=0):
 KEYSYM = {"return": 0xff0d, "enter": 0xff0d, "tab": 0xff09, "escape": 0xff1b, "esc": 0xff1b, "backspace": 0xff08,
           "delete": 0xffff, "space": 0x20, "up": 0xff52, "down": 0xff54, "left": 0xff51, "right": 0xff53, "home": 0xff50,
           "end": 0xff57, "pageup": 0xff55, "pagedown": 0xff56, "insert": 0xff63,
-          "forwarddelete": 0xffff}      # 11-20 复查:safety.norm_key 把 delete / del 归成 forwarddelete,原来查不到、Delete 按不出
+          "forwarddelete": 0xffff}      # safety.norm_key 把 delete / del 归成 forwarddelete,原来查不到、Delete 按不出
 KEYSYM.update({f"f{i}": 0xffbe + i - 1 for i in range(1, 13)})
 MODSYM = {"ctrl": 0xffe3, "shift": 0xffe1, "alt": 0xffe9}
 
@@ -637,8 +637,8 @@ def _tap_key(sess, sym, mods=()):
 
 def key(w, name, mods=(), click_at=None, check=None):
     """按一个键(可带 ctrl / shift / alt)。click_at=(x, y):先点进那个框再按。
-    check:真按之前再核对一次(11-20 复查:排队 + 等用户停手这几秒焦点可能换了),出问题抛 RuntimeError / Refused 就不按。"""
-    # 11-23 C-3.9 整体复查:原来把不认识的修饰键悄悄丢掉(ctrl+alt+fn+delete 按出去是 Ctrl+Alt+Delete,绕过安全检查)→ 直接拒;
+    check:真按之前再核对一次(排队 + 等用户停手这几秒焦点可能换了),出问题抛 RuntimeError / Refused 就不按。"""
+    # 原来把不认识的修饰键悄悄丢掉(ctrl+alt+fn+delete 按出去是 Ctrl+Alt+Delete,绕过安全检查)→ 直接拒;
     # 这里自己再查一遍危险组合(调用方没先查也拦得住)
     safety.check_keys(name, mods)
     m = safety.norm_mods(mods)
@@ -667,16 +667,16 @@ def _click_in(sess, w, x, y):
 
 
 def _plain(ch):
-    # 11-20 复查:\t 不再按成 Tab 键(会把后半段打进下一个框,可能是密码框),当成字贴进去
+    # \t 不再按成 Tab 键(会把后半段打进下一个框,可能是密码框),当成字贴进去
     return ch == "\n" or 0x20 <= ord(ch) < 0x7f
 
 
 def type_text(w, text, click_at=None, check=None):
     """借真键盘打字。英文、数字、符号逐个按;别的字(中文等)借剪贴板贴,贴完把用户原来的剪贴板文字还回去。
-    check:点进框以后、开打之前核对焦点(11-20 复查:点的是 see 时记下的位置,可能已经滚走了),出问题抛错就不打。"""
-    text = str(text).replace("\r\n", "\n").replace("\r", "\n")      # 11-23 C-3.9:同 Mac / Windows,换行只算一个
+    check:点进框以后、开打之前核对焦点(点的是 see 时记下的位置,可能已经滚走了),出问题抛错就不打。"""
+    text = str(text).replace("\r\n", "\n").replace("\r", "\n")      # 同 Mac / Windows,换行只算一个
     from seeu import newline
-    nl = newline.mods(w.get("comm"), w.get("wm_class"), w.get("app_id"), *(w.get("names") or []))   # 11-23 C-4.0:VS Code / 表格按单独回车
+    nl = newline.mods(w.get("comm"), w.get("wm_class"), w.get("app_id"), *(w.get("names") or []))   # VS Code / 表格按单独回车
     if not all(_plain(c) for c in text):
         other, _ = shell.clipboard()
         if other:
@@ -691,7 +691,7 @@ def type_text(w, text, click_at=None, check=None):
         if all(_plain(c) for c in text):
             for ch in text:
                 if ch == "\n":
-                    _tap_key(sess, KEYSYM["return"], nl)    # 11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
+                    _tap_key(sess, KEYSYM["return"], nl)    # 换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
                 else:
                     _tap_key(sess, ord(ch))
                 time.sleep(0.008)
@@ -703,7 +703,7 @@ def type_text(w, text, click_at=None, check=None):
         time.sleep(0.08)
         try:
             _tap_key(sess, ord("v"), ["ctrl"])
-            time.sleep(0.6)                     # 等程序把剪贴板读走再还回去(11-20 复查:0.3 秒慢的程序会贴成用户原来的内容)
+            time.sleep(0.6)                     # 等程序把剪贴板读走再还回去(0.3 秒慢的程序会贴成用户原来的内容)
         finally:
             shell.set_clipboard(old)
     return borrow(w, act, "keyboard", at=click_at)

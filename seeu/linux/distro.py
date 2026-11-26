@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 认发行版,给提示里的装软件命令(11-21 C-3.4,为 Fedora / Debian 补测加)。
+"""SeeU Linux 版 · 认发行版,给提示里的装软件命令(为 Fedora / Debian 补测加)。
 
 Ubuntu / Debian 一家用 apt,Fedora 一家用 dnf;认不出来按 apt(第一版只测过 Ubuntu)。
 提示里只换命令那一段,前后的中文照旧(英文对照表按片段换,不受影响)。
@@ -10,7 +10,7 @@ PKGS = {
     "ocr": ("tesseract-ocr tesseract-ocr-chi-sim", "tesseract tesseract-langpack-chi_sim"),
     "atspi": ("python3-gi gir1.2-atspi-2.0", "python3-gobject at-spi2-core"),
     "git": ("git", "git"),
-    "pil": ("python3-pil", "python3-pillow"),     # 截图裁剪要用;Debian 的 GNOME 默认没装(11-21 C-3.4 实测)
+    "pil": ("python3-pil", "python3-pillow"),     # 截图裁剪要用;Debian 的 GNOME 默认没装
 }
 
 

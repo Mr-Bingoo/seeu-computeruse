@@ -47,7 +47,7 @@ def ocr(path, box=None, langs=('zh-Hans', 'en')):
     req.setRecognitionLanguages_(list(langs))
     req.setUsesLanguageCorrection_(True)
 
-    # 2026-09-15:系统更新后(OS 25.6.0→27.0.0)传空字典 {} 会报
+    # 系统更新后(OS 25.6.0→27.0.0)传空字典 {} 会报
     # "NSInvalidArgumentException - key does not exist",改传 None 才行。
     handler = VNImageRequestHandler.alloc().initWithCIImage_options_(img, None)
     # 动态加载的 framework 没有方法签名元数据，error 不是 out 参数，只有一个返回值

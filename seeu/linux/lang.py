@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 命令行和提示条的英文(11-18 C-3.0,照 Windows 版 win/lang.py)。
+"""SeeU Linux 版 · 命令行和提示条的英文(照 Windows 版 win/lang.py)。
 
 代码里的提示照旧写中文(测试、别的调用方按中文字判断),只在打印给人看的出口过一遍 tx():
 语言是英文时,先换这里的片段(命令行独有的)+ 给 AI 的原因那套(mcp_server.LINUX_PHRASES)+ Windows 网页那套,
@@ -26,7 +26,7 @@ CLI = [
     ("SeeU 的 GNOME 小插件没删掉(", "Couldn't remove SeeU's GNOME helper ("), ("),可以到「扩展」App 里手动删", "); you can remove it in the Extensions app"), ("图片处理库", "Image library"), ("Pillow 在", "Pillow is installed"),
     ("没装 Pillow,看画面拿不到截图、按位置点不了;装:", "Pillow isn't installed, so seeing a window gives no screenshot and tapping by position won't work; install: "), ("借真鼠标键盘", "Real mouse/keyboard"),
     (";第一版只在 GNOME + Wayland 上测过", "; the first version is only tested on GNOME + Wayland"),
-    # 11-21 C-3.3 接入前的环境提醒 + Python 那行
+    # 接入前的环境提醒 + Python 那行
     (";要 3.10 以上,先升级 Python", "; SeeU needs 3.10 or later, please upgrade Python"),
     ("⚠️ 先说一声:这台电脑不完全满足 SeeU Linux 预览版的要求", "⚠️ Heads-up: this computer doesn't fully meet the SeeU Linux preview's requirements"),
     ("   接入照常做;运行 python3 -m seeu 检查 能看全哪些没齐。", "   Connecting goes ahead anyway; run python3 -m seeu check to see everything that's missing."),

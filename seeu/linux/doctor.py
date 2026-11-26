@@ -4,8 +4,8 @@ import os
 import sys
 
 
-from seeu.linux.lang import say as print, tx  # noqa: E402, A001   打印给人看的走中英文(11-18 C-3.0)
-from seeu.linux import distro  # noqa: E402   装软件命令按 apt / dnf 分(11-21 C-3.4)
+from seeu.linux.lang import say as print, tx  # noqa: E402, A001   打印给人看的走中英文
+from seeu.linux import distro  # noqa: E402   装软件命令按 apt / dnf 分
 
 GRANT_WAIT = 120    # 检查 --fix 第一次要截图授权时,等用户点「允许」的上限(秒)
 
@@ -22,7 +22,7 @@ def _line(ok, name, msg):
 
 
 def env_warnings():
-    """不满足 Linux 预览版要求的地方(11-21 C-3.3 用户要:接入时先说一声,别等跑检查才知道)。返回给人看的句子(中文,打印时自动转英文)。
+    """不满足 Linux 预览版要求的地方(接入时先说一声,别等跑检查才知道)。返回给人看的句子(中文,打印时自动转英文)。
     只看环境变量和 Python 版本,不碰屏幕、不连系统服务,接入 / 检查前都能放心调。"""
     from seeu.linux import shell
     out = []
@@ -73,7 +73,7 @@ def main(argv=()):
     except Exception as ex:   # noqa: BLE001
         good &= _line(False, "辅助功能接口", f"用不了({ex});装:{distro.install_cmd('atspi')}")
     # Qt(KDE 一系)、Electron(VS Code 这类)、Chrome 只在系统「辅助功能总开关」开着时才把控件交出来(GTK 一直交);
-    # 开屏幕阅读器时系统打开的也是它(11-18 实测:没开时 FeatherPad、VS Code 一个控件都读不到)。改完那些程序要重开才生效
+    # 开屏幕阅读器时系统打开的也是它(实测:没开时 FeatherPad、VS Code 一个控件都读不到)。改完那些程序要重开才生效
     on = _a11y_on()
     if fix and on is False:
         _a11y_set(True)
@@ -98,7 +98,7 @@ def main(argv=()):
                           + (";是旧版,借鼠标和代理光标要新版:运行 python3 -m seeu 检查 --fix,再注销重新登录一次" if old else ""))
         else:
             good &= _line(False, "GNOME 小插件", shell.why_missing() + ("" if fix or "--fix" in shell.why_missing() else "(运行 python3 -m seeu 检查 --fix)"))
-    # 11-21 C-3.4:Debian 13 默认没装 Pillow,截完图裁不了 → 看画面只有清单没有截图、按位置点全报「还没截图」
+    # Debian 13 默认没装 Pillow,截完图裁不了 → 看画面只有清单没有截图、按位置点全报「还没截图」
     try:
         import PIL   # noqa: F401
         good &= _line(True, "图片处理库", "Pillow 在")
@@ -106,7 +106,7 @@ def main(argv=()):
         good &= _line(False, "图片处理库", "没装 Pillow,看画面拿不到截图、按位置点不了;装:" + distro.install_cmd("pil"))
     try:
         from seeu.linux import shot
-        # 11-22 C-3.6(Fedora 43 实测):原来一律只等 6 秒,用户第一次看到「允许应用截图吗?」来不及点,程序已经退了,
+        # Fedora 43 实测:原来一律只等 6 秒,用户第一次看到「允许应用截图吗?」来不及点,程序已经退了,
         # 点了「允许」系统也不记,下次又弹 → --fix 且还没允许过时,先说一声、最多等 2 分钟(跟远程操作那步一样等用户点完)
         wait = shot_wait(fix, shot._granted())
         if wait > 6:

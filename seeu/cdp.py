@@ -1,6 +1,6 @@
-"""SeeU · 调试端口(Chrome DevTools Protocol,公开协议)(C-1.0,10-25 用户拍板「那就做吧」)
+"""SeeU · 调试端口(Chrome DevTools Protocol,公开协议)
 
-网页壳 App(Electron / CEF:VS Code、GitHub Desktop、Chatbox…)和隐身 Chrome 走这条路:**全程藏着**也能读、写、按快捷键(10-25 实测)。
+网页壳 App(Electron / CEF:VS Code、GitHub Desktop、Chatbox…)和隐身 Chrome 走这条路:**全程藏着**也能读、写、按快捷键。
 只给 **SeeU 专用那份**:单独配置(`~/.seeu/cdp/<短名>`)带参数拉起,随机端口、只绑 127.0.0.1,起来马上藏 + 前台还回去,干完 quit 关端口。
 🔴 用户自己开着的那份不碰(接不上,也不提供「帮你关掉重开」):调用方走老办法(辅助功能 → 后台打字 → 需要时借前台,结果里如实说)。
 
@@ -16,12 +16,12 @@
 通用的读/点/填走 seeu.web(see/tap/type… 自动排第一条路「调试端口」,复用插件同款 pageSnapshot/pageAct/pageRead)。
 命令行:python3 -m seeu.cdp list | status | restart <App> | quit <App>
 
-约定(SeeU-相关要点 10-25 两节):
+约定:
 - Python 自己实现 WebSocket(标准库),不依赖 Node / 第三方包。
 - 被叫出来就停手:launch 会开 stealth 的看门狗(同隐身浏览器);之后这里所有动作抛 CDPError(code=called_out)。
 - 安全底线:打字查 safety.check_text、快捷键查 safety.check_keys;Claude、终端类不拉起;VS Code 焦点在内置终端时不打字不按键。
 - 坑:Electron 拉起会抢前台(open -g 拦不住)→ 一出窗口就按 pid 藏、前台还回去;VS Code 配置路径要短(socket 路径超长一启动就退);
-  🔴 别直接跑 App 里的可执行文件查版本(`Code --version` 会把 GUI 用用户自己的配置拉起来,10-25 踩过)。
+  🔴 别直接跑 App 里的可执行文件查版本(`Code --version` 会把 GUI 用用户自己的配置拉起来,踩过)。
 """
 import base64
 import hashlib
@@ -38,7 +38,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from seeu.web import WebError
-from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
 DIR = home("cdp")
 APP_DIRS = ("/Applications", os.path.expanduser("~/Applications"))
@@ -46,7 +46,7 @@ CALL_TIMEOUT = 15        # 一次调用最多等几秒(无人值守:必须有上
 LAUNCH_WAIT_S = 40
 QUIT_WAIT_S = 15
 SHORT = {"Visual Studio Code": "code", "GitHub Desktop": "ghd", "Chatbox": "chatbox", "Google Chrome": "chrome"}
-# 测过的(10-25):VS Code 读写保存、GitHub Desktop / Chatbox 端口能开读页面;其余没试,有的 App 会禁掉这个参数
+# 测过的:VS Code 读写保存、GitHub Desktop / Chatbox 端口能开读页面;其余没试,有的 App 会禁掉这个参数
 TESTED = {"Visual Studio Code": "藏着读/写/保存 ✅", "GitHub Desktop": "藏着读页面 ✅", "Chatbox": "藏着读页面 ✅",
           "Google Chrome": "隐身 Chrome ✅"}
 # 能同时开两份的(单独配置互不影响);别的 App 用户开着就不拉(单实例锁可能把参数转给用户那份、把它叫到前台)
@@ -395,7 +395,7 @@ def _has_window(pid):
 def _front():
     try:
         import AppKit
-        # 11-06:先让事件循环跑 20ms 再问。没有事件循环的程序里 NSWorkspace 会一直返回第一次查到的旧值,
+        # 先让事件循环跑 20ms 再问。没有事件循环的程序里 NSWorkspace 会一直返回第一次查到的旧值,
         # 「前台被抢了就还回去」就永远以为没被抢(seeu_lib.input_guard.frontmost_app 同款做法)。
         AppKit.NSRunLoop.currentRunLoop().runUntilDate_(AppKit.NSDate.dateWithTimeIntervalSinceNow_(0.02))
         return AppKit.NSWorkspace.sharedWorkspace().frontmostApplication()
@@ -428,7 +428,7 @@ def _check_allowed(app, path):
         b = _plist(path).get("CFBundleIdentifier", "")
     except Exception:
         pass
-    if b and b in safety.host_bundles():       # 10-31:只拦正在运行 SeeU 的那个,别的 AI App 可以操作
+    if b and b in safety.host_bundles():       # 只拦正在运行 SeeU 的那个,别的 AI App 可以操作
         raise CDPError(f"{app} 是正在运行 SeeU 的程序,安全底线不碰(防 AI 自己批准自己)", "refused")
     if app in safety.TERMINALS or b in safety.TERMINALS.values():
         raise CDPError(f"{app} 是终端,安全底线不碰", "refused")
@@ -646,7 +646,7 @@ def page_fn(h, fn, args, tab=None):
     if r is None:
         raise CDPError("网页脚本没回话(页面可能正在跳转)", "script")
     if isinstance(r, dict) and r.get("__err"):
-        raise CDPError(*aejs.page_err(r))      # 11-23 C-3.9:网页说的话不当 SeeU 的提示(见 aejs.page_err)
+        raise CDPError(*aejs.page_err(r))      # 网页说的话不当 SeeU 的提示(见 aejs.page_err)
     return r
 
 
@@ -664,7 +664,7 @@ def wait_loaded(h, tab, timeout=10.0):
 
 
 def open_tab(h, url):
-    """后台开新标签页,返回页面 id。🔴 Chrome 开新标签一定会露一下窗口(10-25 试了 createTarget background / hidden、
+    """后台开新标签页,返回页面 id。🔴 Chrome 开新标签一定会露一下窗口(试了 createTarget background / hidden、
     window.open 带不带手势四种,只有 hidden 不露但连接一断标签就没了)→ 看门狗暂停、开完马上藏、前台还回去。
     不想露:用 navigate(h, tab, url) 在已有标签里跳转(实测不露)。"""
     _check(h)
@@ -704,7 +704,7 @@ KEYS = {"enter": ("Enter", "Enter", 13, "\r"), "return": ("Enter", "Enter", 13, 
         "home": ("Home", "Home", 36, ""), "end": ("End", "End", 35, ""),
         "page_up": ("PageUp", "PageUp", 33, ""), "page_down": ("PageDown", "PageDown", 34, "")}
 KEYS.update({f"f{i}": (f"F{i}", f"F{i}", 111 + i, "") for i in range(1, 13)})
-# 11-07:工具说明里写的是不带下划线的写法(跟 bgkey 一样),原来在这条路上报「不认识的键」
+# 工具说明里写的是不带下划线的写法(跟 bgkey 一样),原来在这条路上报「不认识的键」
 KEYS.update({"forwarddelete": KEYS["forward_delete"], "pageup": KEYS["page_up"], "pagedown": KEYS["page_down"]})
 
 
@@ -732,10 +732,10 @@ def _not_terminal(h, s):
         raise CDPError("VS Code 的焦点在内置终端里,往里打字等于能执行任何命令,SeeU 不碰(这一步请你自己来)", "refused")
 
 
-# 11-07 C-1.1.4(复查留下的):焦点在内嵌框(iframe)里时,外层页面的 activeElement 只是那个框本身,原来就当成普通元素放行了
+# 焦点在内嵌框(iframe)里时,外层页面的 activeElement 只是那个框本身,原来就当成普通元素放行了
 # (支付的银行卡框、第三方登录框多半嵌在 iframe 里)。现在:同一个网站的内嵌框 → 钻进去接着看;
 # 别的网站的内嵌框(里面不让看)→ 只能看框自己的名字 / 地址 / 权限,像密码、登录、支付、验证的就拦。认不出的照旧放行(嵌进来的编辑器、播放器要能用)。
-# 词表(11-07 独立复查后重写):
+# 词表(独立复查后重写):
 #   _FW_WORD 要独立成词(前后不挨着字母):短词和容易撞的词(auth 撞 author、pay 撞 payload、card 撞 discard、log in 撞 blog index…);
 #   _FW_ANY  出现就算:够长、不容易撞的词和中文。
 #   地址只看主机名 + 路径:问号后面常带着本页网址(评论框、播放器的 origin=…),本页地址里有 password / pay 会把无关的框全拦了。
@@ -743,7 +743,7 @@ _FW_WORD = (r"log[-_ ]?[io]n|sign[-_ ]?(?:in|on|up)|auth(?:n|z|enticat\w*|oriz\w
             r"|pay(?:ments?|pal|s)?|accounts?|challenge|cards?|card[-_ ]?number|bank\w*|identity")
 _FW_ANY = (r"pass(?:word|wd|code|phrase)|pwd|oauth|verif|captcha|secure|checkout|billing|credit[-_ ]?card"
            r"|(?:ali|wechat|apple|google|union)[-_ ]?pay"
-           # 11-07 第二轮复查:连写的名字(ptlogin_iframe、weblogin、loginframe)原来全漏;驼峰(loginIframe、paymentFrame)在判断前先拆开
+           # 连写的名字(ptlogin_iframe、weblogin、loginframe)原来全漏;驼峰(loginIframe、paymentFrame)在判断前先拆开
            r"|[a-z]login(?![a-z])|(?:^|[^a-z])login(?:i?frame|form|box|page|dialog|modal|popup|widget|wrap)|passport|cashier|tenpay"
            r"|密码|密碼|登录|登入|登錄|验证|驗證|认证|認證|口令|支付|付款|收银|银行|銀行|信用卡|卡号|卡號|账号|帐号|賬號|帳號")
 _FRAME_WORDS = "(?:^|[^a-z])(?:" + _FW_WORD + ")(?![a-z])|" + _FW_ANY
@@ -768,9 +768,9 @@ _SECRET_JS = ("(function(){var W=/" + _FRAME_WORDS + "/i,e=document.activeElemen
 
 
 def _chrome_guard(h, s, enters=True):
-    """调试端口上按键 / 打字之前(11-06 体检:原来这两个动作不查名单、不查密码框,
+    """调试端口上按键 / 打字之前(原来这两个动作不查名单、不查密码框,
     名单外网站的表单有焦点时按回车就提交了):隐身 Chrome 当前页不在允许名单(I See 没开)→ 拒;焦点在密码 / 验证码 / 银行卡框 → 拒。
-    11-07 复查,跟 act.press 对齐:①密码框这一条只管「往框里放东西 / 改它 / 提交它」的键(enters,规则见 safety.key_enters),
+    跟 act.press 对齐:①密码框这一条只管「往框里放东西 / 改它 / 提交它」的键(enters,规则见 safety.key_enters),
     Tab、Esc、方向键放行 —— 原来任何键都拒,登录页一打开光标就在密码框里时连离开都做不到;
     ②网页壳 App(VS Code 这类,不是 Chrome)原来完全不查,现在同样查(只认得出标准写法的密码框,词表比插件窄)。"""
     if h.app == "Google Chrome":
@@ -833,7 +833,7 @@ def key(h, k, *mods, tab=None):
     name, code, vk, text = _key_spec(k)
     m = 0
     for x in safety.norm_mods(mods):
-        if x not in MOD:            # 11-06:原来不认识的修饰键静默忽略,跟安全检查看到的不是同一套
+        if x not in MOD:            # 原来不认识的修饰键静默忽略,跟安全检查看到的不是同一套
             return dict(outcome="failed", route="调试端口", reason=f"不认识的修饰键:{x}(只认 cmd / shift / alt / ctrl)")
         m |= MOD[x]
     _step(h, "按键")
@@ -914,7 +914,7 @@ def vscode_open(h, path):
     """在 SeeU 专用那份里打开一个文件(快速打开 ⌘P → 粘路径 → 回车,全程藏着)。"""
     path = os.path.abspath(os.path.expanduser(path))
     r = key(h, "p", "cmd")
-    if r.get("outcome") in ("refused", "failed"):   # 11-06 体检:焦点在内置终端时 ⌘P 被拒,原来没看结果,接着把路径打进终端
+    if r.get("outcome") in ("refused", "failed"):   # 焦点在内置终端时 ⌘P 被拒,原来没看结果,接着把路径打进终端
         raise CDPError(r.get("reason") or "快速打开没按出来", r.get("code") or "refused")
     time.sleep(0.5)
     with session(h) as s:

@@ -2,7 +2,7 @@
 """SeeU Linux 版 · 安全底线(硬拦,写死、不留开关;跟 Mac / Windows 版同一套口径)。
 
 不管谁下的指令(包括网页上藏的字、AI 自己的判断),这几类一律不做,抛 Refused(动作层报 refused「这一步请你自己来」):
-  0. 🔴 锁屏 / 屏保时什么都不做(Linux 新加:11-18 实测 Cua Driver 锁屏时照样能后台写字、点按钮)。
+  0. 🔴 锁屏 / 屏保时什么都不做(Linux 新加:实测 Cua Driver 锁屏时照样能后台写字、点按钮)。
   1. 危险打字内容:下载后直接运行、sudo / pkexec、删整个硬盘 / 家目录、格式化、抹盘、fork 炸弹。
   2. 终端类程序(GNOME 终端 / Console / Ptyxis、Konsole、xterm、kitty…):不看、不点、不写字。
   3. 系统权限 / 密码弹窗:管理员授权框(polkit)、钥匙环密码框、GPG 密码框、系统的授权确认框(截图、远程操作…由
@@ -37,7 +37,7 @@ def norm_key(key):
 def norm_mods(mods=()):
     if isinstance(mods, str):
         mods = [mods]
-    # 11-23 C-3.9 整体复查:空串不算修饰键(AI 传 [""] 时别被下面「不认识的修饰键」误拦)
+    # 空串不算修饰键(AI 传 [""] 时别被下面「不认识的修饰键」误拦)
     return [MOD_ALIAS.get(str(m).strip().lower(), str(m).strip().lower()) for m in mods or () if str(m).strip()]
 
 
@@ -59,7 +59,7 @@ KNOWN_MODS = {"ctrl", "alt", "shift", "super"}
 
 
 def check_keys(key, mods=()):
-    """11-23 C-3.9 整体复查:原来按「修饰键集合正好等于」判,多写一个就绕过(ctrl+alt+shift+delete;ctrl+alt+fn+delete 里
+    """原来按「修饰键集合正好等于」判,多写一个就绕过(ctrl+alt+shift+delete;ctrl+alt+fn+delete 里
     不认识的 fn 真按时被丢掉,按出去就是 Ctrl+Alt+Delete)。改成:不认识的修饰键直接拒;危险组合按「包含」判。"""
     k, m = norm_key(key), set(norm_mods(mods))
     unknown = sorted(m - KNOWN_MODS)
@@ -103,12 +103,12 @@ TERMINALS = {
     "qterminal": "QTerminal", "mate-terminal": "MATE 终端", "guake": "Guake", "tilda": "Tilda", "blackbox": "Black Box",
     "cosmic-term": "COSMIC 终端", "warp": "Warp", "warp-terminal": "Warp", "ghostty": "Ghostty", "hyper": "Hyper",
     "tabby": "Tabby", "deepin-terminal": "深度终端", "terminology": "Terminology", "st": "st", "urxvt": "urxvt", "rxvt": "rxvt",
-    # 11-20 复查补:名单外的终端
+    # 复查补:名单外的终端
     "sakura": "Sakura", "roxterm": "ROXTerm", "cool-retro-term": "cool-retro-term", "contour": "Contour", "rio": "Rio",
     "yakuake": "Yakuake", "mlterm": "mlterm", "eterm": "Eterm", "aterm": "aterm", "zutty": "Zutty", "st-256color": "st",
     "extraterm": "Extraterm", "termite": "Termite", "kermit": "Kermit", "xiterm": "xiterm", "lilyterm": "LilyTerm",
 }
-# 11-20 复查:名单外的终端兜底 —— 名字 / 窗口类里带 terminal、console,或以 term 结尾(xterm、roxterm、cool-retro-term…)
+# 名单外的终端兜底 —— 名字 / 窗口类里带 terminal、console,或以 term 结尾(xterm、roxterm、cool-retro-term…)
 _TERM_RX = re.compile(r"terminal|(^|[-_. ])console($|[-_. ])|term$", re.I)
 TERMINAL_CLASSES = {"org.gnome.terminal", "org.gnome.console", "org.gnome.ptyxis", "org.kde.konsole", "xterm", "kitty",
                     "alacritty", "org.wezfurlong.wezterm", "foot", "com.gexperts.tilix", "terminator", "xfce4-terminal",
@@ -175,7 +175,7 @@ def why_not(win):
     """win = window.info() 的结果。不能碰返回原因,能碰返回 None。"""
     names = {n.lower() for n in [win.get("comm") or "", os.path.basename(win.get("exe") or "")] if n}
     cls = {(win.get("wm_class") or "").lower(), (win.get("app_id") or "").lower()} - {""}
-    alias = {str(n).lower() for n in (win.get("names") or []) if n}      # 11-20 复查:程序菜单里的名字、桌面文件名也比
+    alias = {str(n).lower() for n in (win.get("names") or []) if n}      # 程序菜单里的名字、桌面文件名也比
     for n in names | cls | alias:
         if n in TERMINALS:
             return f"「{TERMINALS[n]}」是终端,往里打字等于能执行任何命令"
@@ -198,7 +198,7 @@ def why_not(win):
 
 
 def check_control(e):
-    """11-20 复查:程序里嵌着的终端面板(GNOME Builder、Geany、Kate…)控件角色是 terminal,不往里打字、不按键、不点。"""
+    """程序里嵌着的终端面板(GNOME Builder、Geany、Kate…)控件角色是 terminal,不往里打字、不按键、不点。"""
     if e is not None and (e.get("role") or "") == "terminal":
         raise Refused("这是程序里嵌着的终端,往里打字等于能执行任何命令,SeeU 不碰(这一步请你自己来)")
 
@@ -213,18 +213,18 @@ def check_unlocked():
     """锁屏 / 屏保时一律不做。"""
     from seeu.linux import shell
     if shell.locked():
-        # 11-25 C-4.2:刚装好小插件、还没重新登录时也走到这里(logind 明说没锁)→ 照旧不动手,但说真正的原因
+        # 刚装好小插件、还没重新登录时也走到这里(logind 明说没锁)→ 照旧不动手,但说真正的原因
         if shell.not_loaded():
             raise Refused(shell.why_missing())
         raise Refused("屏幕锁着(或屏保开着),SeeU 什么都不做;等你解锁后再说")
 
 
-# ---------------------------------------------------------------- 菜单(11-18 C-3.0,照 Mac safety.check_menu)
+# ---------------------------------------------------------------- 菜单(照 Mac safety.check_menu)
 # Mac 那份 + Linux 多两样:注销 / 挂起 / 关机这类会话菜单;「运行 / 执行」(FeatherPad 这类编辑器的「Run」直接把文件当程序跑)
 BLOCKED_MENU = re.compile(r"清[空倒]废纸篓|[清倒]空?垃圾桶|清空回收站|立即[删刪]除|永久删除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|锁屏|关机|關機|"
                           r"挂起|休眠|强制退出|強制結束|\b(Empty (the )?(Trash|Bin)|Delete (Immediately|Permanently)|"
                           r"Log ?Out|Lock Screen|Shut ?Down|Power Off|Suspend|Hibernate|Force Quit)\b", re.I)
-# 11-23 C-4.0 Fable 复查:「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
+# 「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
 # 「Restart Kernel」「Restart Language Server」「重启服务」这类程序自己的按钮不算;英文词加词边界(「Design Outline」里的 sign out 不算)
 BLOCKED_RESTART = re.compile(r"^\s*(重新启动|重新開機|重启|Restart|Reboot)(\s*(Now|Computer|电脑|计算机|系统))?\s*(\(&?[A-Za-z]\))?\s*(\.{3}|…)?\s*$|"
                              r"\bUpdate and restart\b|更新并重启", re.I)
@@ -232,7 +232,7 @@ RUN_MENU = re.compile(r"^\s*(run|execute|运行|執行|执行)\b", re.I)
 
 
 def check_menu(path, run=True):
-    """run=False:只查危险词、不查「运行」(第二轮复查:列表项里叫 run.sh 的文件会被误伤)。"""
+    """run=False:只查危险词、不查「运行」(列表项里叫 run.sh 的文件会被误伤)。"""
     for p in path:
         t = str(p)
         if BLOCKED_MENU.search(t) or BLOCKED_RESTART.search(t):

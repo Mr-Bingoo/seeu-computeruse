@@ -1,6 +1,6 @@
 """探一下某个 App 能不能用 SeeU 自动化:python3 -m seeu 探一下 <App>   (英文别名 probe;MCP 工具 seeu_probe)
 
-只读,不点、不打字、不切前台(11-01 做,开源前补齐的第 4 项)。一次看完:
+只读,不点、不打字、不切前台。一次看完:
   装在哪、版本、是不是在跑;安全底线碰不碰;内核(原生 / 浏览器 / 网页壳 Electron·CEF / 截图认字类);
   有没有 AppleScript 字典、URL scheme;在跑的话再看:开着哪些窗口、辅助功能能读到几个控件 / 几个输入框、后台能不能截到图;
   最后给一句「SeeU 会走哪条路」。网页壳要看穿一层:有的把 Chromium 埋在 Contents/Helpers 里,顶层 Frameworks 是空的。
@@ -82,7 +82,7 @@ def _plist(path):
 def _shell_kind(path):
     """(内核, 是否藏得深);不是网页壳返回 (None, False)。
     先按框架名认(cdp.kind,只看顶层 Frameworks);认不出再往里找 Chromium 的通用特征「… Helper (Renderer).app」——
-    11-01 豆包实测:Chromium 改名叫「Doubao Browser Framework」、埋在 Contents/Helpers/Doubao Browser.app 里,按名字认不出。"""
+    豆包实测:Chromium 改名叫「Doubao Browser Framework」、埋在 Contents/Helpers/Doubao Browser.app 里,按名字认不出。"""
     from seeu import cdp
     k = cdp.kind(path)
     if k:

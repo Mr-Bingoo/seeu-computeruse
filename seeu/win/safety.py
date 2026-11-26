@@ -9,8 +9,8 @@
   4. 存密码的程序(1Password、Bitwarden、KeePass…):不看、不点、不打字。
   5. 正在运行 SeeU 的程序本身(往上找父进程;跟 Mac 版一样只拦这一个):防 AI 自己批准自己。
   6. 资源管理器里 Shift+Delete(不进回收站直接删)。
-  7. 名字是「清空回收站 / 关机 / 注销 / 重启 / 永久删除…」的按钮、菜单项:不点(check_menu,11-23)。
-  8. 锁屏(或屏保 / 系统授权框占着屏幕)时什么都不做(check_unlocked,11-23)。
+  7. 名字是「清空回收站 / 关机 / 注销 / 重启 / 永久删除…」的按钮、菜单项:不点(check_menu)。
+  8. 锁屏(或屏保 / 系统授权框占着屏幕)时什么都不做(check_unlocked)。
   另:密码框里不打字、不按会改内容的键(key_enters,跟 Mac 版同一条规则)。
 系统限制附带的保护:以管理员身份运行的窗口,普通进程发不进去消息,SeeU 不提权,所以本来就碰不到。
 """
@@ -65,7 +65,7 @@ _STAY_CTRL = {"a", "c", "v", "x", "z", "y", "insert"}      # 带 Ctrl 也还留�
 
 
 def moves_focus(key, mods=()):
-    """这个键按完,光标可能已经不在原来那个输入框里了(11-23 C-3.9 整体复查)。
+    """这个键按完,光标可能已经不在原来那个输入框里了。
     Tab / Shift+Tab、Esc、F1~F20(F6 跳到地址栏),和别的带 Ctrl / Alt 的快捷键(Ctrl+L、Alt+D、Ctrl+Tab、Ctrl+F…)算;
     方向键、Home / End、翻页、删除、空格、普通字符只在框里动,不算。回车不算(聊天框、多行框里回车后还在原来的框)。"""
     k, m = norm_key(key), set(norm_mods(mods))
@@ -189,7 +189,7 @@ def host_pids():
     return _HOST[0]
 
 
-# 11-23 C-3.9 整体复查(用户定):开始菜单 / 任务栏搜索框打程序名回车就能直接启动程序(跟「运行」框一样)→ 整个不碰
+# 开始菜单 / 任务栏搜索框打程序名回车就能直接启动程序(跟「运行」框一样)→ 整个不碰
 SEARCH_APPS = {"searchhost.exe": "Windows 搜索", "searchapp.exe": "Windows 搜索", "searchui.exe": "Windows 搜索",
                "startmenuexperiencehost.exe": "开始菜单"}
 
@@ -198,11 +198,11 @@ def why_not(win):
     """win = window.info() 的结果。不能碰返回原因,能碰返回 None。"""
     e = (win.get("exe") or "").lower()
     title = win.get("title") or ""
-    if win.get("class") in ("SeeUFloat", "SeeUGlow"):   # 11-13:SeeU 自己的浮标、光圈不碰(浮标上有只能用户亲手点的 I See 按钮)
+    if win.get("class") in ("SeeUFloat", "SeeUGlow"):   # SeeU 自己的浮标、光圈不碰(浮标上有只能用户亲手点的 I See 按钮)
         return "这是 SeeU 自己的浮标,上面的按钮只能用户亲手点"
     if e in TERMINALS:
         return f"「{TERMINALS[e]}」是命令行程序,能直接运行任何命令"
-    if win.get("class") in CONSOLE_CLASSES:     # 11-15 复查:WSL 发行版、商店版 Python 这类,程序名不在名单里,窗口类是命令行窗口
+    if win.get("class") in CONSOLE_CLASSES:     # WSL 发行版、商店版 Python 这类,程序名不在名单里,窗口类是命令行窗口
         return "这是命令行窗口,能直接运行任何命令"
     if e in SYSTEM_APPS:
         return f"「{SYSTEM_APPS[e]}」是系统权限相关的界面"
@@ -226,14 +226,14 @@ def check_window(win):
 
 
 # ---------------------------------------------------------------- 危险名字的按钮 / 菜单项
-# 11-23 C-3.9 整体复查:按编号 / 按名字点按钮、菜单项、列表项之前查名字(原来 Windows 完全没查;照 Mac safety.check_menu 的词表
-# 和 Linux 11-20 的做法)。Windows 的叫法补上:清空回收站、注销 / Sign out / Log off、永久删除、休眠。
+# 按编号 / 按名字点按钮、菜单项、列表项之前查名字(原来 Windows 完全没查;照 Mac safety.check_menu 的词表
+# 和 Linux 的做法)。Windows 的叫法补上:清空回收站、注销 / Sign out / Log off、永久删除、休眠。
 # 没照搬 Linux 的「运行 / Run」那条:Windows 上编辑器的「运行」菜单太常见,规则照 Mac(Mac 没有这条)。
 BLOCKED_MENU = re.compile(r"清空回收站|清[空倒]废纸篓|[清倒]空?垃圾桶|立即[删刪]除|永久[删刪]除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|锁屏|"
                           r"关机|關機|休眠|强制退出|強制結束|"
                           r"\b(Empty (the )?(Recycle Bin|Trash|Bin)|Delete (Immediately|Permanently)|Permanently delete|"
                           r"Log ?Out|Log ?Off|Sign ?out|Lock Screen|Shut ?Down|Power Off|Hibernate|Force Quit)\b", re.I)
-# 11-23 C-4.0 Fable 复查:「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
+# 「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
 # 「Restart Kernel」「Restart Language Server」「重启服务」这类程序自己的按钮不算;英文词加词边界(「Design Outline」里的 sign out 不算)
 BLOCKED_RESTART = re.compile(r"^\s*(重新启动|重新開機|重启|Restart|Reboot)(\s*(Now|Computer|电脑|计算机|系统))?\s*(\(&?[A-Za-z]\))?\s*(\.{3}|…)?\s*$|"
                              r"\bUpdate and restart\b|更新并重启", re.I)
@@ -253,9 +253,9 @@ def check_menu(path, exe=""):
 
 
 # ---------------------------------------------------------------- 锁屏
-# 11-23 C-3.9 整体复查:原来没有锁屏检查(Mac / Linux 都有)。锁屏、屏保(要密码的)、管理员授权框(UAC)出来时,
+# 原来没有锁屏检查(Mac / Linux 都有)。锁屏、屏保(要密码的)、管理员授权框(UAC)出来时,
 # 接收键盘鼠标的「输入桌面」不是平时那个 Default:普通程序打不开它(拒绝访问),或打开了名字不是 Default。
-# 🔴 判断出错一律当「没锁」(免得把正常使用卡死)。真机还没验过(见 11-23 复查清单 A8)。
+# 🔴 判断出错一律当「没锁」(免得把正常使用卡死)。真机还没验过。
 ERROR_ACCESS_DENIED = 5
 
 
@@ -299,10 +299,10 @@ def check_unlocked():
 
 
 # ---------------------------------------------------------------- 资源管理器地址栏
-# 11-23 C-3.9 整体复查(虚拟机实测 + 用户定):资源管理器地址栏跟「运行」框一样,打程序名 / 命令回车会直接运行。
+# 虚拟机实测:资源管理器地址栏跟「运行」框一样,打程序名 / 命令回车会直接运行。
 # 先借鼠标点进地址栏、再借真键盘打字回车,SeeU 打得进去。规则:地址栏里只打「已经存在的文件夹路径」(%变量% 先展开),
 # 回车前也看地址栏里现在是不是已有的文件夹;别的(程序名、命令、带参数的、网址)一律不打不按。认不出焦点在哪 = 按地址栏算。
-# 11-23 C-4.0 Fable 复查:原来只要名字里带「地址」就算(文件「地址簿.txt」被误当地址栏);英文 Win10 面包屑叫「Address: C:\Users」没认出来
+# 原来只要名字里带「地址」就算(文件「地址簿.txt」被误当地址栏);英文 Win10 面包屑叫「Address: C:\Users」没认出来
 ADDRESS_NAME = re.compile(r"^(地址栏|地址|Address( bar| band)?)\s*$|^(地址|Address)\s*[:：]", re.I)
 NOT_FOLDER = "资源管理器地址栏里只打已有文件夹的路径(打程序名、命令回车会直接运行),SeeU 不打(这一步请你自己来)"
 NOT_FOLDER_ENTER = "资源管理器地址栏里现在不是已有文件夹的路径,回车会直接运行里面的东西,SeeU 不按(这一步请你自己来)"

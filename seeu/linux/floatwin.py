@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版悬浮标(11-18 SeeU C-3.0):胶囊 ↔ 卡片 ↔ 多任务岛、按钮栏(灯光 / I See / 原因 / 看画面 / 收起)、能点能拖、
+"""SeeU Linux 版悬浮标:胶囊 ↔ 卡片 ↔ 多任务岛、按钮栏(灯光 / I See / 原因 / 看画面 / 收起)、能点能拖、
 看画面拉边缩放、借鼠标变橙、屏幕四周光圈 —— 样子和规则跟 Mac / Windows 同一套。
 
 分工(Wayland 下普通程序不能自己摆一个置顶、不抢前台的窗口,只能画在 GNOME Shell 里):
@@ -112,7 +112,7 @@ def mark(fx, fy, wid=0):
         send("mark", float(fx), float(fy), int(wid or 0))
 
 
-# ───────── 信号是谁发的(11-23 C-3.9 整体复查)─────────
+# ───────── 信号是谁发的 ─────────
 # 「手按」(real=true)是小插件用 FloatEvent 信号报上来的。小插件不在时(锁屏、被停用)org.seeu.SeeU 这个名字谁都能占,
 # 占了发一条假的 real=true 就能开 I See。所以每条信号都核对发送方是不是 gnome-shell,两条路过一条就认:
 #   ① 问总线它的进程号,那个进程的程序文件名字是 gnome-shell、归 root、别人改不了(普通程序造不出这样的文件);
@@ -716,7 +716,7 @@ def serve():
     def sig_cb(_conn, _sender, _path, _iface, _name, params):
         try:
             kind, x, y, real = params.unpack()
-            # 11-23 C-3.9 整体复查:real 只在发信号的确实是 gnome-shell 时才认(别的程序占了名字发的假信号 → 当不是手按)
+            # real 只在发信号的确实是 gnome-shell 时才认(别的程序占了名字发的假信号 → 当不是手按)
             real = bool(real) and sender_is_shell(_sender, pid_of, owner_of)
             on_event(kind, float(x), float(y), real)
         except Exception as ex:   # noqa: BLE001
@@ -742,7 +742,7 @@ def serve():
             pass
 
     def tick():
-        """11-23 C-3.9 整体复查:原来 tick 里(frame() 等)一抛错,GLib 就把这个定时回调摘掉 → 悬浮标冻在屏幕上、再也不动。
+        """原来 tick 里(frame() 等)一抛错,GLib 就把这个定时回调摘掉 → 悬浮标冻在屏幕上、再也不动。
         现在整个包起来:出错记日志、照常返回 True;连着错超过 3 秒就先让小插件把悬浮标藏了(恢复后下一帧自己再画出来)。"""
         try:
             tick_body()
@@ -806,7 +806,7 @@ def serve():
     SERVING = True
     loop = GLib.MainLoop()
     GLib.timeout_add(16, tick)
-    # 11-23 C-3.9 整体复查:被 kill(SIGTERM)/ 终端关掉(SIGHUP)/ Ctrl+C 时也走下面的 finally,把悬浮标藏了再退
+    # 被 kill(SIGTERM)/ 终端关掉(SIGHUP)/ Ctrl+C 时也走下面的 finally,把悬浮标藏了再退
     # (原来直接死,最后一帧留在屏幕上)。被强杀(SIGKILL)拦不了,靠小插件自己「多久没新帧就藏」。
     try:
         import signal

@@ -1,5 +1,5 @@
-"""一键接入 / 移除 SeeU(MCP + Skill)。10-30 第一版,支持 Codex、Claude(Claude Code 和桌面版 Code 页共用一份设置);
-11-01 加 Cursor、Trae、VS Code(Copilot):这三家没有命令,直接改它们的 mcp.json(只加/删 seeu 这一条,别的不动)。
+"""一键接入 / 移除 SeeU(MCP + Skill)。第一版,支持 Codex、Claude(Claude Code 和桌面版 Code 页共用一份设置);
+加 Cursor、Trae、VS Code(Copilot):这三家没有命令,直接改它们的 mcp.json(只加/删 seeu 这一条,别的不动)。
 
     python3 -m seeu 接入                 # 看哪家已接
     python3 -m seeu 接入 自动            # 认出是哪家 AI 在运行这条命令就接哪家(给 AI 自己装用)
@@ -10,7 +10,7 @@
 
 做的事:找到那家的命令 → 备份设置 → 用那家自带的命令接 MCP → 装 Skill(没装过才装)→ 试连 → 查授权、说清授给谁。
 记录放 ~/.seeu/seeu_接入.json,备份放 ~/.seeu/seeu_接入备份/。
-🔴 `codex mcp add/remove` 会重写整份 config.toml(打乱顺序、丢空的 args = [],10-30 实测),所以移除时设置没被别人改过就整份拿备份恢复。
+🔴 `codex mcp add/remove` 会重写整份 config.toml(打乱顺序、丢空的 args = [],实测),所以移除时设置没被别人改过就整份拿备份恢复。
 """
 import hashlib
 import re
@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 import time
-from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SERVER = os.path.join(HERE, "mcp_server.py")
@@ -35,7 +35,7 @@ CLIENTS = {
     "claude": dict(label="Claude", cmd="claude", app="Claude", config="~/.claude.json", skills="~/.claude/skills",
                    get="https://claude.com/claude-code(装好后终端里能运行 claude)"),
 }
-# 11-01 实测的三家:没有命令行,接入 = 往 mcp.json 里加一条。root = 放服务的键(VS Code 叫 servers,别家 mcpServers)。
+# 实测的三家:没有命令行,接入 = 往 mcp.json 里加一条。root = 放服务的键(VS Code 叫 servers,别家 mcpServers)。
 # apps = 认 App 用的 .app 名(按顺序找第一个装了的);config 跟着 App 走。授权对象 = 系统设置里显示的名字。
 JSON_CLIENTS = {
     "cursor": dict(label="Cursor", apps={"Cursor": "~/.cursor/mcp.json"}, root="mcpServers",
@@ -66,8 +66,8 @@ def system_python(exe=None):
 
 
 def _python():
-    """写进设置的 Python:系统那个是 /usr/bin/python3 转到 Xcode / 命令行工具里的真身,真身路径升级就变 → 写入口那个(10-30 实测)。
-    11-23 C-3.9 整体复查:装了 Homebrew / pyenv / conda 的 Mac,终端里的 python3 不是系统那个;README 第 1 步把库装进了系统 Python,
+    """写进设置的 Python:系统那个是 /usr/bin/python3 转到 Xcode / 命令行工具里的真身,真身路径升级就变 → 写入口那个。
+    装了 Homebrew / pyenv / conda 的 Mac,终端里的 python3 不是系统那个;README 第 1 步把库装进了系统 Python,
     这里却把 Homebrew 的写进客户端 → 连得上、真用时缺库,「检查」给的命令又是已经跑过的那条,绕不出来。
     Mac 上一律写系统那个(插件启动器、README、检查给的命令都是它)。"""
     exe = sys.executable
@@ -86,7 +86,7 @@ def _p(s):
 
 def _toml_norm(path, drop=None):
     """粗略把 toml 拆成 {(节, 键): 值},不管顺序;空 args、120 / 120.0 这类写法差别抹平。drop = 不比较的节(如 SeeU 自己那节)。
-    10-31 Codex App 实测:接入后 App 会把整份设置重排一遍,按逐字比就误判成「用户改过」,不敢整份还原。"""
+    Codex App 实测:接入后 App 会把整份设置重排一遍,按逐字比就误判成「用户改过」,不敢整份还原。"""
     out, sec = {}, ""
     try:
         lines = open(path, encoding="utf-8").read().splitlines()
@@ -246,7 +246,7 @@ def _auth_hint(key):
         _p(f"   ❌ {who} 缺:{'、'.join(miss)}(运行 python3 -m seeu 检查 看怎么开)")
     else:
         _p(f"   ✅ {who} 的辅助功能、屏幕录制都开了")
-    # 10-31 实测:授权跟着系统认的「负责进程」走,每种用法各不相同(见 接入说明-AI客户端.md)
+    # 实测:授权跟着系统认的「负责进程」走,每种用法各不相同
     if key == "claude":
         _p("   ⚠️ 在别处用时授权给的不是同一个:Claude 客户端 Code 页 →「claude」(客户端自带的那个,小写);"
            "聊天页 →「SeeU」(SeeU 小程序,首次会自己出现在列表里);终端里用 claude 命令 → 那个终端")
@@ -369,7 +369,7 @@ def _entry(key):
 
 
 def _stop_running(app):
-    """停掉这家 App 拉起的 SeeU。11-01 实测:三家都察觉不到设置被删,拉起的 SeeU 一直挂着,要停掉才算移除干净。
+    """停掉这家 App 拉起的 SeeU。实测:三家都察觉不到设置被删,拉起的 SeeU 一直挂着,要停掉才算移除干净。
     认法:命令行里有 mcp_server.py 的进程,系统记的「负责进程」在这个 .app 里(跟授权同一套)。"""
     try:
         import ctypes
@@ -425,7 +425,7 @@ def install_json(key):
     _save(st)
     n = probe()
     _p(f"④ 试连一次 {'✅ 能连上,' + str(n) + ' 个工具' if n else '❌ 连不上(运行 python3 -m seeu mcp 看报错)'}")
-    _p(f"⑤ 授权:在 {c['label']} 里用时,系统把授权算在「{app}」头上(11-01 实测)。"
+    _p(f"⑤ 授权:在 {c['label']} 里用时,系统把授权算在「{app}」头上(实测)。"
        f"\n   系统设置 → 隐私与安全性 → 辅助功能、屏幕与系统录音 → 都打开「{app}」,开完 ⌘Q 重开 {c['label']}。"
        f"\n   (新版 macOS 英文界面里「辅助功能」叫 Device Control and Data Access)"
        f"\n   也可以先不开:在 {c['label']} 里让它调一次 seeu_check,缺什么它会照原话告诉你。")
@@ -436,7 +436,7 @@ def install_json(key):
 
 def _mine(rec, text):
     """设置里这条叫 seeu 的是不是这份 SeeU 接的:有接入记录,或内容里指着这份的 mcp_server.py。
-    11-06 体检 C4:原来没有接入记录也照删,可能删掉用户手配的、或另一份 SeeU 接的那条。"""
+    原来没有接入记录也照删,可能删掉用户手配的、或另一份 SeeU 接的那条。"""
     return bool(rec) or SERVER in str(text)
 
 
@@ -506,7 +506,7 @@ def uninstall(key):
         return 0
     cfg = os.path.expanduser(c["config"])
     found_scope, none_there = None, False
-    if not rec:                             # 11-06 体检 C4:没有接入记录 → 先看那条是不是指着这份 SeeU,不是就不删
+    if not rec:                             # 没有接入记录 → 先看那条是不是指着这份 SeeU,不是就不删
         try:
             code, out = _run([c["cmd"], "mcp", "get", NAME], timeout=60)
         except Exception as ex:             # 查不出来(超时等):没有记录又看不清是谁的,就不删
@@ -540,10 +540,10 @@ def uninstall(key):
                 return 1
             _p("· MCP 已拿掉" + ("。接入后你改过别的设置,所以没整份恢复;顺序可能被打乱,内容没变" if rec else ""))
     else:
-        # 11-07 C-1.1.4(复查留下的):没有接入记录时原来把 user、local 两个范围各删一遍 —— 查到并核对过的只有 get 显示的那一条,
+        # 没有接入记录时原来把 user、local 两个范围各删一遍 —— 查到并核对过的只有 get 显示的那一条,
         # 另一个范围里同名的可能是用户手配的。现在:有记录按记录的范围;没记录按 get 显示的范围;
         # 范围认不出就不带范围删(只有一处时照删;两处同名时 claude 自己会停下来让选,不会多删)。
-        # 11-07 独立复查后补:①记录里没写范围(老记录)也先问一次 get;②删完再问一次,别的范围里还有一条也指着这份 SeeU 就接着删
+        # 独立复查后补:①记录里没写范围(老记录)也先问一次 get;②删完再问一次,别的范围里还有一条也指着这份 SeeU 就接着删
         #   (最多三个范围),不是这份的不碰;③删失败而且不是「本来就没有」→ 明说没拿掉、返回 1、接入记录留着。
         cwd = rec.get("cwd") or None
 
@@ -561,7 +561,7 @@ def uninstall(key):
         for _ in range(0 if none_there else 3):
             code, out = _run(["claude", "mcp", "remove"] + (["-s", scope] if scope else []) + [NAME], cwd=cwd)
             if code != 0:
-                # 11-07 第二轮复查:带范围删时 claude 的说法是「No user-scoped MCP server found …」这类,各版本还不一样;
+                # 带范围删时 claude 的说法是「No user-scoped MCP server found …」这类,各版本还不一样;
                 # 认不出说法时不猜,再问一次:设置里已经没有指着这份 SeeU 的那条了,就当「本来就没有」照旧走完
                 # (不然用户自己先删过的话,这里报没拿掉、记录留着,「接入」又说先移除,两头走不通)。
                 if done or _GONE_RE.search(out) or ask() is None:
@@ -591,12 +591,12 @@ QIANWEN_HOW = ("千问(5.2 起)的设置不在文件里,要在它界面上加一
 
 
 def write_pointer():
-    """11-15 C-2.0:留一张「SeeU 装在这儿」的纸条,给 npm 启动包 seeu-computeruse 找(千问只认 npx 启动命令)。
+    """留一张「SeeU 装在这儿」的纸条,给 npm 启动包 seeu-computeruse 找(千问只认 npx 启动命令)。
     内容:用哪个 Python、服务在哪。接入 / 每次服务启动都写一次(装的位置挪了也能跟上)。写不了就算了。"""
     try:
         from seeu.where import as_plugin
         if as_plugin():
-            # 11-23 复查:插件版不写。纸条是给千问的 npx 启动包找 git 版用的;插件版一写,千问就被改去跑插件缓存里那份
+            # 插件版不写。纸条是给千问的 npx 启动包找 git 版用的;插件版一写,千问就被改去跑插件缓存里那份
             # (换了设置文件),插件一更新旧缓存被删,千问直接启动失败
             return
     except Exception:   # noqa: BLE001

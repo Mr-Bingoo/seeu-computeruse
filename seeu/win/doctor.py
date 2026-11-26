@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Windows 版 · 检查(11-14,照 Mac 版 seeu/doctor.py):一条命令看这台电脑上 SeeU 能不能用、缺什么,缺的写怎么补。
+"""SeeU Windows 版 · 检查(照 Mac 版 seeu/doctor.py):一条命令看这台电脑上 SeeU 能不能用、缺什么,缺的写怎么补。
 
     python -m seeu 检查        (英文 check / doctor)
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU 多任务调度(11-17 C-2.5,方案见 SeeU-多任务调度设计.md 第一步)。
+"""SeeU 多任务调度。
 
 几个任务(各个 AI 会话 / 程序)同时用 SeeU 时:
   - 第 ② 层「App 占用」:同一个 App 一次只让一个任务动手(Mac 一个 App 只有一个焦点,交错点 / 打字会写串窗口)。
@@ -27,12 +27,12 @@ STALE_CHANGE = 0.03    # 排队期间目标窗口画面变了这么多(像素占
 RECENT_S = 60.0        # 「同时在用 SeeU 的任务」按最近这么久动过算
 POLL_S = 0.15
 BUSY_MAX_S = 120.0     # 「正在做」超过这么久没报到(见 BEAT_S)当卡死,清掉(某个动作挂住时别把 App 一直占着)
-BEAT_S = 20.0          # 11-17 C-2.8:动作做得久(打很长一段字)时,每这么久报一次「还在做」,别被别人当卡死插进来
+BEAT_S = 20.0          # 动作做得久(打很长一段字)时,每这么久报一次「还在做」,别被别人当卡死插进来
 BUSY_HARD_S = 600.0    # 报到最多报这么久;一个动作超过它就不再报,再过 BUSY_MAX_S 被当卡死清掉
 FLOCK_WAIT_S = 5.0     # 等状态文件锁最多这么久;拿不到就不排(放行),不让整个 SeeU 卡住
 STALE_BOX_PT = 80      # 防过时只比点击点附近这么大一块(点),画面别处一直在动(镜像、视频)不算
 SAMPLES_MAX = 5 * 1024 * 1024
-FOCUS_KEEP_S = 600.0   # 「谁最后动过这个 App 的焦点」记多久(外部评审 11-17 第 1 条)
+FOCUS_KEEP_S = 600.0   # 「谁最后动过这个 App 的焦点」记多久
 QUEUE_GONE_S = 20.0    # 排队的人这么久没报到(每秒报一次)就当已经走了;要远比 FLOCK_WAIT_S 长(等状态锁、排队前截图时报不了到)
 SEEN_EVERY_S = 1.0
 RELEASE_TRIES = 2      # 做完让出拿不到状态锁时再试几次(每次最多 FLOCK_WAIT_S 秒)
@@ -74,7 +74,7 @@ def me():
     return tid, name
 
 
-# 光标颜色(用户 11-17 在小样里定「鲜明」):第 0 个是 SeeU 紫;其余跟紫、借鼠标橙、卡住红都拉开
+# 光标颜色(「鲜明」):第 0 个是 SeeU 紫;其余跟紫、借鼠标橙、卡住红都拉开
 PALETTE = ("#7F77DD", "#2F8BEF", "#13A3A6", "#2FA866", "#E2609C", "#8AA62C", "#A97650", "#5F7F99")
 
 
@@ -92,7 +92,7 @@ def _color_for(st, tid, base):
     used = {v for t, v in cols.items() if t != tid}
     if tid in cols:
         if cols[tid] != 0 and 0 not in used:
-            cols[tid] = 0          # 复查 11-17:别的任务都走了 → 换回 SeeU 紫(名牌也会写回 SeeU,颜色跟着统一)
+            cols[tid] = 0          # 别的任务都走了 → 换回 SeeU 紫(名牌也会写回 SeeU,颜色跟着统一)
         return cols[tid]
     if 0 not in used:
         k = 0
@@ -172,7 +172,7 @@ def cursor_hex(default=None):
     """光标颜色的 "#RRGGBB"(灵动岛圆点用,跟光标一致;0 号走设置里的后台模式颜色)。"""
     if default is None:
         try:
-            if LINUX:                # 11-18 C-3.0:Linux 读设置里的后台模式颜色(别去导入 Mac 的 act)
+            if LINUX:                # Linux 读设置里的后台模式颜色(别去导入 Mac 的 act)
                 from seeu.linux import real as _lr
                 h = _lr.color("bg").lstrip("#")
                 default = tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
@@ -189,7 +189,7 @@ def cursor_wait(on):
     if os.environ.get("SEEU_NO_CURSOR"):
         return
     try:
-        if LINUX:                    # 11-18 C-3.0:Linux 的光标画在 GNOME 小插件里
+        if LINUX:                    # Linux 的光标画在 GNOME 小插件里
             from seeu.linux import shell as _sh
             _sh.cursor_wait(cursor_key(), on)
             return
@@ -205,11 +205,11 @@ def cursor_wait(on):
 
 
 WIN = sys.platform == "win32"
-LINUX = sys.platform.startswith("linux")    # 11-18:Linux 预览版;11-19 C-3.1 起普通程序也排队,按窗口分(同 Windows,见 _linux_key)
+LINUX = sys.platform.startswith("linux")    # Linux 预览版;普通程序也排队,按窗口分(同 Windows,见 _linux_key)
 
 
 def _alive(pid):
-    """进程还在不在。🔴 Windows 上不能用 os.kill(pid, 0):那是 TerminateProcess,会把对方直接杀掉(11-17 C-2.6)。"""
+    """进程还在不在。🔴 Windows 上不能用 os.kill(pid, 0):那是 TerminateProcess,会把对方直接杀掉。"""
     try:
         pid = int(pid)
     except Exception:
@@ -316,7 +316,7 @@ def _load():
 
 
 def _sane(st):
-    """复查 11-17(C-2.7):文件能解析但字段类型不对(写坏一半、别的版本写的)→ 坏的那一项重置,别让 _purge 每次都抛错、调度一直失效。"""
+    """文件能解析但字段类型不对(写坏一半、别的版本写的)→ 坏的那一项重置,别让 _purge 每次都抛错、调度一直失效。"""
     for k in ("apps", "recent", "focus", "names", "colors"):
         v = st.get(k)
         if not isinstance(v, dict):
@@ -339,7 +339,7 @@ def _save(st):
     tmp = p + f".{os.getpid()}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(st, f, ensure_ascii=False)
-    for i in range(10):         # 复查 11-17 C-2.6:Windows 上别的进程正开着它读时 os.replace 报拒绝访问 → 有上限地重试
+    for i in range(10):         # Windows 上别的进程正开着它读时 os.replace 报拒绝访问 → 有上限地重试
         try:
             os.replace(tmp, p)
             return
@@ -365,7 +365,7 @@ def _purge(st, now):
         if not a.get("busy") and a.get("until", 0) < now:
             del st["apps"][k]
     for k, q in list(st["queue"].items()):
-        # 复查 11-17(C-2.7):排队的人每秒报一次到(seen),QUEUE_GONE_S 没报到当已经走了(退出排队没写成功时,别挡住后面的人)
+        # 排队的人每秒报一次到(seen),QUEUE_GONE_S 没报到当已经走了(退出排队没写成功时,别挡住后面的人)
         # 没有 seen 的(老版本的 SeeU 写的)不按报到清,只按进程 / 等太久清(用户常不重开客户端,新老混跑)
         q[:] = [e for e in q if _alive(e.get("pid", 0)) and now - e.get("t", now) < WAIT_APP_S + 30
                 and ("seen" not in e or now - e["seen"] < QUEUE_GONE_S)]
@@ -376,7 +376,7 @@ def _purge(st, now):
     st["names"] = {t: v for t, v in st.get("names", {}).items() if t in st["recent"] or t in busy}
     st["colors"] = {t: v for t, v in st.get("colors", {}).items() if t in st["recent"] or t in busy}
     # 焦点记录:过期的、记录主人的进程已经结束的都不算 —— 一次性命令行进程(pid: 任务);
-    # 复查 11-17(C-2.7):AI 会话(mcp:<进程号>)关掉 / 客户端重开后,旧会话的记录也不算,不然新会话第一下打字就被「自己」拦住
+    # AI 会话(mcp:<进程号>)关掉 / 客户端重开后,旧会话的记录也不算,不然新会话第一下打字就被「自己」拦住
     st["focus"] = {k: v for k, v in st.get("focus", {}).items() if now - v.get("t", 0) < FOCUS_KEEP_S
                    and not _tid_dead(v.get("tid", ""))}
 
@@ -398,10 +398,10 @@ WEB_KEY = "web:"        # Windows 专用浏览器的占用键前缀(win/web.py)
 
 
 def _win_key(app):
-    """Windows 按窗口分(11-17 C-2.6):Windows 打字、点击直投目标窗口,不同窗口互不干扰;同一个窗口才要排队。
+    """Windows 按窗口分:Windows 打字、点击直投目标窗口,不同窗口互不干扰;同一个窗口才要排队。
     键 = 「程序名#窗口号」,同一个窗口不管写成 notepad / 记事本 / #窗口号 都对得上。找不到窗口就按写法本身。"""
     a = str(app or "").strip()
-    if a.startswith(WEB_KEY):             # 11-17 C-2.8:SeeU 专用浏览器(调试端口,没有可找的窗口)按浏览器名排
+    if a.startswith(WEB_KEY):             # SeeU 专用浏览器(调试端口,没有可找的窗口)按浏览器名排
         return a
     now = time.time()
     hit = _WKEY.get(a)
@@ -421,7 +421,7 @@ def _win_key(app):
 
 
 def _linux_key(app):
-    """Linux 按窗口分(11-19 C-3.1,照 Windows):按控件点、往控件里写字都直投那个窗口的控件,不同窗口互不干扰;同一个窗口才排队。
+    """Linux 按窗口分(照 Windows):按控件点、往控件里写字都直投那个窗口的控件,不同窗口互不干扰;同一个窗口才排队。
     键 = 「程序名#窗口号」,gnome-text-editor / 文本编辑器 / #窗口号 都对得上。找不到窗口(小插件不在、没开)就按写法本身。"""
     a = str(app or "").strip()
     if a.startswith(WEB_KEY):
@@ -465,7 +465,7 @@ def _key(app):
     if str(app or "").startswith(WEB_KEY):
         return str(app or "").strip()
     from seeu import bgclick as bg
-    try:      # 11-23 C-3.9 整体复查:原来只有 AI 工具入口把名字归一,命令行 / import 写 TextEdit、AI 那边被换成「文本编辑」→ 成了两个占用键、
+    try:      # 原来只有 AI 工具入口把名字归一,命令行 / import 写 TextEdit、AI 那边被换成「文本编辑」→ 成了两个占用键、
         from seeu import ax          # 不排队(中文系统);「iPhone镜像」也对不上设备锁的英文名。在算键的地方统一归一(归一过的再归一不变)
         app = ax.canon_name(app)
     except Exception:
@@ -510,7 +510,7 @@ def acquire(app, on_wait=None, wait_max=None):
     pid = os.getpid()
     wait_max = WAIT_APP_S if wait_max is None else wait_max
     t0 = time.time()
-    info = {"waited": 0.0, "ahead": 0, "holder": None, "key": key}   # 复查 11-17 C-2.6:release 用这个键,别重算(Windows 窗口顺序变了 / 被关掉会算出别的)
+    info = {"waited": 0.0, "ahead": 0, "holder": None, "key": key}   # release 用这个键,别重算(Windows 窗口顺序变了 / 被关掉会算出别的)
     queued = False
     holder = None
     while True:
@@ -518,7 +518,7 @@ def acquire(app, on_wait=None, wait_max=None):
         try:
             got = _turn(key, tid, name, pid, now, t0, info, queued, d)
         except Congested:
-            # 外部评审 11-17(C-2.6):状态锁拿不到 = 调度太挤,放行正好违背调度的目的 → 一律按忙,说法跟「某任务占着」分开
+            # 状态锁拿不到 = 调度太挤,放行正好违背调度的目的 → 一律按忙,说法跟「某任务占着」分开
             if queued:
                 _leave(key, tid, tries=1)    # 已经挤了 5 秒,别再多等;没删掉的靠报到超时清
             info["waited"] = round(time.time() - t0, 1)
@@ -527,7 +527,7 @@ def acquire(app, on_wait=None, wait_max=None):
         except Exception:
             if not queued:
                 raise                       # 状态文件读写坏了(不是挤):还没排进队就放行,别因为调度挡住所有动作
-            _leave(key, tid)                # 复查 11-17:排过队再出错不能放行(别人可能正占着),按忙处理
+            _leave(key, tid)                # 排过队再出错不能放行(别人可能正占着),按忙处理
             info["waited"] = round(time.time() - t0, 1)
             raise Busy(f"调度状态读写卡住,排队中断(等了 {info['waited']:.0f} 秒),这次没做;稍后再试", info)
         if got:
@@ -538,7 +538,7 @@ def acquire(app, on_wait=None, wait_max=None):
             if on_wait:
                 try:
                     import inspect
-                    if inspect.signature(on_wait).parameters:   # 复查 11-17:按签名判断,别拿 TypeError 猜(会把里面的错当老写法再调一次)
+                    if inspect.signature(on_wait).parameters:   # 按签名判断,别拿 TypeError 猜(会把里面的错当老写法再调一次)
                         on_wait(dict(info))
                     else:
                         on_wait()
@@ -596,7 +596,7 @@ def _turn(key, tid, name, pid, now, t0, info, queued, d):
             info["waited"] = round(now - t0, 2)
             fo = st.get("focus", {}).get(key)
             if fo and fo.get("tid") != tid:
-                info["focus_by"] = fo.get("name") or "?"     # 外部评审 11-17:在你上一步之后,别的任务动过这个 App 的焦点
+                info["focus_by"] = fo.get("name") or "?"     # 在你上一步之后,别的任务动过这个 App 的焦点
             return True
         if not any(e.get("tid") == tid for e in q):
             q.append({"tid": tid, "name": name, "pid": pid, "t": now, "seen": time.time()})
@@ -610,7 +610,7 @@ def _turn(key, tid, name, pid, now, t0, info, queued, d):
         old = st["recent"].get(tid) or {}
         if now - old.get("t", 0) > 2.0 or old.get("name") != name:
             st["recent"][tid] = {"t": now, "name": name}
-        if json.dumps(st, sort_keys=True, ensure_ascii=False) != s0:     # 外部评审 11-17:排队中没变化就不写(每 0.15 秒写一次,任务多了锁更挤)
+        if json.dumps(st, sort_keys=True, ensure_ascii=False) != s0:     # 排队中没变化就不写(每 0.15 秒写一次,任务多了锁更挤)
             _save(st)
         return False
 
@@ -618,7 +618,7 @@ def _turn(key, tid, name, pid, now, t0, info, queued, d):
 def release(app, key=None, focus=False, keep=True):
     """动完一步:不马上放,接着占 LEASE_S 秒(同一任务的下一步直接用),到点自动让出。key = acquire 返回的 info["key"]。
     focus=True:这一步会动这个 App 的焦点(点、打字、按键、菜单、开 App…),记成「它最后动过焦点」。
-    keep=False:这一步被拦下、什么都没做(focus_moved / stale)→ 马上让出,不接着占(11-17 C-2.8:原来白让排队的人多等约 6 秒)。"""
+    keep=False:这一步被拦下、什么都没做(focus_moved / stale)→ 马上让出,不接着占(原来白让排队的人多等约 6 秒)。"""
     key = key or _key(app)
     d = _depthmap()
     if d.get(key, 0) > 1:
@@ -631,7 +631,7 @@ def release(app, key=None, focus=False, keep=True):
     focus = focus or key in inner
     _local.focus = inner - {key}
     tid, _ = me()
-    for _ in range(RELEASE_TRIES):    # 复查 11-17(C-2.7):挤的时候没写成功,App 会被白挡到 BUSY_MAX_S → 再试一次
+    for _ in range(RELEASE_TRIES):    # 挤的时候没写成功,App 会被白挡到 BUSY_MAX_S → 再试一次
         try:
             with _flock():
                 st = _load()
@@ -650,7 +650,7 @@ def release(app, key=None, focus=False, keep=True):
 
 @contextlib.contextmanager
 def _beat(key):
-    """11-17 C-2.8:占着 App 做一个动作期间,每 BEAT_S 秒把「正在做」的开始时间刷成现在,别人不会因为做得久(超过 BUSY_MAX_S)
+    """占着 App 做一个动作期间,每 BEAT_S 秒把「正在做」的开始时间刷成现在,别人不会因为做得久(超过 BUSY_MAX_S)
     把它当卡死清掉、插进来串字。最多报 BUSY_HARD_S 秒;不是自己占着了就停。出错不管(不影响动作)。"""
     stop = threading.Event()
     try:
@@ -695,9 +695,9 @@ class Stale(Exception):
 
 @contextlib.contextmanager
 def hold(app, pt=None):
-    """外部评审 11-17 第 1 条:几步要连着做、中间不让别的任务插进来(点输入框 + 打字)时,整段占着。
+    """几步要连着做、中间不让别的任务插进来(点输入框 + 打字)时,整段占着。
     yield 占用信息;排不上抛 Busy(调用方报 busy);调度自己出错就不占(跟单步一样放行)。里面的动作按嵌套算,不再各自排队。
-    pt = 要按位置点的屏幕点(按编号点传 None):排队超过 STALE_AFTER_S 才轮到、这期间画面变了 / 窗口挪了 → 抛 Stale(复查 11-17 C-2.7)。
+    pt = 要按位置点的屏幕点(按编号点传 None):排队超过 STALE_AFTER_S 才轮到、这期间画面变了 / 窗口挪了 → 抛 Stale。
     排队时光标打瞌睡、灵动岛显示排队(跟单步一样)。"""
     if os.environ.get("SEEU_NO_SCHED"):
         yield None
@@ -732,7 +732,7 @@ def hold(app, pt=None):
             with _beat(info.get("key")):
                 yield info
     finally:
-        release(app, key=info.get("key"), keep=not stale)    # 11-17:防过时拦下 = 什么都没做,马上让出。复查 11-17(C-2.7):焦点记录交给里面真动过手的那几步(嵌套时记下,这里一起写)
+        release(app, key=info.get("key"), keep=not stale)    # 防过时拦下 = 什么都没做,马上让出。焦点记录交给里面真动过手的那几步(嵌套时记下,这里一起写)
 
 
 def mark_focus(app):
@@ -753,11 +753,11 @@ def mark_focus(app):
         pass
 
 
-DEVICE_APPS = ("iPhone Mirroring", "BlueStacks")      # 状态全局、会留下来的设备画面(外部评审 11-17 第 4 条)
+DEVICE_APPS = ("iPhone Mirroring", "BlueStacks")      # 状态全局、会留下来的设备画面
 
 
 def device_busy(app):
-    """外部评审 11-17 第 4 条:镜像 / 模拟器正被别的项目(用户自己的自动化程序)按桌面锁占着 → 返回给 AI 的原因;没占着返回 None。
+    """镜像 / 模拟器正被别的项目(用户自己的自动化程序)按桌面锁占着 → 返回给 AI 的原因;没占着返回 None。
     只读查锁(seeu_lib.desktop_lock.status),不改协议;SeeU 自己借鼠标拿的锁不算。只在 Mac 上查(Windows / Linux 上没有这些项目)。"""
     if WIN or LINUX:
         return None
@@ -773,7 +773,7 @@ def device_busy(app):
         return None
     if str(cur.get("label", "")).startswith("SeeU") or int(cur.get("pid") or 0) == os.getpid():
         return None
-    # 复查 11-17(C-2.7):原来只查 AI 走工具(mcp:)的,走命令行(没写项目名)的 AI 能绕过 → 也查。放过的只有:
+    # 原来只查 AI 走工具(mcp:)的,走命令行(没写项目名)的 AI 能绕过 → 也查。放过的只有:
     # 写了项目名的程序调用(设了 SEEU_PROJECT;锁上写的项目名常跟它对不上,锁可能正是它自己拿的),
     # 或者拿锁的进程是自己的上级
     if _own_lock(cur):
@@ -815,7 +815,7 @@ DEVICE_WHY = ("「{proj}」正在用 {app}(从 {ts} 起,{label}),这期间 SeeU 
               "这可能要好一阵(自动化程序跑一轮常要很久):先告诉用户,或先做别的事,别反复重试")
 FOCUS_WHY = ("在你上一步之后,别的任务(「{who}」)动过这个 App 的焦点,不带输入框直接{what}可能打进它点开的地方,这次没做。"
              "带上输入框的编号(target)再做一次(SeeU 会先点框再{what},中间不让别人插进来)")
-# 复查 11-17(C-2.7):seeu_press 没有 target 参数,不能叫 AI 带编号重试 → 先自己点一下(点完焦点就算你的)再按
+# seeu_press 没有 target 参数,不能叫 AI 带编号重试 → 先自己点一下(点完焦点就算你的)再按
 FOCUS_WHY_PRESS = ("在你上一步之后,别的任务(「{who}」)动过这个 App 的焦点,不带输入框直接按键可能打进它点开的地方,这次没做。"
                    "先用 seeu_tap 点一下要按键的地方(输入框或窗口),再按一次")
 
@@ -824,7 +824,7 @@ def active_tasks():
     """最近 RECENT_S 秒内动过的任务数、排队中的动作数(记录用,以后给悬浮标 / 任务窗口用)。"""
     try:
         try:
-            with _file_lock(".flock", 1.0, "busy"):     # 复查 11-17:在锁里读(Windows 上锁外开着文件会让别人的 os.replace 失败)
+            with _file_lock(".flock", 1.0, "busy"):     # 在锁里读(Windows 上锁外开着文件会让别人的 os.replace 失败)
                 st = _load()
         except RuntimeError:
             return 1, 0
@@ -923,7 +923,7 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
     positional(args, kwargs) → True 表示这次是按位置点:排队超过 STALE_AFTER_S 才轮到,先比画面,变了就不点。
     lease=False 只记录不占(看画面这类第 ③ 层动作);lease="focus" 浏览器里不占(点、滚动走网页脚本)。
     focus=True:这一步会动 App 的焦点,让出时记「它最后动过焦点」。focus_check(args, kwargs) → True 表示这次是往「当前焦点」里
-    打字 / 按键(没指定输入框):在你上一步之后别的任务动过焦点,就不做(外部评审 11-17 第 1 条)。"""
+    打字 / 按键(没指定输入框):在你上一步之后别的任务动过焦点,就不做。"""
     def deco(fn):
         import functools
 
@@ -935,7 +935,7 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
         def wrap(*args, **kwargs):
             if os.environ.get("SEEU_NO_SCHED"):
                 return fn(*args, **kwargs)
-            try:            # 复查 11-17:app 有默认值的(mirror_home)不传也要能调
+            try:            # app 有默认值的(mirror_home)不传也要能调
                 ba = sig.bind(*args, **kwargs)
                 ba.apply_defaults()
                 app = ba.arguments[first]
@@ -961,7 +961,7 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                     pos = positional(rest, kwargs) if positional else None
 
                     def on_wait(qinfo=None):
-                        _wait_show(app, True, qinfo)      # 11-17:排队中光标打瞌睡 + 变淡、灵动岛下段「排队中」
+                        _wait_show(app, True, qinfo)      # 排队中光标打瞌睡 + 变淡、灵动岛下段「排队中」
                         snap["waiting"] = True
                         if pos:
                             _snap_before(app, snap)
@@ -969,16 +969,16 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                         try:
                             info = acquire(app, on_wait=on_wait)
                         finally:
-                            if snap.get("waiting"):      # 复查 11-17(C-2.7):排上、排不上、调度出错都收(原来出错那条不收,挂 40 秒)
+                            if snap.get("waiting"):      # 排上、排不上、调度出错都收(原来出错那条不收,挂 40 秒)
                                 _wait_show(app, False)
-                    except Busy as ex:      # 复查 11-17:不是被拦,是暂时排不上 → 单独的 busy,AI 稍后重试
+                    except Busy as ex:      # 不是被拦,是暂时排不上 → 单独的 busy,AI 稍后重试
                         r = dict(outcome="busy", route=None, tried=[], png=None, reason=str(ex), code="busy",
                                  queue=ex.info)
                         return r
                     except Exception:
                         info = None          # 调度自己出错:放行,不挡动作
                 try:
-                    # 复查 11-17(C-2.7):写了项目名的程序(用户自己的自动化程序调 SeeU 打字)不查 —— 跟设备锁一样,程序自己的调用不拦
+                    # 写了项目名的程序(用户自己的自动化程序调 SeeU 打字)不查 —— 跟设备锁一样,程序自己的调用不拦
                     # 浏览器里点击走网页脚本、不登记焦点(见 _no_focus),按键也不查,不然照提示点了也解不开
                     if (info and info.get("focus_by") and not info.get("nested") and focus_check
                             and not str(me()[0]).startswith("proj:") and not _no_focus(app) and focus_check(rest, kwargs)):
@@ -1006,7 +1006,7 @@ def scheduled(action, positional=None, lease=True, focus=False, focus_check=None
                     return r
                 finally:
                     if use and info is not None:
-                        # 复查 11-17(C-2.7):真动过手才记「最后动过焦点」(被拦下、防过时没点、出错没做的不算,
+                        # 真动过手才记「最后动过焦点」(被拦下、防过时没点、出错没做的不算,
                         # 不然别的任务的插队保护会被它顶掉)
                         release(app, key=info.get("key"), focus=bool(focus) and isinstance(r, dict)
                                 and (_acted(r) or r.get("code") in ("wrong_window", "no_reply"))
@@ -1025,7 +1025,7 @@ ACTED = ("delivered", "unverified", "ineffective", "partial")    # 发出过事�
 
 
 def _acted(r):
-    """这一步有没有真往 App 里发过事件。11-23 C-3.9 整体复查:最后结果是 refused / failed,但前面某条路(后台点击)已经发过
+    """这一步有没有真往 App 里发过事件。最后结果是 refused / failed,但前面某条路(后台点击)已经发过
     —— 比如后台点了没看出变化、接着借真鼠标被拒 —— 焦点其实可能已经被挪了,也要记「动过焦点」,不然别的任务不带输入框打字会写进这个框。
     前面那条路是出错(error:)的也算:发完事件才抛错的分不出来,宁可多记(别的任务顶多被要求先点一下输入框)。"""
     if r.get("outcome") in ACTED:
@@ -1073,7 +1073,7 @@ def _win_rect(app):
 
 def _stale_why(app, snap, pt, info):
     """排队超过 STALE_AFTER_S 才轮到的按位置点:窗口挪过 / 改过大小,或点击处附近画面变了 → 返回原因(不点);否则 None。"""
-    # Linux 没有单窗口截图(被挡着截不到它本身)→ 只比窗口位置(11-19 C-3.1)
+    # Linux 没有单窗口截图(被挡着截不到它本身)→ 只比窗口位置
     if not ((snap.get("before") or snap.get("geo")) and info and info.get("waited", 0) >= STALE_AFTER_S):
         return None
     g0 = snap.get("geo")
@@ -1082,7 +1082,7 @@ def _stale_why(app, snap, pt, info):
             g1 = _win_rect(app)
         except Exception:
             g1 = None
-        if g1 and any(abs(a - b) > 2 for a, b in zip(g0, g1)):    # 复查 11-17(C-2.7):窗口挪了内容没变,原来比不出来、照旧位置点偏
+        if g1 and any(abs(a - b) > 2 for a, b in zip(g0, g1)):    # 窗口挪了内容没变,原来比不出来、照旧位置点偏
             return (f"排队等了 {info['waited']:.0f} 秒,这期间窗口挪动或改了大小,"
                     "按位置点可能点错;先看一眼(see)再点")
     changed = _changed(app, snap["before"], pt) if snap.get("before") else None
@@ -1100,7 +1100,7 @@ def _safe_key(app):
 
 
 def _act():
-    """act 模块:用 `python3 -m seeu.act` 跑时它是 __main__,别再导入一份(复查 11-17)。"""
+    """act 模块:用 `python3 -m seeu.act` 跑时它是 __main__,别再导入一份。"""
     name = "seeu.win.act" if WIN else ("seeu.linux.act" if LINUX else "seeu.act")
     m = sys.modules.get(name)
     if m is None:
@@ -1127,7 +1127,7 @@ def _changed(app, before_png, pt=None):
         if isinstance(pt, (tuple, list)) and len(pt) >= 2:
             try:                          # 换算不出点击处就比整张图(不跳过核对)
                 import cv2
-                g = _act()._geo(app)      # 复查 11-17:跟 shoot 截的是同一个窗口(多窗口时 main_window 可能挑别的)
+                g = _act()._geo(app)      # 跟 shoot 截的是同一个窗口(多窗口时 main_window 可能挑别的)
                 img = cv2.imread(after)
                 if g and img is not None and g.get("w"):
                     k = img.shape[1] / g["w"]
@@ -1159,7 +1159,7 @@ REAL_WHY = ("别的 SeeU 任务正在借用户的鼠标键盘,排队等了 {n:.0
 
 @contextlib.contextmanager
 def real_slot(wait_max=None):
-    """Windows 借真鼠标的「SeeU 任务之间排队」(11-17 C-2.6;Mac 用桌面锁 + real_wait)。一次只让一个 SeeU 任务借,
+    """Windows 借真鼠标的「SeeU 任务之间排队」(Mac 用桌面锁 + real_wait)。一次只让一个 SeeU 任务借,
     别的最多等 wait_max 秒(WAIT_REAL_S),等不到抛 Busy。进程死了锁自己放。yield 等了多少秒。"""
     wait_max = WAIT_REAL_S if wait_max is None else wait_max
     t0 = time.time()

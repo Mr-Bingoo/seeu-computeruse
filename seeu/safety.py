@@ -1,25 +1,25 @@
 # -*- coding: utf-8 -*-
-"""SeeU 安全底线:硬拦(C-0.9,10-25 用户定;参照 Codex、Cua/Hermes 的公开说明)。
+"""SeeU 安全底线:硬拦(参照 Codex、Cua/Hermes 的公开说明)。
 
 不管谁下的指令(包括网页上藏的字、AI 自己的判断),这几类一律不做,抛 Refused(= ax.AXRefused,SeeU 会报 refused「这一步请你自己来」):
   1. 危险快捷键:清空废纸篓、不进废纸篓直接删除、锁屏、注销、强制退出。
   2. 危险打字内容:下载后直接运行、sudo、删整个硬盘/家目录、抹盘、fork 炸弹。只拦明显危险的,普通 rm 不拦。
   3. 终端类 App(终端、iTerm2、Warp、Ghostty、kitty、Alacritty、WezTerm):不点、不打字、不按键。
-     11-06 加:脚本编辑器、自动操作(Automator)、快捷指令 —— 能直接运行脚本,同样不碰。
+     脚本编辑器、自动操作(Automator)、快捷指令 —— 能直接运行脚本,同样不碰。
   4. 系统权限 / 密码弹窗(「想要控制」授权框、管理员密码框、互联网 App 打开确认、辅助功能授权提示、指纹确认)
      和系统设置里的隐私与安全性 / 密码页面:不点、不打字。
-  4b. 存密码的 App(钥匙串访问、密码 App、1Password 等,10-30 加):不点、不打字。
-  5. 正在运行 SeeU 的程序本身(往上找父进程;10-31 用户定只拦这一个,别的 AI 桌面 App 照常能操作):
+  4b. 存密码的 App(钥匙串访问、密码 App、1Password 等):不点、不打字。
+  5. 正在运行 SeeU 的程序本身(往上找父进程;只拦这一个,别的 AI 桌面 App 照常能操作):
      不点、不打字(防 AI 自己批准自己)。Codex 命令行跑在终端里,第 3 条已拦。
-  6. SeeU 自己的悬浮窗 / 悬浮标 / 多任务岛(10-30 加):借真鼠标点之前查那个位置最上层,是它们(而且没在让路)就不点。
-     10-30 实测:不让路时真鼠标点得中按钮栏,能把 I See 点开 = AI 自己给自己放权。后台点击按名字找不到它们(只认普通窗口),不用拦。
+  6. SeeU 自己的悬浮窗 / 悬浮标 / 多任务岛:借真鼠标点之前查那个位置最上层,是它们(而且没在让路)就不点。
+     实测:不让路时真鼠标点得中按钮栏,能把 I See 点开 = AI 自己给自己放权。后台点击按名字找不到它们(只认普通窗口),不用拦。
   另:菜单里的「清空废纸篓 / 立即删除 / 退出登录 / 锁定屏幕 / 关机 / 重新启动」也拦(跟快捷键同一件事)。
-🔴 写死、不留开关(用户定:开关一留,AI 就可能被网页上的字骗去打开)。
-11-06 体检:快捷键先把键名 / 修饰键别名归一再查(backspace = delete、option = alt…);「看画面」(act.see)也过目标程序这一关;
+🔴 写死、不留开关(开关一留,AI 就可能被网页上的字骗去打开)。
+快捷键先把键名 / 修饰键别名归一再查(backspace = delete、option = alt…);「看画面」(act.see)也过目标程序这一关;
 系统设置读不到窗口标题时按拦处理(原来只查当前桌面上的窗口)。
 接在:bgclick._prepare / click、bgkey.press / type_unicode / type_physical、ax.press / type_text / set_text / menu、
 act._ladder(借真鼠标那条路也在里面)、web.type。直接调底层的程序(镜像、模拟器自动化)碰不到这几条。
-第 4 条的弹窗进程名只按公开资料写,除「想要控制」那个外都没实测(SeeU-相关要点 10-25 节)。
+第 4 条的弹窗进程名只按公开资料写,除「想要控制」那个外都没实测。
 """
 import os
 import re
@@ -45,10 +45,10 @@ BLOCKED_KEYS = {
 }
 
 
-# 11-06 体检:bgkey.KEYCODE 里 backspace / esc 跟 delete / escape 是同一个键,调试端口那条路修饰键还认 command / option…
+# bgkey.KEYCODE 里 backspace / esc 跟 delete / escape 是同一个键,调试端口那条路修饰键还认 command / option…
 # 原来按字面查表,换个叫法就绕开(backspace+cmd+shift = 清空废纸篓)→ 查表前一律归一成标准叫法。
 KEY_ALIAS = {"backspace": "delete", "esc": "escape", "del": "delete",
-             # 11-07:调试端口那条路(cdp.KEYS)的写法带下划线,归成同一个叫法
+             # 调试端口那条路(cdp.KEYS)的写法带下划线,归成同一个叫法
              "forward_delete": "forwarddelete", "page_up": "pageup", "page_down": "pagedown"}
 MOD_ALIAS = {"command": "cmd", "meta": "cmd", "super": "cmd", "win": "cmd", "⌘": "cmd",
              "option": "alt", "opt": "alt", "⌥": "alt",
@@ -72,14 +72,14 @@ def norm_mods(mods=()):
 
 
 _EDIT_KEYS = {"return", "enter", "delete", "forwarddelete", "space"}
-# 只挪光标 / 离开输入框、不改内容的键。多字符键名不在这里的一律当成「会改内容」(11-07 第二轮复查:
+# 只挪光标 / 离开输入框、不改内容的键。多字符键名不在这里的一律当成「会改内容」(
 # 调试端口那条路把向前删叫 forward_delete,原来按「在名单里才算」写,这个写法就漏了 —— 反过来写,键名再对不上也是往严的方向错)
 _NAV_KEYS = {"tab", "escape", "left", "right", "up", "down", "home", "end", "pageup", "pagedown"} | {f"f{i}" for i in range(1, 21)}
 _CTRL_MOVE = set("abefnplv")        # 系统输入框里 ⌃ + 这几个字母只挪光标 / 翻页;别的 ⌃ 字符键都会删字或插字(⌃H/D/K/O/T/Y、⌃' ⌃" ⌃/ …)
 
 
 def key_enters(key, mods=()):
-    """这个按键会不会往当前输入框里放东西、改它或提交它(11-07,密码框 / 验证码框里这些键不按;act.press 和 cdp.key 共用)。
+    """这个按键会不会往当前输入框里放东西、改它或提交它(密码框 / 验证码框里这些键不按;act.press 和 cdp.key 共用)。
     算:单个字符、空格;回车、删除(带不带 ⌘ / ⌃ 都算:⌘⌫ 删到行首,⌘↩ / ⌃↩ 常常也是提交);⌘V、⌘X、⌘Z(撤销 / 重做也改内容);
         ⌃ + 字符(只挪光标的那几个除外);⌥Tab(插入制表符);不认识的多字符键名。
     不算:Tab、Esc、方向键、Home / End、翻页键、F 键和别的 ⌘ 快捷键(关窗口、刷新、全选、复制…)—— 登录页常常一打开光标就在
@@ -128,17 +128,17 @@ TERMINALS = {
     "Terminal": "com.apple.Terminal", "iTerm2": "com.googlecode.iterm2", "Warp": "dev.warp.Warp-Stable",
     "Ghostty": "com.mitchellh.ghostty", "kitty": "net.kovidgoyal.kitty", "Alacritty": "org.alacritty",
     "WezTerm": "com.github.wez.wezterm",
-    # 11-06 体检补:
+    # 补充:
     "WarpPreview": "dev.warp.Warp-Preview", "Hyper": "co.zeit.hyper", "Tabby": "org.tabby",
 }
-# 11-06 C-1.1.3(二次复查第 6 条):能直接运行脚本 / 命令的系统自带 App,理由跟终端一样(往里打字、点「运行」= 执行任何命令)。
-# 按包名认(中文系统上名字是「脚本编辑器」「自动操作」「快捷指令」;包名 11-06 在本机核对过)。
+# 能直接运行脚本 / 命令的系统自带 App,理由跟终端一样(往里打字、点「运行」= 执行任何命令)。
+# 按包名认(中文系统上名字是「脚本编辑器」「自动操作」「快捷指令」;包名在本机核对过)。
 SCRIPT_APPS = {
     "com.apple.ScriptEditor2": "脚本编辑器(Script Editor)", "com.apple.Automator": "自动操作(Automator)",
     "com.apple.shortcuts": "快捷指令(Shortcuts)",
 }
 SCRIPT_APP_NAMES = {"Script Editor", "脚本编辑器", "Automator", "自动操作", "Shortcuts", "快捷指令"}   # 读不到包名时按名字兜底
-# 系统权限 / 密码弹窗(进程名;只有 UserNotificationCenter 那类「想要控制」10-25 真见过,其余按公开资料)
+# 系统权限 / 密码弹窗(进程名;只有 UserNotificationCenter 那类「想要控制」真见过,其余按公开资料)
 SYSTEM_PROMPTS = {
     "UserNotificationCenter": "系统授权弹窗",
     "SecurityAgent": "管理员密码框",
@@ -148,7 +148,7 @@ SYSTEM_PROMPTS = {
     "LocalAuthenticationRemoteService": "指纹 / 密码确认",
     "TCCAuthorizationPrompt": "系统授权弹窗",
 }
-# 10-30:存密码的 App(参考别家停手线时发现没拦)。钥匙串访问在 /System/Library/CoreServices/Applications/(macOS 26)
+# 存密码的 App(参考别家停手线时发现没拦)。钥匙串访问在 /System/Library/CoreServices/Applications/(macOS 26)
 PASSWORD_APPS = {
     "com.apple.keychainaccess": "钥匙串访问", "com.apple.Passwords": "密码 App",
     "com.1password.1password": "1Password", "com.agilebits.onepassword7": "1Password",
@@ -156,7 +156,7 @@ PASSWORD_APPS = {
     "com.callpod.keepermacapp": "Keeper", "com.lastpass.lastpassmacdesktop": "LastPass", "in.sinew.Enpass-Desktop": "Enpass",
 }
 SETTINGS_APPS = {"System Settings", "System Preferences", "系统设置", "系统偏好设置"}
-# 隐私与安全性本身 + 它下面各子页面(窗口标题只写子页面名,10-25 实测「Automation」)+ 密码、用户与群组、登录项
+# 隐私与安全性本身 + 它下面各子页面(窗口标题只写子页面名,实测「Automation」)+ 密码、用户与群组、登录项
 SETTINGS_PRIVATE = re.compile(r"隐私|安全|密码|自动化|辅助功能|屏幕(与系统)?录|完全磁盘|文件与文件夹|输入监控|开发者工具|App 管理|"
                               r"定位服务|通讯录|相机|麦克风|登录项|用户与群组|"
                               r"Privacy|Security|Password|Automation|Accessibility|Screen (& System Audio )?Recording|Full Disk|"
@@ -164,9 +164,9 @@ SETTINGS_PRIVATE = re.compile(r"隐私|安全|密码|自动化|辅助功能|屏�
                               r"Camera|Microphone|Login Items|Users (&|and) Groups|Device Control|Data Access|设备控制|数据访问|"
                               r"共享|Sharing", re.I)
 # 能调 SeeU 的 AI 桌面 App(名字沿用老的,cdp/doctor 在用):Claude;ChatGPT(本机 /Applications/ChatGPT.app 包名就是
-# com.openai.codex,10-30 查;老版 ChatGPT 是 com.openai.chat)
+# com.openai.codex;老版 ChatGPT 是 com.openai.chat)
 CLAUDE_BUNDLES = {"com.anthropic.claudefordesktop", "com.openai.codex", "com.openai.chat"}
-# 🔴 10-31 用户定:「工具是人在控制,工具不操作自己,但是可以操作其他」→ 任何 AI App(含 Claude、Codex)都不一律拦,
+# 🔴 「工具是人在控制,工具不操作自己,但是可以操作其他」→ 任何 AI App(含 Claude、Codex)都不一律拦,
 # 只拦「正在运行 SeeU 的那个」(防它替自己批准),由 host_pids / host_bundles 认(含经 XPC 拉起的,见下)。
 # CLAUDE_BUNDLES 只留作「已知 AI 桌面 App」名单(文案、检查授权里提示用),不再用来拦。
 
@@ -203,7 +203,7 @@ def host_pids():
     if _host:
         return _host[0]
     pids, pid = set(), os.getppid()
-    ok = True                       # 11-06 体检:ps 超时 / 出错那次不记住(原来空结果永久缓存,这个进程一辈子认不出宿主)
+    ok = True                       # ps 超时 / 出错那次不记住(原来空结果永久缓存,这个进程一辈子认不出宿主)
     for _ in range(16):
         try:
             out = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(pid)], capture_output=True, text=True,
@@ -219,7 +219,7 @@ def host_pids():
         if ppid in ("0", "1"):
             break
         pid = int(ppid)
-    # 10-31:豆包经 XPC 服务(Doubao.app/…/McpService.xpc)拉起 SeeU,父进程链到 launchd 就断了,认不到豆包主程序 →
+    # 豆包经 XPC 服务(Doubao.app/…/McpService.xpc)拉起 SeeU,父进程链到 launchd 就断了,认不到豆包主程序 →
     # 再按「最外层 .app」认:祖先程序装在哪个 App 包里,那个 App 正在跑的进程都算宿主
     try:
         outer = set()
@@ -252,7 +252,7 @@ def host_bundles():
 
 
 def _window_titles(pid):
-    """这个进程所有窗口的标题(含别的桌面、藏着的)。11-06 体检:原来只查当前桌面上的,
+    """这个进程所有窗口的标题(含别的桌面、藏着的)。原来只查当前桌面上的,
     系统设置在别的桌面 / 被隐藏时标题是空的 → 隐私页拦不住,而后台点击、辅助功能恰恰不需要窗口在当前桌面。"""
     out = []
     try:
@@ -318,16 +318,16 @@ def check_app(app):
 
 
 # ---------------------------------------------------------------- 菜单
-# 11-06 二次复查:简体中文访达里实际叫「清倒废纸篓」(原来只写了「清空」,拦不住);顺带补繁体和英式英文的叫法
+# 简体中文访达里实际叫「清倒废纸篓」(原来只写了「清空」,拦不住);顺带补繁体和英式英文的叫法
 BLOCKED_MENU = re.compile(r"清[空倒]废纸篓|[清倒]空?垃圾桶|立即[删刪]除|退出登录|注销|登出|锁定屏幕|鎖定螢幕|关机|關機|"
                           r"强制退出|強制結束|\b(Empty (the )?(Trash|Bin)|Delete Immediately|Log Out|Lock Screen|Shut Down|Force Quit)\b", re.I)
-# 11-23 C-4.0 Fable 复查:「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
+# 「重启」类只认整个名字(系统菜单里的「重新启动…」「Restart」「Restart Now」「重启」),
 # 「Restart Kernel」「Restart Language Server」「重启服务」这类程序自己的按钮不算;英文词加词边界(「Design Outline」里的 sign out 不算)
 BLOCKED_RESTART = re.compile(r"^\s*(重新启动|重新開機|重启|Restart|Reboot)(\s*(Now|Computer|电脑|计算机|系统))?\s*(\(&?[A-Za-z]\))?\s*(\.{3}|…)?\s*$|"
                              r"\bUpdate and restart\b|更新并重启", re.I)
 
 
-# 11-23 C-4.0:访达废纸篓窗口右上角那个按钮只叫「清倒」/「Empty」(原来词表漏了)。别的 App 里「清空」常是清空输入框,只在访达里认整个名字
+# 访达废纸篓窗口右上角那个按钮只叫「清倒」/「Empty」(原来词表漏了)。别的 App 里「清空」常是清空输入框,只在访达里认整个名字
 FINDER_EMPTY = re.compile(r"^\s*(清倒|清空|Empty)\s*(\.{3}|…)?\s*$", re.I)
 
 

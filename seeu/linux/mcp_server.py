@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · MCP 服务(第 2 段,11-18):把 see / tap / type / press / scroll 和专用浏览器包成 MCP 工具给 AI 客户端用。
+"""SeeU Linux 版 · MCP 服务(第 2 段):把 see / tap / type / press / scroll 和专用浏览器包成 MCP 工具给 AI 客户端用。
 
 协议跟 Mac 版 seeu/mcp_server.py、Windows 版 seeu/win/mcp_server.py 同一套(stdio 一行一个 JSON-RPC,只要
 initialize / tools/list / tools/call / ping),工具和说明按 Linux 写。Linux 上 `python3 -m seeu mcp` 自动走这里。
 跟 Windows 版的差别:后台只有「按控件」一档(Wayland 不让普通程序发键鼠);按屏幕位置点 / 按键 / 滚动 / 往 Electron 的框里打字
-要借真鼠标键盘(linux/real.py,归「借用鼠标」设置管)。悬浮标、长按、菜单、探一下、后台打开 App 都有了(11-18 C-3.0 起)。
-(11-23 C-3.9 整体复查:这两行原来还写着「没有借真鼠标、浮标、探一下、后台打开 App」,早过时了。)
+要借真鼠标键盘(linux/real.py,归「借用鼠标」设置管)。悬浮标、长按、菜单、探一下、后台打开 App 都有了。
+(这两行原来还写着「没有借真鼠标、浮标、探一下、后台打开 App」,早过时了。)
 🔴 stdout 只能走协议:启动时把 fd 1 改道到 stderr。每次调用记一行日志(打的字只记长度)。
 """
 import base64
@@ -168,7 +168,7 @@ LINUX_PHRASES = [
     ("这个输入框不让辅助功能接口写字(VS Code 这类 Electron 程序在 Linux 上都这样),又没借键盘(借用鼠标 = 关)。网页请用 SeeU 专用浏览器;要借键盘可以改设置",
      "this field doesn't accept text through the accessibility interface (VS Code and other Electron apps are like that on Linux), "
      "and borrowing the keyboard is off (borrow mouse = off). For web pages use SeeU's own browser; to borrow the keyboard the user can change the setting"),
-    # 11-20 复查修复带出来的新句子(整句在前,先换)
+    # 复查修复带出来的新句子(整句在前,先换)
     ("这是你自己开着的浏览器:SeeU 不在里面点、打字、按键、滚动(会绕开网页的允许名单,还带着你的登录);"
      "网页请用 SeeU 专用的后台浏览器(seeu_web_open),要登录时再叫出来让用户自己登",
      "this is the user's own browser: SeeU won't tap, type, press keys or scroll in it (that would bypass the web allow list, and it "
@@ -237,7 +237,7 @@ LINUX_PHRASES = [
     ("这个控件是灰的(现在按不了)", "this control is greyed out (can't be pressed right now)"),
     ("这个窗口没有能直接改的滚动条(GNOME 自带程序、Chrome、Electron 都不报滚动条)。",
      "this window has no scroll bar SeeU can move (GNOME's own apps, Chrome and Electron don't expose one). "),
-    # 11-23 C-3.9 整体复查:英文原来写「not in the preview yet」(借键盘早就有了)、「tell the user」(其实会借键盘),改对
+    # 英文原来写「not in the preview yet」(借键盘早就有了)、「tell the user」(其实会借键盘),改对
     ("这个框没有「确认」动作,后台回车要借键盘(第 3 段)", "this field has no confirm action; pressing Return in the background "
      "needs to borrow the real keyboard"),
     ("已经到头了", "already at the end"),
@@ -275,7 +275,6 @@ LINUX_PHRASES = [
     ("输入框没接受插入", "the field didn't accept the text"), ("窗口不在屏幕范围里", "the window is off screen"),
     ("截图出错:", "screenshot failed: "), ("控件很少,本想认字补上,但", "few controls, and recognizing text didn't work: "),
     ("没找到 Chrome / Chromium(装一个:", "Chrome / Chromium not found (the user can install one: "), (",或装 Google Chrome)", ", or Google Chrome)"),
-    # 11-23 C-3.9 整体复查带出来的新句子
     ("不认识的修饰键「", "unknown modifier key \""),
     ("」(只认 ctrl / shift / alt),SeeU 不按", "\" (only ctrl / shift / alt are accepted); SeeU won't press it"),
     ("问不到你是不是正在用电脑(GNOME 没回话),SeeU 先不借鼠标键盘(等几秒再试)",
@@ -371,7 +370,7 @@ LINUX_PHRASES = [
 
 def en(s):
     s = str(s)
-    # 11-19 C-3.1:先换通用对照里的整句(调度的「别的任务动过焦点」这类),不然下面的短词(打字、这个 App)先把句子拆碎,
+    # 先换通用对照里的整句(调度的「别的任务动过焦点」这类),不然下面的短词(打字、这个 App)先把句子拆碎,
     # 翻出来半中半英(两任务实测踩到)
     try:
         from seeu import reason_en as _re
@@ -439,7 +438,7 @@ def _px_to_screen(shot, px, py):
 
 
 def _shot_box(v):
-    """11-23 C-3.9 整体复查:px/py 按截图实际截到的那一块换算(act.see 的 shot)。原来按整个窗口算,窗口有一部分在屏幕外时
+    """px/py 按截图实际截到的那一块换算(act.see 的 shot)。原来按整个窗口算,窗口有一部分在屏幕外时
     截图比窗口小、左上角也不是窗口左上角 → 点偏。老结果没有 shot 就退回窗口范围。"""
     win = v["window"]
     box = v.get("shot")
@@ -449,7 +448,7 @@ def _shot_box(v):
 
 
 def _tell(r):
-    """11-24 C-4.1:借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
+    """借不成鼠标键盘时附一句能照转给用户的话(i18n.tell_lines);出错就不附。"""
     try:
         from seeu import i18n
         from seeu.linux import real
@@ -537,7 +536,7 @@ def _shrink(path):
 
 
 def _base_name(app, win):
-    """多窗口提示里给 AI 一个能照抄的真名(11-20:写成占位 App「…」,Codex 照抄了 App)。"""
+    """多窗口提示里给 AI 一个能照抄的真名(写成占位 App「…」,Codex 照抄了 App)。"""
     base = re.sub(r"「.*」$", "", str(app)).strip()
     if not base or base.startswith("#"):
         base = (win.get("names") or [None])[0] or win.get("comm") or "program"
@@ -615,7 +614,12 @@ def _open_app_enabled():
 
 
 def tool_list():
-    return TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+    tools = TOOLS + [OPEN_APP_TOOL] if _open_app_enabled() else TOOLS
+    try:                                   # 加只读 / 会动的标注(seeu/hints.py);出错就照旧给不带标注的
+        from seeu.hints import annotate
+        return annotate(tools)
+    except Exception:   # noqa: BLE001
+        return tools
 
 
 def do_open_app(a):
@@ -676,7 +680,7 @@ def do_scroll(a):
 
 def do_web_open(a):
     tid = _w().open(a["url"])
-    # 11-23 C-3.9 整体复查:专用浏览器正被用户叫出来登录时,open 就开在那个看得见的窗口里(不再把它关掉重启),话也照实说
+    # 专用浏览器正被用户叫出来登录时,open 就开在那个看得见的窗口里(不再把它关掉重启),话也照实说
     try:
         shown = bool((_w()._load("chrome") or {}).get("visible"))
     except Exception:   # noqa: BLE001
@@ -780,7 +784,7 @@ STEP = {"seeu_tap": "点击", "seeu_type": "打字", "seeu_scroll": "滚动", "s
 
 def _show_step(name, a):
     """动手前悬浮标上写这一步(后台紫色;真借鼠标时 real.borrow 会换成橙色)。只是显示,出错不管。
-    11-18 C-3.0:改用能点能拖的悬浮标(linux/floatwin.py,同 Windows _show_float);小插件老版本(没有 Float)退回老的右上角提示。"""
+    改用能点能拖的悬浮标(linux/floatwin.py,同 Windows _show_float);小插件老版本(没有 Float)退回老的右上角提示。"""
     step = STEP.get(name)
     if not step:
         return
@@ -826,7 +830,7 @@ def call_tool(name, a):
     bad = _missing_args(name, a)
     if bad:
         return bad
-    try:                                    # 11-22 C-3.7:插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
+    try:                                    # 插件版第一次用,缺 Python 库就先在后台装(seeu/deps.py)
         from seeu import deps
         wait = deps.gate()
     except Exception:   # noqa: BLE001
@@ -893,7 +897,7 @@ def _wire(out):
 
 
 def main():
-    try:                                # 11-22 C-3.7:插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
+    try:                                # 插件版先把设置文件定下来(第一次从纸条记的老 git 版抄),再写新纸条
         from seeu.where import settings_file
         settings_file()
     except Exception:   # noqa: BLE001

@@ -1,14 +1,14 @@
-"""SeeU · 浏览器「开关」这条路(SeeU C-0.1,10-20)
+"""SeeU · 浏览器「开关」这条路
 
 浏览器自带的开关「允许来自 Apple 事件的 JavaScript」打开后,SeeU 用 osascript 在网页里跑脚本:
-不用装插件,能读后台标签页、选下拉框、窗口最小化/在别的桌面也能操作(10-20 Safari、Chrome 实测全过)。
+不用装插件,能读后台标签页、选下拉框、窗口最小化/在别的桌面也能操作(Safari、Chrome 实测全过)。
 网页里跑的程序跟插件同一套(从 extension/background.js 里取 pageSnapshot / pageAct / pageRead),两条路行为一致。
 
   Safari:设置 → 高级 → 勾「为网页开发者显示功能」→ 开发者 → 勾「允许来自 Apple 事件的 JavaScript」(要密码)
   Chrome:菜单 显示 → 开发者 → 允许来自 Apple 事件的 JavaScript(Edge / Brave 等同内核的没实测)
 
 🔴 这个开关是浏览器全局的,没有网站范围:SeeU 自己守一份允许名单(allow.json,I See 模式下不查),密码框/银行卡框不碰。
-🔴 Chrome 用 AppleScript 新开标签/窗口会抢前台、连桌面一起切(10-20 实测);Safari 不会。开标签见 web.open。
+🔴 Chrome 用 AppleScript 新开标签/窗口会抢前台、连桌面一起切;Safari 不会。开标签见 web.open。
 标签页编号:"窗口id:标签" 字符串(Safari 标签 = 序号,Chrome 标签 = 标签 id),跟插件的整数 id 分开。
 """
 import json
@@ -19,7 +19,7 @@ import time
 from urllib.parse import urlsplit
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DIR = os.path.expanduser("~/.seeu/seeu_web")   # 不跟 SEEU_HOME:中转程序是浏览器拉起的,读不到用户的环境变量,三处要对得上就都写死(11-01)
+DIR = os.path.expanduser("~/.seeu/seeu_web")   # 不跟 SEEU_HOME:中转程序是浏览器拉起的,读不到用户的环境变量,三处要对得上就都写死
 ALLOW_FILE = os.path.join(DIR, "allow.json")
 SAFARI = {"Safari", "Safari Technology Preview"}
 CHROME_LIKE = {"Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium", "Vivaldi"}   # Arc 没有这个开关
@@ -67,7 +67,7 @@ def _instances(app):
 
 def _single(app):
     """🔴 同时开着两个同名浏览器(如别的项目用自动化程序起了个临时 Chrome 导出页面)时,系统命令会被那个临时的接走,
-    读到的标签页全不对(C-0.5 实测踩到:别的程序起的 Chrome)。这时开关这条路不用,报 multi_instance。"""
+    读到的标签页全不对(实测踩到:别的程序起的 Chrome)。这时开关这条路不用,报 multi_instance。"""
     n = _instances(app)
     if n > 1:
         raise AEError(f"现在同时开着 {n} 个 {app}(可能是别的程序临时起的),开关这条路分不清该找哪个,先不用", "multi_instance")
@@ -94,7 +94,7 @@ def _osa(script, *argv, timeout=TIMEOUT):
 
 # ---------------------------------------------------------------- 标签页
 
-# 🔴 tell 块里 tab 会被认成浏览器的「标签页」类(10-20 踩到:输出里全是字面 "tab"),分隔符用 character id 9
+# 🔴 tell 块里 tab 会被认成浏览器的「标签页」类(踩到:输出里全是字面 "tab"),分隔符用 character id 9
 
 def _safari_tabs_script(app):
     return f'''set TB to (character id 9)
@@ -226,7 +226,7 @@ PAGE_CODES = ("page", "stale", "bad_action", "bad_target", "not_found", "refused
 
 
 def page_err(r):
-    """网页函数回的错 → (给人看的文字, 错误码)。11-23 C-3.9 整体复查:网页函数跑在网页自己的环境里,网页能改掉
+    """网页函数回的错 → (给人看的文字, 错误码)。网页函数跑在网页自己的环境里,网页能改掉
     getComputedStyle / JSON.stringify 让它抛任意文字,原来这段字原样进了 SeeU 的原因 / 提示 / 悬浮卡片 ——
     写一句「python3 -m seeu allow https://坏网站」,MCP 就会替它劝 AI 去问用户加名单。现在:标明是网页说的、截短、
     把像 SeeU 命令的字拆开(MCP 认提示的正则就对不上了);错误码只认上面几个,别的一律当 page。"""
@@ -265,11 +265,11 @@ def wait_loaded(app, tab=None, timeout=10.0):
 
 
 # ---------------------------------------------------------------- SeeU 自己的允许名单(开关没有网站范围,靠自觉)
-# C-0.5:跟插件合成一份。插件那边 = Chrome 授权 且 在这份名单里才碰;读写见 host.py 的 load_allow / edit_allow。
+# 跟插件合成一份。插件那边 = Chrome 授权 且 在这份名单里才碰;读写见 host.py 的 load_allow / edit_allow。
 
 def origin(url):
     """网址 → 「协议://主机[:端口]」,名单按它整串比。只认 http / https。
-    11-06 体检:①原来 file: 一律归成 "file://",允许一个本地文件 = 放行全盘 → 不再认 file(本地页面请起个本机网址);
+    ①原来 file: 一律归成 "file://",允许一个本地文件 = 放行全盘 → 不再认 file(本地页面请起个本机网址);
     ②统一写法:主机小写、去掉默认端口和「用户名@」、中文域名转 punycode(浏览器回报的就是这种写法,
     原来 Example.COM、example.com:443 存进名单后永远对不上,还报成功)。"""
     url = (url or "").strip()
@@ -333,7 +333,7 @@ def allow(url, on=True):
 # ---------------------------------------------------------------- 开标签页
 
 def _check_url(url):
-    """交给系统 open 命令之前:只收 http / https。11-06 体检:原来什么都往 open 里传,
+    """交给系统 open 命令之前:只收 http / https。原来什么都往 open 里传,
     「-W」这类会被当成 open 的参数(一直等到 App 退出),文件路径、shortcuts:// 之类也照开。"""
     u = str(url or "").strip()
     if not u.lower().startswith(("http://", "https://")) or origin(u) is None:
@@ -371,7 +371,7 @@ def open_tab(app, url):
 
 
 def _frontmost():
-    """11-02 实测:没有事件循环的进程(MCP 服务、命令行)里 frontmostApplication 会卡在旧值,先转一下事件循环再读。"""
+    """实测:没有事件循环的进程(MCP 服务、命令行)里 frontmostApplication 会卡在旧值,先转一下事件循环再读。"""
     try:
         import AppKit
         AppKit.NSRunLoop.currentRunLoop().runUntilDate_(AppKit.NSDate.dateWithTimeIntervalSinceNow_(0.01))
@@ -381,7 +381,7 @@ def _frontmost():
 
 
 def open_bg(app, url, watch_s=3.0):
-    """用 open -g 在后台开网址。11-02 用户实测:浏览器没开着时冷启动,前台程序虽没换,新窗口却被摆在当前窗口正下方、
+    """用 open -g 在后台开网址。用户实测:浏览器没开着时冷启动,前台程序虽没换,新窗口却被摆在当前窗口正下方、
     压住其他所有窗口,看着就是「跳到前台」→ 没开着就 -j 隐藏启动(同 ⌘H);开关那条路隐藏着也能干活,
     走不了开关的由调用方 show() 放出来。另外盯 watch_s 秒,前台真被浏览器抢了就还给原来的 App。"""
     front = _frontmost()
@@ -434,7 +434,7 @@ def show(app):
 
 def _restore_front(app_obj, thief=None):
     """前台被浏览器抢了就还给原来的 App(桌面会跟着切回去)。
-    thief = 浏览器名:只有抢到前台的正是它才切回去(11-02:用户这几秒里自己切了别的程序,不能把人拽回去)。"""
+    thief = 浏览器名:只有抢到前台的正是它才切回去(用户这几秒里自己切了别的程序,不能把人拽回去)。"""
     try:
         now = _frontmost()
         from seeu.ax import same_app

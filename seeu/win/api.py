@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """SeeU Windows 版 · 系统接口声明(ctypes,只用标准库)。
 
-从探路程序 `参考/Windows探路/probe.py` 挪过来整理的。🔴 64 位 Windows 上句柄、指针都是 8 字节,
-不声明类型 ctypes 会按 int 传 → OverflowError(11-10 真机踩过),所以每个用到的函数都写明参数类型。
+从探路程序挪过来整理的。🔴 64 位 Windows 上句柄、指针都是 8 字节,
+不声明类型 ctypes 会按 int 传 → OverflowError(真机踩过),所以每个用到的函数都写明参数类型。
 Mac 上 import 这个文件会失败(没有 windll),替身测试用 SEEU_WIN_FAKE 换掉整个模块。
 """
 import ctypes
@@ -12,7 +12,7 @@ user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-# 坐标一律用物理像素(高分屏缩放下不乱)。UIA 也会把线程切成高 DPI 感知(11-11 踩过:前后两次 GetCursorPos 单位不一样),
+# 坐标一律用物理像素(高分屏缩放下不乱)。UIA 也会把线程切成高 DPI 感知(踩过:前后两次 GetCursorPos 单位不一样),
 # 进程一开始就设好,两边一致。
 try:
     user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))   # PER_MONITOR_AWARE_V2

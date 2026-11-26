@@ -11,7 +11,7 @@ import re
 from seeu.linux import shell
 
 _DESKTOP_NAMES = {}             # 窗口类型(Meta.WindowType):0 普通、1 桌面(图标层,不列)、3 对话框、4 模态对话框
-_DESKTOP_LABEL = {}             # {同上的键: 按当前语言挑的给人看的名字}(11-21 C-3.4)
+_DESKTOP_LABEL = {}             # {同上的键: 按当前语言挑的给人看的名字}
 
 
 def _comm(pid):
@@ -76,7 +76,7 @@ def _desktop_names():
 
 
 def _pick_name(loc):
-    """按当前语言挑一个给人看的名字:Name[zh_CN] → Name[zh] → Name(11-21 C-3.4:Fedora 上按字母排第一的是
+    """按当前语言挑一个给人看的名字:Name[zh_CN] → Name[zh] → Name(Fedora 上按字母排第一的是
     卡拜尔语「Amaẓrag n Weḍris」,被当成文本编辑器的程序名显示了)。"""
     lang = (os.environ.get("LANGUAGE") or os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES")
             or os.environ.get("LANG") or "").split(":")[0].split(".")[0]
@@ -128,7 +128,7 @@ def find(app):
     m = re.match(r"^(.*?)「(.*)」$", app)
     if m:
         app, title_part = m.group(1).strip(), m.group(2)
-        if app.lower() in ("", "app"):            # 11-20:AI 照抄说明里的占位「App「标题」」→ 只按标题找
+        if app.lower() in ("", "app"):            # AI 照抄说明里的占位「App「标题」」→ 只按标题找
             app = ""
     wins = list_windows()
     if app.startswith("#") and app[1:].isdigit():
@@ -153,7 +153,7 @@ def find(app):
     if title_part:
         hits = [w for w in hits if title_part.lower() in (w.get("title") or "").lower()]
         progs = {os.path.basename(str(w.get("exe") or "")) or w.get("comm") for w in hits}
-        if not app and len(progs) > 1:           # 第二轮复查(照 Windows):照抄「App「标题」」对上好几个程序的窗口,别乱挑
+        if not app and len(progs) > 1:           # 照 Windows:照抄「App「标题」」对上好几个程序的窗口,别乱挑
             cands = "、".join(f"{(w.get('names') or [w.get('comm')])[0]}「{(w.get('title') or '')[:40]}」" for w in hits[:6])
             raise RuntimeError(f"「{a0}」对得上好几个程序的窗口:{cands};请写成「程序名「标题里的几个字」」或「#窗口号」")
     if not hits:
@@ -184,7 +184,7 @@ def covered(w, wins=None):
 
 
 def sensitive_above(w, wins=None):
-    """11-20 复查:盖在这个窗口上面、又是 SeeU 不碰的程序(终端、密码程序、系统授权框…)的窗口位置,截图发给 AI 前涂黑。"""
+    """盖在这个窗口上面、又是 SeeU 不碰的程序(终端、密码程序、系统授权框…)的窗口位置,截图发给 AI 前涂黑。"""
     from seeu.linux import safety
     wins = wins if wins is not None else list_windows()
     out = []

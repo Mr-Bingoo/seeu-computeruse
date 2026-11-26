@@ -23,14 +23,14 @@ import subprocess
 import sys
 import time
 
-PARK_XY = (60, 60)            # 点完把光标甩到这里(镜像里停着不动会被当长按,09-08 实测)
+PARK_XY = (60, 60)            # 点完把光标甩到这里(镜像里停着不动会被当长按,实测)
 TRIGGER_SYNC_MAX_ROUNDS = 8   # 硬上限
 
 
 # ---------------------------------------------------------------- 窗口
 
 # 应用自己藏着、但系统窗口列表里照样有的大窗:永远不当主窗口(属性跟真窗口一样,只能按标题认)。
-# 🔴 中文系统里这个窗口的标题还不知道(11-23),知道了往这里加;all_spaces 那条路有「标题 = 应用名优先」兜底。
+# 🔴 中文系统里这个窗口的标题还不知道,知道了往这里加;all_spaces 那条路有「标题 = 应用名优先」兜底。
 HIDDEN_WINDOWS = {"Welcome to iPhone Mirroring"}
 
 
@@ -44,7 +44,7 @@ def _alt_names(owner):
 
 
 def same_app(shown, owner):
-    """系统给的应用名是不是 owner(先比原名,对不上再按系统语言换名比;11-23 为中文系统加)。"""
+    """系统给的应用名是不是 owner(先比原名,对不上再按系统语言换名比;为中文系统加)。"""
     if not shown or not owner:
         return False
     return shown == owner or shown in _alt_names(owner)
@@ -82,7 +82,7 @@ def _win_cand(wins, owners, min_w, min_h, all_spaces):
     for w in wins:
         if w.get("kCGWindowOwnerName") not in owners:
             continue
-        if (w.get("kCGWindowName") or "") in HIDDEN_WINDOWS:   # 10-15:隐藏大窗,截到是纯白
+        if (w.get("kCGWindowName") or "") in HIDDEN_WINDOWS:   # 隐藏大窗,截到是纯白
             continue
         if all_spaces and w.get("kCGWindowLayer", 0) != 0:
             continue
@@ -99,7 +99,7 @@ def _win_cand(wins, owners, min_w, min_h, all_spaces):
 
 
 def frontmost_name():
-    """当前前台应用名。🔴 NSWorkspace 在没有事件循环的进程里会一直返回第一次查到的值(10-01 实测),
+    """当前前台应用名。🔴 NSWorkspace 在没有事件循环的进程里会一直返回第一次查到的值,
     先跑 20ms 事件循环收通知再查(跟 input_guard.frontmost_app 同一招)。查不到退回 System Events。"""
     try:
         from AppKit import NSWorkspace, NSRunLoop, NSDate
@@ -127,7 +127,7 @@ def activate(owner, wait_front_s=0):
     if same_app(frontmost_name(), owner):
         return True
     subprocess.run(["osascript", "-e", f'tell application "{owner}" to activate'], capture_output=True)
-    time.sleep(0.35)                 # 原 random.uniform(0.25, 0.45),10-31 SeeU 换固定值(不加随机,取中间值)
+    time.sleep(0.35)                 # 原 random.uniform(0.25, 0.45),SeeU 换固定值(不加随机,取中间值)
     if not wait_front_s:
         return None
     t0 = time.time()
@@ -176,7 +176,7 @@ def px_to_pt(px, py, g, scale):
 
 
 # ---------------------------------------------------------------- 合成鼠标事件(纯 Quartz)
-# iPhone 镜像只吃 Quartz 合成的 CGEvent(09-08):cliclick 只收整数坐标,按住时发的是 mouseMoved,拖动/手势都失败。
+# iPhone 镜像只吃 Quartz 合成的 CGEvent:cliclick 只收整数坐标,按住时发的是 mouseMoved,拖动/手势都失败。
 
 def post(etype, x, y):
     import Quartz

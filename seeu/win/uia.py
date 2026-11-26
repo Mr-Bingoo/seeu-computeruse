@@ -2,7 +2,7 @@
 """SeeU Windows 版 · UI 自动化(UIA):读控件清单、读文字、认密码框、按按钮。
 
 在本进程里直接调(comtypes);探路时另起 PowerShell 一次约 1 秒,太慢。
-🔴 读(控件清单、文字、密码框)不抢前台;**按(Invoke / Toggle / 选中…)会把目标拉到前台**(11-11 真机,记事本、Chrome 都抢),
+🔴 读(控件清单、文字、密码框)不抢前台;**按(Invoke / Toggle / 选中…)会把目标拉到前台**(真机,记事本、Chrome 都抢),
    所以「按」只能放在 inputs.borrow_front 里做(借前台再还),由动作层决定什么时候走这一档。
 依赖:comtypes(pip install comtypes,纯 Python)。
 """
@@ -112,12 +112,12 @@ def elements(hwnd, limit=500):
     return out
 
 
-CHILD_MAX = 80          # 最多问这么多个子窗口(按个数截、不按时间截:动作前后两次读要截在同一处,不然清单前后对不上会误判「变了」,二轮复查 11-18)
+CHILD_MAX = 80          # 最多问这么多个子窗口(按个数截、不按时间截:动作前后两次读要截在同一处,不然清单前后对不上会误判「变了」)
 
 
 def _desk_kids(hwnd):
     """窗口在别的虚拟桌面上时,要从哪些子窗口补问(同一进程、看得见的,按列举顺序 = 先上级后下级);不在别的桌面返回 []。
-    复查 11-18:用 window.children(api 里设好了参数类型,64 位句柄不出错);别的进程嵌进来的子窗口不问(安全底线只按顶层程序查过)。"""
+    用 window.children(api 里设好了参数类型,64 位句柄不出错);别的进程嵌进来的子窗口不问(安全底线只按顶层程序查过)。"""
     from seeu.win import window as W
     if not W.other_desktop(hwnd):
         return []
@@ -133,7 +133,7 @@ def _desk_kids(hwnd):
 
 
 def _child_items(hwnd, have, room):
-    """11-18 C-2.8(Win10 / Win11 实测):窗口在别的虚拟桌面上时,从顶层窗口往下读,系统只给菜单、标题栏按钮那几项,正文输入框不见了;
+    """Win10 / Win11 实测:窗口在别的虚拟桌面上时,从顶层窗口往下读,系统只给菜单、标题栏按钮那几项,正文输入框不见了;
     但从各个子窗口句柄往下问,控件和值都还在:Win10 老式记事本(Edit)读得到全文;Win11 新记事本顶层只剩 6 项,
     从子窗口(DesktopChildSiteBridge 等)补回全部 34 项,按编号打字也进得去(两边 other_desk_type.py 各 7/7)。
     只在别的桌面上补;某个子窗口读出了东西,它下面的子窗口就不再重复读;按(类型, 位置, 名字)去重。只读。"""
@@ -185,7 +185,7 @@ def _child_items(hwnd, have, room):
 
 def current(item):
     """清单里这一项**现在**的样子(不用 see 时的缓存,真去问一次):返回 (类型, (x, y, w, h));
-    控件已经不在了 / 滚出去看不见了 / 没有大小,返回 None。按编号操作前核对用(11-14)。"""
+    控件已经不在了 / 滚出去看不见了 / 没有大小,返回 None。按编号操作前核对用。"""
     try:
         e = item["el"]
         t = e.CurrentControlType
@@ -243,11 +243,11 @@ def focused_in(hwnd):
     except Exception:
         return None
     if not e:
-        try:        # 复查 11-18:别的虚拟桌面上顶层树被截断,焦点(可能是密码框)要从子窗口补查
+        try:        # 别的虚拟桌面上顶层树被截断,焦点(可能是密码框)要从子窗口补查
             kids = _desk_kids(hwnd)
         except Exception:   # noqa: BLE001
             kids = []
-        for c in kids:      # 二轮复查:一个子窗口出错只跳过它,别连累后面的(密码框会漏认)
+        for c in kids:      # 一个子窗口出错只跳过它,别连累后面的(密码框会漏认)
             try:
                 e = element(c).FindFirstBuildCache(7, cond, _cache())
             except Exception:   # noqa: BLE001
@@ -260,7 +260,7 @@ def focused_in(hwnd):
 
 
 def read_element(e):
-    """读一个控件的文字(值 / 文本),读不到 None。打字时读「刚点过的那个输入框」用,比猜焦点准(11-11:读成了地址栏)。"""
+    """读一个控件的文字(值 / 文本),读不到 None。打字时读「刚点过的那个输入框」用,比猜焦点准(读成了地址栏)。"""
     U = _U()
     try:
         if _val(e, P_PASSWORD) or e.CurrentIsPassword:
@@ -284,11 +284,11 @@ CARET_MAX = 50000
 
 
 def caret(hwnd):
-    """输入区里光标在第几个字(选中了一段就是 (起点, 选中长度));读不到返回 None(11-15:核实 End / 方向键这类只挪光标的键)。
-    只认有焦点的控件,再找第一个输入框;不退到「文档」(Electron 里那是整张网页,会动的内容会被当成光标挪了,11-15 复查)。只读。"""
+    """输入区里光标在第几个字(选中了一段就是 (起点, 选中长度));读不到返回 None(核实 End / 方向键这类只挪光标的键)。
+    只认有焦点的控件,再找第一个输入框;不退到「文档」(Electron 里那是整张网页,会动的内容会被当成光标挪了)。只读。"""
     U = _U()
 
-    def cands():                     # 焦点控件读不出来才去遍历找输入框(遍历整棵树费时间,11-15 第五轮复查)
+    def cands():                     # 焦点控件读不出来才去遍历找输入框(遍历整棵树费时间)
         f = focused_in(hwnd)
         if f:
             yield f["el"]
@@ -324,7 +324,7 @@ def caret(hwnd):
 
 def read_text(hwnd):
     """读窗口里输入区的文字(只读):优先有焦点的控件,再找第一个输入框 / 文档。读不到返回 None。
-    VS Code(Monaco)没开屏幕阅读模式时只给一句提示,当成读不到(11-11 真机)。"""
+    VS Code(Monaco)没开屏幕阅读模式时只给一句提示,当成读不到(真机)。"""
     U = _U()
     cands = []
     f = focused_in(hwnd)
@@ -361,7 +361,7 @@ def read_text(hwnd):
 
 def scroll(hwnd, sx, sy, dy=0, dx=0):
     """用辅助功能的「滚动」接口后台滚 (sx, sy) 处能滚的区域(找不到就滚整个网页文档)。dy 负 = 往下翻,单位约像素。
-    不碰鼠标、不抢前台(11-12 旧 Intel Mac 的 Win10 + Chrome 真机:小步一次约 40 像素,前台不变)。
+    不碰鼠标、不抢前台(旧 Intel Mac 的 Win10 + Chrome 真机:小步一次约 40 像素,前台不变)。
     Chrome 的滚动条消息要真鼠标在窗口里才认,这条是它的补位。
     注意:Win10 虚拟机窗口没显示在 Mac 屏幕上时,Chrome 不给网页文档(找到 0 个),这时也滚不了。
     返回实际滚了几步;找不到能滚的区域返回 0。"""
@@ -418,7 +418,7 @@ def scroll(hwnd, sx, sy, dy=0, dx=0):
 def blocking_dialog(hwnd):
     """窗口里挡着的弹窗(网页 / Electron 里的模态对话框,如 VS Code 第一次打开的「欢迎 / 登录」窗)。没有返回 None。
     认法:窗口里面(不含窗口本身)类型是「窗口」、且标了模态或网页角色是 dialog / alertdialog、在屏幕上有大小。
-    11-12 Win10 真机:VS Code 欢迎窗 = 类型 50032「对话框」、role=dialog、模态 True;被它挡着时后台打字画面会变,却打不进编辑区。
+    Win10 真机:VS Code 欢迎窗 = 类型 50032「对话框」、role=dialog、模态 True;被它挡着时后台打字画面会变,却打不进编辑区。
     注意:Chrome / VS Code 的辅助功能是用到才建,刚打开时可能只给十几个元素、认不出,读不到就当没有。"""
     a = _auto()
     cond = a.CreatePropertyCondition(P_TYPE, 50032)
@@ -426,7 +426,7 @@ def blocking_dialog(hwnd):
         arrs = [element(hwnd).FindAll(TREE_DESC, cond)]
     except Exception:
         return None
-    try:            # 复查 11-18:别的虚拟桌面上顶层树被截断,弹窗也从子窗口补查
+    try:            # 别的虚拟桌面上顶层树被截断,弹窗也从子窗口补查
         for c in _desk_kids(hwnd):
             try:
                 arrs.append(element(c).FindAll(TREE_DESC, cond))

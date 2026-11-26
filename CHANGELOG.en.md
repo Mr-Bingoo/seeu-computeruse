@@ -4,6 +4,15 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac and Linux, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.6.3 (2026-11-26)
+
+A small update: AI clients are now told which tools only look and which can change things, and SeeU is listed on the ModelScope MCP Plaza and the official MCP Registry.
+
+- **Tools say whether they only look or can change things** (Mac, Windows, Linux): the tools that only look (check, see the screen, read a page) and the ones that may change content (click, type, press keys, click menus) are now marked for your AI client. Some clients will ask you first before the second kind.
+- **Listed on the ModelScope MCP Plaza and the official MCP Registry**: SeeU can now be found on ModelScope and in the official MCP Registry. The README has a standard config block for clients that only accept that form (Mac / Windows).
+- **No more internal markers in messages**: a few check results and messages to the AI carried dates and codes from development; they're gone now, and the meaning is unchanged.
+- **What you need to do**: after updating, fully quit your AI client and open it again.
+
 ## v1.6.2 (2026-11-26)
 
 A safety fix release: password fields in Safari are caught while Safari is in the background, apps like VS Code no longer get text typed into another window or typed twice, and the iPhone Mirroring window no longer drifts with your mouse.

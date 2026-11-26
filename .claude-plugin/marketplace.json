@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "SeeU — background computer use for AI clients.",
-    "version": "1.6.2"
+    "version": "1.6.3"
   },
   "plugins": [
     {
       "name": "seeu",
       "source": "./",
       "description": "Background computer use for your Mac, Windows PC or Linux desktop: the AI looks at app windows and clicks, types and scrolls without taking your mouse or switching the front app.",
-      "version": "1.6.2",
+      "version": "1.6.3",
       "category": "productivity",
       "keywords": [
         "computer-use",

@@ -1,4 +1,4 @@
-"""插件版第一次用时自己装 Python 库(11-22 C-3.7)。只用标准库。
+"""插件版第一次用时自己装 Python 库。只用标准库。
 
 为什么:插件市场只把 SeeU 的文件拷进客户端的插件文件夹,不会替用户装依赖。
 做法:MCP 服务收到第一个工具调用时查一下缺不缺(只看找不找得到,不真 import);缺就在后台起一个
@@ -55,7 +55,7 @@ def missing():
 
 
 def _pins(pkgs):
-    """11-22 实测:Mac 系统自带 Python 3.9 + 自带的老 pip 会挑中 pyobjc 12.0(已撤回:它谎称支持 3.9)的源码包,编译失败。
+    """实测:Mac 系统自带 Python 3.9 + 自带的老 pip 会挑中 pyobjc 12.0(已撤回:它谎称支持 3.9)的源码包,编译失败。
     3.9 上把 pyobjc 钉在 12 以下(11.1 有现成的 3.9 安装包),pyobjc-core 也显式写上。"""
     if sys.platform != "darwin" or sys.version_info >= (3, 10):
         return list(pkgs)
@@ -66,7 +66,7 @@ def _pins(pkgs):
 
 
 def pip_cmd(pkgs):
-    # 11-22 Intel Mac(macOS 14)实测:opencv-python-headless 最新版 5.1 只有 macOS 15 的现成安装包,老系统上 pip 会下 83MB 源码包
+    # Intel Mac(macOS 14)实测:opencv-python-headless 最新版 5.1 只有 macOS 15 的现成安装包,老系统上 pip 会下 83MB 源码包
     # 现场编译,十几分钟都装不完。--only-binary=:all: 只用现成安装包:pip 自己退回到这台系统能用的那一版(14 上是 5.0),
     # 真没有能用的就当场报错,不会闷头编译。顺带也躲开了 3.9 上那个撤回的 pyobjc 12.0 源码包(_pins 照旧留着兜底)。
     return [sys.executable, "-m", "pip", "install", "--user", "--disable-pip-version-check", "--only-binary=:all:", *_pins(pkgs)]
@@ -170,7 +170,7 @@ def run(pkgs=None):
             log.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {' '.join(pip_cmd(pkgs))}\n")
             log.flush()
             kw = {}
-            if sys.platform == "win32":     # 11-23 C-3.9 整体复查:本进程是 DETACHED 起的、没有控制台,pip 不带这个会自己弹一个黑窗口(用户一关就装失败)
+            if sys.platform == "win32":     # 本进程是 DETACHED 起的、没有控制台,pip 不带这个会自己弹一个黑窗口(用户一关就装失败)
                 kw["creationflags"] = 0x08000000      # CREATE_NO_WINDOW
             rc = subprocess.run(pip_cmd(pkgs), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                 timeout=PIP_TIMEOUT_S, **kw).returncode
@@ -219,7 +219,7 @@ def _manual(pkgs):
     exe = sys.executable
     if sys.platform == "darwin":
         # SeeU 在 Mac 上一律用系统自带的 /usr/bin/python3(插件启动器、README 都是);用 Homebrew 的 python3 跑「检查」时
-        # 照它给命令会被 pip 拒绝(externally-managed-environment),所以给人看的命令固定写系统那个(11-23 复查)
+        # 照它给命令会被 pip 拒绝(externally-managed-environment),所以给人看的命令固定写系统那个
         cmd = cmd.replace(exe, "/usr/bin/python3", 1)
     elif " " in exe:
         cmd = cmd.replace(exe, f'"{exe}"', 1)      # Windows:装在 C:\Program Files 下,不加引号 cmd 只认到 C:\Program
@@ -247,7 +247,7 @@ def gate():
         return ("SeeU installed its Python libraries, but this Python still can't find " + ", ".join(pkgs) + ". "
                 "Ask the user to run this in Terminal, then restart the AI app: " + _manual(pkgs))
     if not busy and st.get("status") == "installing":
-        # 11-23 复查:后台那一轮没跑完就没了(重启、注销、客户端关掉时连子进程一起杀)也算失败一次,
+        # 后台那一轮没跑完就没了(重启、注销、客户端关掉时连子进程一起杀)也算失败一次,
         # 不然每次工具调用都重起一轮,永远走不到「请用户手动装」
         st = {"status": "failed", "t": 0, "pkgs": pkgs, "tries": int(st.get("tries") or 0) + 1,
               "why": "the background installer stopped before it finished"}
@@ -260,7 +260,7 @@ def gate():
                     + "  (log: " + LOG + ")")
         if _take_lock():
             try:
-                st2 = _read()                       # 11-23 复查:拿到锁再看一眼,别的进程可能刚起了一轮
+                st2 = _read()                       # 拿到锁再看一眼,别的进程可能刚起了一轮
                 if not (st2.get("status") == "installing" and _alive(st2.get("pid"))):
                     _start_background(pkgs)
             finally:

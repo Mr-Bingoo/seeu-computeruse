@@ -1,4 +1,4 @@
-"""给 AI 的结果文字在出口处转英文(11-01 用户定:给 AI 看的只留英文)。
+"""给 AI 的结果文字在出口处转英文(给 AI 看的只留英文)。
 
 代码里的报错/原因照旧写中文——有的调用方会按中文字判断(如找「没有窗口」),不能改原文;
 只在 MCP 把结果交给 AI 时过一遍 to_en():按片段表替换(长的先换),再换中文标点。App 名、数字、路径原样留。
@@ -8,7 +8,7 @@ import re
 
 # (中文片段, 英文)。顺序无所谓,用的时候按中文长度从长到短换。
 PHRASES = [
-    # —— 11-26 C-4.4 晚:网页壳 App 认字看密码框
+    # —— 网页壳 App 认字看密码框
     ("画面上有密码输入框(认到「", "A password input box is on screen (read \u201c"),
     ("」),SeeU 不往里打字(这一步请你自己来)", "\u201d), so SeeU won't type into it (please do this step yourself)"),
     ("」),SeeU 不往里按键(这一步请你自己来)", "\u201d), so SeeU won't press keys into it (please do this step yourself)"),
@@ -16,7 +16,7 @@ PHRASES = [
     ("」这类字样,可能弹着登录 / 密码框;这个 App 查不了光标在不在里面,先 see 看一眼,是密码框就请用户自己来",
      "\u201d on screen, so a login / password box may be open; SeeU can't tell whether the cursor is in it in this app. See first; if it's a password box, ask the user to do it"),
     ("画面上有「", "The screen shows \u201c"),
-    # —— 11-17 C-2.7 复查后补
+    # —— 复查后补
     ("键盘焦点不在「", "The keyboard focus isn't in the \u201c"),
     ("」这个窗口里(现在在「", "\u201d window (it is now in \u201c"),
     ("」),SeeU 没按,免得按到别的窗口;先点一下「", "\u201d). SeeU didn't press the key, so it can't land in another window; first tap the spot that needs the key in \u201c"),
@@ -38,7 +38,7 @@ PHRASES = [
     ("先用 seeu_tap 点一下要按键的地方(输入框或窗口),再按一次", "Tap the spot first with seeu_tap (the field or the window), then press again"),
     (" 秒,这期间窗口挪动或改了大小,", " s in the queue and the window moved or was resized meanwhile, "),
     ("按位置点可能点错;先看一眼(see)再点", "so clicking by position could hit the wrong thing; look again (see) first"),
-    # —— 11-17 C-2.6 多任务调度(sched.py;数字、程序名夹在中间,按片段换;Mac / Windows 共用)
+    # —— 多任务调度(sched.py;数字、程序名夹在中间,按片段换;Mac / Windows 共用)
     ("别的任务(「", "Another task (“"),
     ("」)正在用「", "”) is using “"),
     ("」,排队等了 ", "”; waited "),
@@ -63,7 +63,7 @@ PHRASES = [
     ("」正在用 ", "\u201d is using "), ("(从 ", " (since "), (" 起,", ", "),
     ("),这期间 SeeU 不去点它,免得两边的点击插在一起。", "); SeeU won't touch it meanwhile so the two sides' clicks don't interleave. "),
     ("这可能要好一阵(自动化程序跑一轮常要很久):先告诉用户,或先做别的事,别反复重试", "This may take a while (an automation run can take a long time): tell the user, or do something else first; don't keep retrying"),
-    # —— 11-15 C-2.1 后台打开 App(openapp.py)
+    # —— 后台打开 App(openapp.py)
     ("是浏览器,开网页请用 seeu_web_open(网址要过允许名单)", " is a browser — use seeu_web_open for web pages (the URL must be on the allow list)"),
     ("是终端,SeeU 不替你打开", " is a terminal; SeeU won't open it for you"),
     ("能直接运行脚本,SeeU 不替你打开", " can run scripts directly; SeeU won't open it for you"),
@@ -86,12 +86,12 @@ PHRASES = [
     ("开起来了,但还没看到它的窗口。等一两秒再 seeu_see 看看", " has started but no window is visible yet. Wait a second or two, then call seeu_see"),
     ("已在后台打开 ", "opened in the background: "), ("(没拉到前台)。接下来用 seeu_see 看它的画面", " (not brought to the front). Next, call seeu_see on it"),
     ("(新版 macOS 英文界面里「辅助功能」叫 Device Control and Data Access)", "(Accessibility is called “Device Control and Data Access” in newer macOS)"),
-    # —— 11-15 千问实测:input_guard 让路的原话没收录,只换了「操作」→「用户正在operating电脑」
+    # —— 千问实测:input_guard 让路的原话没收录,只换了「操作」→「用户正在operating电脑」
     ("用户正在操作电脑(", "the user is using the computer ("), ("),停下交还给用户", "), stopping and handing control back to the user"),
     ("s 前有鼠标/键盘动静", "s ago there was mouse/keyboard activity"),
     ("用户还在用电脑(", ", the user is still using the computer ("), ("),停手", "), stopped"),
     ("用户正在操作,不打扰", "the user is using the computer, not interrupting"),
-    # —— 11-15 C-2.0 Mac:Chrome / Electron 窗口看不见时截图不可信
+    # —— Mac:Chrome / Electron 窗口看不见时截图不可信
     ("目标窗口不在当前桌面上(在别的桌面,或窗口被收起来了):后台做不成,借鼠标 / 切前台可能把用户整个切到那个桌面,SeeU 没借。请用户切到那个桌面,或把窗口挪到 / 打开在现在的桌面,再 see 一次接着做",
      "the target window is not on the current desktop (it is on another desktop, or its window is closed/tucked away): the background route didn't work, and borrowing the mouse / bringing it to the front could switch the user's whole screen to that desktop, so SeeU didn't. Ask the user to switch to that desktop, or move / open the window on the current one, then call seeu_see again and continue"),
     ("这个窗口的截图现在不可信:", "this window's screenshot can't be trusted right now: "),
@@ -99,7 +99,7 @@ PHRASES = [
      "it is completely covered by other windows, and Chrome / Electron apps stop repainting while covered"),
     ("它不在当前桌面上(在别的桌面、缩进了程序坞,或被隐藏了),Chrome / Electron 这类程序这时不重画",
      "it is not on the current desktop (on another desktop, minimized to the Dock, or hidden), and Chrome / Electron apps stop repainting then"),
-    ("。按截图位置操作会照着旧画面点到别的东西(11-15 实测:页面已经变了,截图 20 秒没变),SeeU 没做。",
+    ("。按截图位置操作会照着旧画面点到别的东西(实测:页面已经变了,截图 20 秒没变),SeeU 没做。",
      ". Acting on a screenshot position would hit the old picture and land on something else (tested: the page had changed but the screenshot stayed the same for 20 seconds), so SeeU did nothing. "),
     ("改用 see 列表里的编号、菜单(menu)或快捷键(press);都不行的话,请用户",
      "Use a number from the seeu_see list, a menu (seeu_menu) or a shortcut (seeu_press) instead; if none of those works, ask the user to "),
@@ -113,11 +113,11 @@ PHRASES = [
     ("切到那个桌面,或把窗口挪到当前桌面", "switch to that desktop, or move the window to the current one"),
     (",再 see。要全程藏着操作,可以改用 SeeU 专用的那份(Python:", ", then call seeu_see again. To keep working fully hidden, SeeU's own instance can be used instead (Python: "),
     ("),它藏着也能读清页面", "), which reads the page clearly even while hidden"),
-    # —— 11-14 按编号操作前核对控件还在不在
+    # —— 按编号操作前核对控件还在不在
     ("控件自己的值变了", "the control's own value changed"),
     ("画面变了:第 ", "the screen changed: item "), (" 项「", " \""),
     ("」已经不在 see 时的位置,先 see 一次再操作", "\" is no longer where seeu_see saw it — call seeu_see again before acting"),
-    # —— 11-07 C-1.1.4 新增的原因
+    # —— 新增的原因
     ("焦点在浏览器自己的按钮", "the keyboard focus is on the browser's own control "),
     ("上(不在网页里),SeeU 不替你按回车 / 空格(这一步请你自己来;只想关掉弹窗可以按 Esc)",
      " (outside the web page) — SeeU won't press Return / Space on it (please do this step yourself; to just dismiss a dialog, press Esc)"),
@@ -125,7 +125,7 @@ PHRASES = [
     ("嵌套太深、看不清是什么的框", "field nested too deeply to tell what it is"),
     ("(对话框的默认按钮)", " (the dialog's default button)"),
     (" 页)", " page)"),
-    # —— 11-06 C-1.1.3 新增的原因
+    # —— 新增的原因
     ("浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号",
      "long-press is not available in browsers (it clicks by screen position, which would bypass the allow list); use seeu_tap with a number for things on the page"),
     ("里,SeeU 不往里按键(这一步请你自己来)", " — SeeU won't press keys into it (please do this step yourself)"),
@@ -134,7 +134,7 @@ PHRASES = [
     ("能直接运行脚本,安全底线不碰", "can run scripts directly; blocked by the safety rules"),
     ("脚本编辑器(Script Editor)", "Script Editor"), ("自动操作(Automator)", "Automator"), ("快捷指令(Shortcuts)", "Shortcuts"),
     ("不是浏览器,SeeU 的网页工具不碰它", " is not a browser; SeeU's web tools won't touch it"),
-    # —— 11-06 体检新增的原因
+    # —— 新增的原因
     ("不在 SeeU 允许名单里,还没打开。怎么办:", " is not on SeeU's allow list, so it was not opened. What to do: "),
     ("不在 SeeU 允许名单里,没拉起浏览器。怎么办:", " is not on SeeU's allow list, so the browser was not started. What to do: "),
     (",然后再开一次;或开 I See 模式", ", then open it again; or turn on I See mode"),
@@ -153,14 +153,14 @@ PHRASES = [
     ("用户正在用电脑,SeeU 先不借鼠标(等用户停手再试):", "the user is using the computer, so SeeU is not borrowing the mouse right now (try again when they stop): "),
     ("没核实到字打进去,所以没按回车(先 see 看一眼,字在就单独按一次回车)",
      "the text could not be verified, so Return was not pressed (see first; if the text is there, press Return separately)"),
-    # —— 11-25 C-4.2 按键核对复查
+    # —— 按键核对复查
     ("」所在 App 的窗口(App 可能正卡着),认不出键会进哪个窗口,SeeU 没按;等几秒先 see 看一眼再试;一直这样就告诉用户这个 App 可能卡住了(别改成只写 App 名按:App 醒过来键会进当时的窗口)",
      "\u201d: its app's windows can't be read (the app may be hanging), so it's unclear which window the key would land in. SeeU didn't press; wait a few seconds, see, then try again; if it stays like this, tell the user the app may be hung (don't switch to pressing with just the app name: when the app wakes up the key lands in whatever window is focused then)"),
     ("按键前读不到「", "before pressing: \u201c"),
     ("字打进去了,但没按回车:", "the text went in, but Return was not pressed: "),
     ("打完字以后键盘焦点换到别的窗口了,所以没按回车(先 see 看一眼再决定)",
      "the keyboard focus moved to another window after typing, so Return was not pressed (see first, then decide)"),
-    # —— 11-24 C-4.1 按键核实(act._key_verify)
+    # —— 按键核实(act._key_verify)
     ("按了,但画面没看出变化(这不等于没生效:一个字、回车提交、挪光标常常看不出来)。先 see 看一眼,别直接重按",
      "The key was sent, but no visible change was detected (that doesn't mean it failed: one character, a Return, or a caret move often can't be seen). See first; don't just press it again"),
     ("画面没看出来,按控件读到的核实:", "not visible in the screenshot; verified from the app's controls: "),
@@ -366,7 +366,7 @@ PHRASES = [
     ("个网页技术做的 App,测过能藏着用:", " apps built with web technology; tested to work hidden: "), ("个网页技术做的 App", " apps built with web technology"), (";没试(有的会禁掉):", "; not tried (some block it): "), ("本机", "this Mac has"),
     (";Claude 不碰", "; Claude is never touched"), (";只用 SeeU 专用那份,你自己开着的不碰", "; only SeeU's own instance is used, never yours"),
     ("隐身 Chrome 开关", "Stealth Chrome setting"), ("开着(后备)", "on (fallback)"),
-    ("没开:不要紧,C-1.0 起隐身 Chrome 读写页面走调试端口,这个开关只当后备", "off: fine — stealth Chrome reads/writes pages via the debug port; this setting is only a fallback"),
+    ("没开:不要紧,隐身 Chrome 读写页面走调试端口,这个开关只当后备", "off: fine — stealth Chrome reads/writes pages via the debug port; this setting is only a fallback"),
     ("都齐了(— 是没装/没开着、查不了的,不算缺)。", "All set (— means not installed / not open / can't check, not missing)."),
     ("缺的,照这样开:", "Missing — enable like this:"), ("设置页:", "settings page: "),
     ("加 --open 会把上面的设置页直接打开(只打开,勾选要你亲手)。", "Add --open to open those settings pages directly (it only opens them; you switch them on yourself)."),

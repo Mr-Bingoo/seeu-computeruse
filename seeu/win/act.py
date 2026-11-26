@@ -32,14 +32,14 @@ KEEP_SHOTS = 200
 MIN_CHANGE = 0.05       # 整个窗口变了百分之几算「有变化」(探路:几个字只占 0.1%,按键 0.01%,所以还要看读回和点击处附近)
 NEAR_CHANGE = 1.0       # 点击处附近 ±60 像素变了百分之几算有变化(光标、高亮这种小变化)
 # 画面是视频流、读不到控件的程序(按程序名):靠截图认字出清单。BlueStacks / MuMu / 雷电 / 夜神 模拟器
-_LAG = {}               # 窗口号 → (记下的时间, 那时的小截图):做完一步「控件变了、画面没变」,截图暂时不可信(11-15)
-LAG_TTL = 60            # 最多记 1 分钟(11-15 复查:原 10 分钟,误挂了卡太久)
-LAG_CLEAR = 3.0         # 新截图跟记下那张差多少百分比算「画面跟上了」(转圈、闪烁的光标、按钮高亮不算;11-15 第五轮复查:原 1%,高亮就有 2%)
+_LAG = {}               # 窗口号 → (记下的时间, 那时的小截图):做完一步「控件变了、画面没变」,截图暂时不可信
+LAG_TTL = 60            # 最多记 1 分钟(原 10 分钟,误挂了卡太久)
+LAG_CLEAR = 3.0         # 新截图跟记下那张差多少百分比算「画面跟上了」(转圈、闪烁的光标、按钮高亮不算;原 1%,高亮就有 2%)
 LAG_WHY = "上一步之后它的控件已经变了、画面还没跟上(程序画得慢,或者机器太忙)"
 COVER_WHY = "它整个被别的窗口盖住了,Chrome / Electron 这类程序被盖住时不重画"
 DESK_WHY = "它在另一个虚拟桌面上,Chrome / Electron 这类程序在别的桌面上可能不重画"
 STALE_PIXEL = ("这个窗口的截图现在不可信:{why}。按截图位置操作会照着旧画面点到别的东西"
-               "(11-15 Win10 实测:照旧图点,点中了另一张卡片的「连接」),SeeU 没做。{tip}")
+               "(Win10 实测:照旧图点,点中了另一张卡片的「连接」),SeeU 没做。{tip}")
 LAG_TIP = "改用 see 列表里控件的编号操作(截图认字得来的编号同样不行);列表里没有的,等几秒再 see 一次,画面跟上了再按位置点"
 COVER_TIP = "改用 see 列表里控件的编号操作(截图认字得来的编号同样不行);列表里没有的,请用户把这个窗口露出来一点,再 see"
 DESK_TIP = "改用 see 列表里控件的编号操作(截图认字得来的编号同样不行);列表里没有的,请用户切到那个桌面或把窗口挪过来,再 see"
@@ -47,7 +47,7 @@ FRAME_NAMES = {"最小化", "最大化", "还原", "关闭", "系统", "Minimize
 CANVAS_EXES = {"hd-player.exe", "mumuplayer.exe", "nemuplayer.exe", "dnplayer.exe", "nox.exe", "ldplayer.exe"}
 # 环境变量 SEEU_SETTINGS_FILE:开发测试时把设置换到别的文件(虚拟机里的代码是共享目录,不设会改到开发机上真的设置;同 isee.SETTINGS)
 from seeu.where import settings_file as _sf
-_SETTINGS = _sf()   # SEEU_SETTINGS_FILE 优先(在 where 里);11-22 C-3.7:插件版存用户文件夹
+_SETTINGS = _sf()   # SEEU_SETTINGS_FILE 优先(在 where 里);插件版存用户文件夹
 
 
 # ─────────────────────────────── 小工具 ───────────────────────────────
@@ -62,7 +62,7 @@ def _pid_alive(pid):
 
 
 def _tmp():
-    """截图临时目录。11-23 C-3.9 整体复查(照 Mac act._tmp):目录名带进程号,主人进程还活着的不删
+    """截图临时目录。照 Mac act._tmp:目录名带进程号,主人进程还活着的不删
     (原来超一天就删、不看主人:长驻的 MCP 服务一天没截图,目录被别的 SeeU 进程删掉,此后 see 一直报错);
     自己的目录万一被删了(系统清临时文件等)就重建。"""
     if _TMP[0] is None:
@@ -106,7 +106,7 @@ def _save_png(w, h, data):
 
 def _settings():
     """读 设置.json。没有这个文件 = 全用默认;文件在但读不出来(格式坏了、不是一组设置)→ 借用鼠标按「问我」算
-    (11-14 复查:原来一律当成空,用户手改成「关」但存坏了的话会被当成「开」)。记事本存的带 BOM 的也认。"""
+    (原来一律当成空,用户手改成「关」但存坏了的话会被当成「开」)。记事本存的带 BOM 的也认。"""
     try:
         with open(_SETTINGS, encoding="utf-8-sig") as f:
             d = json.load(f)
@@ -212,7 +212,7 @@ def real_allowed(allow=None):
 
 def _win(app):
     """找窗口 + 过安全底线 + 管理员窗口。返回 window.info。"""
-    safety.check_unlocked()          # 11-23 C-3.9 整体复查:锁屏时什么都不做(原来没查;判断出错当没锁)
+    safety.check_unlocked()          # 锁屏时什么都不做(原来没查;判断出错当没锁)
     win = W.find(app)
     safety.check_window(win)
     if win.get("elevated") and not W.self_elevated():
@@ -221,7 +221,7 @@ def _win(app):
     return win
 
 
-# ─────────────────────────────── 代理光标(纯显示,11-14,照 Mac act._cursor) ───────────────────────────────
+# ─────────────────────────────── 代理光标(纯显示,照 Mac act._cursor) ───────────────────────────────
 # 动手前在那个位置画一个箭头给人看:后台模式 = 紫色「SeeU」;借了用户的鼠标 / 前台 = 亮橙 + 署名。
 # 位置被别的窗口挡住、或窗口在别的虚拟桌面上,就不画。出任何错都吞掉,绝不影响动作。SEEU_NO_CURSOR=1 不画。
 
@@ -265,10 +265,10 @@ def _cursor(h, kind, x, y, mode="bg"):
             from seeu.win import api
             top = W.top_of(int(api.user32.WindowFromPoint(_wt.POINT(int(x), int(y))) or 0))
             if top and int(top) != int(h) and W.cls(top) not in ("SeeUFloat", "SeeUCursor", "SeeUToast"):
-                C.hide(_task_key())          # 11-17:只藏自己这只(别的任务的光标不受影响)
+                C.hide(_task_key())          # 只藏自己这只(别的任务的光标不受影响)
                 return
         label, color = _cursor_style(mode)
-        # 11-17 C-2.6(照 Mac):一个任务一只光标,key = 任务显示名;后台模式名牌按规则(只剩一只写 SeeU,多只写任务名)、颜色用任务色
+        # 照 Mac:一个任务一只光标,key = 任务显示名;后台模式名牌按规则(只剩一只写 SeeU,多只写任务名)、颜色用任务色
         key = _task_key()
         if key and mode != "real":
             try:
@@ -313,7 +313,7 @@ def _small(cap):
 
 
 def stale_why(h, cap=None):
-    """这个窗口的截图现在可不可信(11-15):不可信返回原因,可信返回 None。cap = 刚截的图(没有就现截一张)。
+    """这个窗口的截图现在可不可信:不可信返回原因,可信返回 None。cap = 刚截的图(没有就现截一张)。
     ① 做完一步只有控件变了、画面没变 → 记下;之后截图跟那时比明显变了(画面跟上了)或过了 1 分钟才放下。
     ② Chrome / Electron 窗口整个被盖住(不重画)。"""
     h = int(h)
@@ -329,7 +329,7 @@ def stale_why(h, cap=None):
             v = None
     if v:
         return LAG_WHY
-    if _is_chrome(h) and W.other_desktop(h):      # 11-15 第五轮复查:别的桌面上的 Chrome 类窗口当不可信(保守)
+    if _is_chrome(h) and W.other_desktop(h):      # 别的桌面上的 Chrome 类窗口当不可信(保守)
         return DESK_WHY
     return COVER_WHY if W.stale_shot(h) else None
 
@@ -344,7 +344,7 @@ def _stale_pixel(h):
 
 
 def _sig(hwnd):
-    """窗口标题 + 控件名字和值的指纹。🔴 Chrome 窗口被完全挡住时不重画,截到的是旧图(11-11 真机:点成功了却判没变,
+    """窗口标题 + 控件名字和值的指纹。🔴 Chrome 窗口被完全挡住时不重画,截到的是旧图(真机:点成功了却判没变,
     换下一档又点一次,按钮被点了 3 下)—— 所以画面没变时还要看这个。"""
     try:
         parts = [W.text(hwnd)] + [f"{e['name']}={e.get('value') or ''}" for e in uia.elements(hwnd, limit=400)]
@@ -353,7 +353,7 @@ def _sig(hwnd):
         return None
 
 
-PAGE_SWAP = 0.3         # 控件名字有三成以上换了 = 换页了(11-15)
+PAGE_SWAP = 0.3         # 控件名字有三成以上换了 = 换页了
 PAINT_SMALL = 3.0       # 换页了画面却只变了不到这么多百分比 = 画面没跟上(鼠标移过去的高亮这种小变化)
 
 
@@ -368,7 +368,7 @@ def _is_chrome(hwnd):
 
 
 def _snap(hwnd, chrome):
-    """一次遍历出两样:指纹(同 _sig)和控件名字集合(只给 Chrome / Electron,看「换没换页」;取满上限的不给 —— 截断了比不准,11-15 复查)。"""
+    """一次遍历出两样:指纹(同 _sig)和控件名字集合(只给 Chrome / Electron,看「换没换页」;取满上限的不给 —— 截断了比不准)。"""
     try:
         es = uia.elements(hwnd, limit=NAMES_CAP)
         parts = [f"{e['name']}={e.get('value') or ''}" for e in es]
@@ -397,7 +397,7 @@ def _verify(hwnd, act, near=None, read=None, timeout=2.5):
     chrome = _is_chrome(hwnd)
     sig0, names0 = _snap(hwnd, chrome)
 
-    def rebase():       # 11-17 C-2.8:借前台 / 借真鼠标排完队、等完用户停手,真动手前重拍「动作前」(原来那张是排队前的)
+    def rebase():       # 借前台 / 借真鼠标排完队、等完用户停手,真动手前重拍「动作前」(原来那张是排队前的)
         nonlocal before, txt0, title0, sig0, names0
         b = _shot(hwnd)
         if b is None:
@@ -411,7 +411,7 @@ def _verify(hwnd, act, near=None, read=None, timeout=2.5):
         act()
     finally:
         _rl.REBASE.f = None
-    # 11-23 C-3.9 整体复查(照 Mac act._try 的 done):动作已经发出去了,之后核实 / 存截图出错(临时目录被删、窗口没了…)
+    # 照 Mac act._try 的 done:动作已经发出去了,之后核实 / 存截图出错(临时目录被删、窗口没了…)
     # 不能当成「这条路没走通」—— 那样 _ladder 会换下一档把同一个动作再做一遍(按钮最多被点 3 次)。一律按 unverified 返回。
     try:
         return _after(hwnd, before, near, read, timeout, txt0, title0, chrome, sig0, names0)
@@ -443,13 +443,13 @@ def _after(hwnd, before, near, read, timeout, txt0, title0, chrome, sig0, names0
         if ok:
             note = f"画面变了 {pct}%"
             if names0 is not None and pct < PAINT_SMALL:
-                # 11-15 Win10:真鼠标点「定时任务」,按钮高亮画面变了 2%,控件整页换了,画面却还是老页面 → 也算没跟上
+                # Win10:真鼠标点「定时任务」,按钮高亮画面变了 2%,控件整页换了,画面却还是老页面 → 也算没跟上
                 time.sleep(0.5)
                 n1 = _names(hwnd)
                 if n1 is not None and _swapped(names0, n1) >= PAGE_SWAP:
                     _LAG[int(hwnd)] = (time.time(), _small(_shot(hwnd) or after))
                     return "delivered", _safe_png(after), note + ";控件大半换了、画面只变了一点(画面可能没跟上)"
-            if pct >= LAG_CLEAR:             # 画面明显跟着变了(≥3%),说明跟得上;按钮高亮这种小变化不算(11-15 复查)
+            if pct >= LAG_CLEAR:             # 画面明显跟着变了(≥3%),说明跟得上;按钮高亮这种小变化不算
                 _LAG.pop(int(hwnd), None)
             return "delivered", _safe_png(after), note
         if read:
@@ -461,7 +461,7 @@ def _after(hwnd, before, near, read, timeout, txt0, title0, chrome, sig0, names0
         if sig0 is not None and time.time() - t0 > 0.5:
             s1 = _sig(hwnd)
             if s1 is not None and s1 != sig0:
-                if chrome:      # 11-15:之后按截图位置点要先拦(见 stale_why);只对 Chrome / Electron(普通程序勾个框也是这样,不是没跟上)
+                if chrome:      # 之后按截图位置点要先拦(见 stale_why);只对 Chrome / Electron(普通程序勾个框也是这样,不是没跟上)
                     _LAG[int(hwnd)] = (time.time(), _small(after))
                 return "delivered", _safe_png(after), "控件内容变了(画面可能没重画)"
     return "ineffective", _safe_png(after), "画面、标题、控件内容都没变"
@@ -469,13 +469,13 @@ def _after(hwnd, before, near, read, timeout, txt0, title0, chrome, sig0, names0
 
 def _keep_front(hwnd, act, info):
     """后台动作做完盯 0.5 秒:前台被目标窗口拿走了就还回去。
-    11-11 真机:用户在 Chrome 窗口 A 里,后台点 Chrome 窗口 B,Chrome 自己把 B 换到前台(同一个程序的窗口之间系统不拦)。"""
+    真机:用户在 Chrome 窗口 A 里,后台点 Chrome 窗口 B,Chrome 自己把 B 换到前台(同一个程序的窗口之间系统不拦)。"""
     def run():
         fg0 = W.foreground()
         act()
         if not fg0 or fg0 == hwnd:
             return
-        try:        # 11-23 C-3.9 整体复查:动作已发出,盯前台这段出错不能让 _ladder 换下一档重做
+        try:        # 动作已发出,盯前台这段出错不能让 _ladder 换下一档重做
             t0 = time.time()
             while time.time() - t0 < 0.5:
                 if W.foreground() == hwnd:
@@ -524,12 +524,12 @@ def see(app):
     items = []
     elems = uia.elements(h)
     if win["class"] == "Chrome_WidgetWin_1" and not any(e["type"] == 50030 for e in elems):
-        time.sleep(1.5)             # Chrome / Electron 第一次被 UIA 查时网页那部分是空的,隔一两秒才有(11-11 真机)
+        time.sleep(1.5)             # Chrome / Electron 第一次被 UIA 查时网页那部分是空的,隔一两秒才有(真机)
         elems = uia.elements(h)
     for e in elems:
         x, y, w, hh = e["rect"]
         val = " ".join(str(e.get("value") or "").split())
-        if len(val) > 80:                       # 文档、长输入框的内容只给开头(11-11:记事本整篇 2 万字塞进了清单)
+        if len(val) > 80:                       # 文档、长输入框的内容只给开头(记事本整篇 2 万字塞进了清单)
             val = val[:80] + f"…(共 {len(str(e['value']))} 字)"
         name = " ".join(e["name"].split())
         text = name if not val else f"{name} = {val}" if name else val
@@ -539,8 +539,8 @@ def see(app):
     canvas = win["exe"].lower() in CANVAS_EXES
     real_ = [i for i in items if i["role"] not in ("文字", "标题栏") and i["text"] not in FRAME_NAMES]
     if cap and (canvas or len(real_) < 3):
-        # 11-15:窗口边框上的最小化 / 最大化 / 关闭不算(Win10 上 Trae、豆包只读得到这 3 个,原来正好够数、认字被跳过)
-        # 读不到控件(模拟器、游戏、自绘界面):截图认字补清单(11-11,Windows 自带识字,要装语言包)
+        # 窗口边框上的最小化 / 最大化 / 关闭不算(Win10 上 Trae、豆包只读得到这 3 个,原来正好够数、认字被跳过)
+        # 读不到控件(模拟器、游戏、自绘界面):截图认字补清单(Windows 自带识字,要装语言包)
         from seeu.win import ocr
         r = ocr.recognize(W.png_bytes(*cap))
         if r["available"]:
@@ -551,7 +551,7 @@ def see(app):
             ocr_note = r.get("note")
     for i, it in enumerate(items, 1):
         it["id"] = i
-        it["hwnd"] = int(h)          # 11-23 C-3.9 整体复查:记下这一项是哪个窗口的(同程序两个窗口时,动作那次找到的可能是另一个)
+        it["hwnd"] = int(h)          # 记下这一项是哪个窗口的(同程序两个窗口时,动作那次找到的可能是另一个)
     _last[app] = items
     same = [w for w in W.list_windows() if w["exe"].lower() == win["exe"].lower()]
     wins = [w["title"] for w in same] if len(same) > 1 else []
@@ -574,12 +574,12 @@ class Stale(RuntimeError):
 
 
 def _still_there(it, hwnd=None):
-    """按编号点之前核对(11-14,规则同 Mac 的 act._still_there):see 的时候那个控件还在不在、现在在哪。
+    """按编号点之前核对(规则同 Mac 的 act._still_there):see 的时候那个控件还在不在、现在在哪。
     返回现在的中心点 (x, y);不在了抛 Stale(不退回去点老位置)。
       - 控件还在:用它现在的位置(滚动、挪窗口后也点得准),顺手更新清单里记的位置。
       - 控件对象失效:看原位置上现在是不是同一种、同名、还在这个窗口里的控件,是就照点(窗口被盖着时问不到,算不在)。
     认字得来的项(模拟器、自绘界面)没有控件可问,不核对。
-    11-23 C-3.9 整体复查:先核对这一项是不是这次找到的这个窗口的(see 时记了窗口号)。同一个程序开着两个窗口、see 之后
+    先核对这一项是不是这次找到的这个窗口的(see 时记了窗口号)。同一个程序开着两个窗口、see 之后
     另一个窗口到了上面,同一个 App 名这次找到的就是另一个 —— 原来「控件对象还有效」就照点,点进了 see 的那个窗口。"""
     if hwnd is not None and it.get("hwnd") is not None and int(it["hwnd"]) != int(hwnd):
         raise Stale(WRONG_WINDOW.format(a=int(it["hwnd"]), b=int(hwnd)))
@@ -651,10 +651,10 @@ OFF_REASON = "后台做了但没效果;按设置(借用鼠标 = 关)没借用户
 
 def _gate(r, allow, what, h=None):
     """后台不行时,能不能往下借。能借返回 None;不能借返回填好原因的结果。
-    h:目标窗口。在别的虚拟桌面上 → 借了也做不了(借鼠标 / 借前台都拒),别先问用户、等答应了才说做不了(11-14 复查)。"""
+    h:目标窗口。在别的虚拟桌面上 → 借了也做不了(借鼠标 / 借前台都拒),别先问用户、等答应了才说做不了。"""
     try:
         if h and W.other_desktop(h):
-            # 11-15 复查:报 refused(停下告诉用户),不是 ineffective(那会让 AI 换个目标白试一次)
+            # 报 refused(停下告诉用户),不是 ineffective(那会让 AI 换个目标白试一次)
             r.update(outcome="refused", code="other_desktop", reason=W.OTHER_DESKTOP)
             return r
     except Exception:   # noqa: BLE001
@@ -685,14 +685,14 @@ def _is_busy(why):
 
 def _busy(r, ex):
     from seeu.win import real as _rl
-    if isinstance(ex, getattr(_rl, "SeeUBusy", ())) or SEEU_BUSY_MARK in str(ex):   # 11-17:别的 SeeU 任务在借鼠标,排不上 → busy(稍后重试),不是被拦
+    if isinstance(ex, getattr(_rl, "SeeUBusy", ())) or SEEU_BUSY_MARK in str(ex):   # 别的 SeeU 任务在借鼠标,排不上 → busy(稍后重试),不是被拦
         r.update(outcome="busy", code="busy", reason=str(ex))
         return r
     r.update(outcome="refused", code="user_busy", reason=str(ex))
     return r
 
 
-# 11-23 C-3.9 整体复查:点这几种有名字的控件前查危险名字(清空回收站 / 关机 / 注销 / 重启…,safety.check_menu);
+# 点这几种有名字的控件前查危险名字(清空回收站 / 关机 / 注销 / 重启…,safety.check_menu);
 # 按钮、菜单项、拆分按钮。列表项不查(资源管理器里的文件名会被误伤);按截图位置 / 认字得来的项没有控件名,查不了。
 TAP_CHECK_TYPES = {50000, 50011, 50031}
 
@@ -714,7 +714,7 @@ def tap(app, target, allow=None, real=True, stale_check=True):
         _check_name(e, win)
     except safety.Refused as ex:
         return _refused(ex)
-    if e is None and stale_check:    # 按截图位置(或截图认字)点:截图不可信就不点(11-15)
+    if e is None and stale_check:    # 按截图位置(或截图认字)点:截图不可信就不点
         bad = _stale_pixel(h)
         if bad:
             return bad
@@ -726,11 +726,11 @@ def tap(app, target, allow=None, real=True, stale_check=True):
     except Exception:   # noqa: BLE001
         pass
     _cursor(h, "click", x, y)
-    st_read = _state_reader(h, e, x, y)          # 11-23 C-3.9:单选 / 勾选框按「选没选中」核实(见 _state_reader)
+    st_read = _state_reader(h, e, x, y)          # 单选 / 勾选框按「选没选中」核实(见 _state_reader)
     r = _ladder(h, [("后台点击", lambda: inputs.click(h, round(x), round(y)))], near=near, read=st_read)
     r["xy"] = (round(x), round(y))
     if r["outcome"] not in ("ineffective", "failed") or not real:
-        # real=False:只走后台(打字前点输入框用。点空输入框画面只多一个光标,常判「没变」,不能因此借用户的鼠标 —— 11-11 真机每次打字都借了一次)
+        # real=False:只走后台(打字前点输入框用。点空输入框画面只多一个光标,常判「没变」,不能因此借用户的鼠标 —— 真机每次打字都借了一次)
         return r
     blocked = _gate(r, allow, "前台约 0.2 秒按下这个控件,或借鼠标点一下", h)
     if blocked:
@@ -743,11 +743,11 @@ def tap(app, target, allow=None, real=True, stale_check=True):
             if not W.other_desktop(h):
                 _cursor(h, "click", x, y, "real")
             from seeu.win import real as _rl
-            with _rl.slot():                     # 复查 11-17 C-2.6:借前台也会动前台窗口,跟借真鼠标一起排队
-                _rl.rebase()                     # 11-17 C-2.8:排完队重拍「动作前」
+            with _rl.slot():                     # 借前台也会动前台窗口,跟借真鼠标一起排队
+                _rl.rebase()                     # 排完队重拍「动作前」
                 info.update(inputs.borrow_front(h, lambda: uia.press(e)))
             if info.get("stolen") and not info.get("back"):
-                # 11-23 C-3.9 整体复查:原来在这抛错 → _ladder 当成这条路没走通,换真鼠标把同一个按钮再点一次。
+                # 原来在这抛错 → _ladder 当成这条路没走通,换真鼠标把同一个按钮再点一次。
                 # 按下已经做成了:照常核实,只在 note 里说前台没还回去
                 front_lost.append(1)
         steps.append(("借前台按下", borrow))
@@ -808,7 +808,7 @@ def _real_step(r, h, name, fn, near, allow, what):
 
 
 def long_press(app, target, ms=1000, allow=None):
-    """长按(11-12):后台按住 ms 毫秒 → 没效果再借真鼠标(归「借用鼠标」设置管)。浏览器里不做(跟 Mac 版一样)。"""
+    """长按:后台按住 ms 毫秒 → 没效果再借真鼠标(归「借用鼠标」设置管)。浏览器里不做(跟 Mac 版一样)。"""
     try:
         win = _win(app)
     except safety.Refused as ex:
@@ -818,7 +818,7 @@ def long_press(app, target, ms=1000, allow=None):
     h = win["hwnd"]
     x, y, _e = _resolve(app, target, h)
     try:
-        _check_name(_e, win)         # 11-23 C-3.9 整体复查:长按也是点,同样查危险名字
+        _check_name(_e, win)         # 长按也是点,同样查危险名字
     except safety.Refused as ex:
         return _refused(ex)
     if _e is None:
@@ -839,7 +839,7 @@ def long_press(app, target, ms=1000, allow=None):
 
 
 def drag(app, pts, hold_ms=0, allow=None):
-    """拖动(11-12):pts = 屏幕点列表(至少两个,起点在前),每个点都要在窗口里。后台拖 → 没效果再借真鼠标拖。浏览器里不做。"""
+    """拖动:pts = 屏幕点列表(至少两个,起点在前),每个点都要在窗口里。后台拖 → 没效果再借真鼠标拖。浏览器里不做。"""
     try:
         win = _win(app)
     except safety.Refused as ex:
@@ -877,7 +877,7 @@ BROWSER_EXES = {"chrome.exe", "msedge.exe", "brave.exe", "vivaldi.exe", "opera.e
 _FIELD = {}         # 窗口号 → SeeU 最近一次按 at 点进去的那个输入框(UIA 信息)
 NEED_FIELD = ("这是用户自己的浏览器:后台时 SeeU 读不出光标在哪个框里(可能是密码框),所以网页里打字 / 按会改内容的键,"
               "要先用 at / target 指定输入框(SeeU 会先查它是不是密码框)。网页优先用 SeeU 专用浏览器(seeu_web_open)")
-WEB_HINT = ("这是用户自己的浏览器:它没开网页内容的辅助功能时,后台打字 / 滚动它常常不认(11-11 真机,Chrome 157)。"
+WEB_HINT = ("这是用户自己的浏览器:它没开网页内容的辅助功能时,后台打字 / 滚动它常常不认(真机实测,Chrome 157)。"
             "网页请改用 SeeU 专用浏览器(seeu_web_open),那条路稳")
 
 
@@ -887,7 +887,7 @@ def _is_browser(win):
 
 def _address_el(win):
     """资源管理器窗口里正拿着键盘焦点的地址栏(UIA 元素);不是 / 找不到 None。
-    11-23 C-3.9 虚拟机实测:Win11 资源管理器的地址栏在新式界面框架里,点进去后 focused_in 只读到一个没名字的容器,
+    虚拟机实测:Win11 资源管理器的地址栏在新式界面框架里,点进去后 focused_in 只读到一个没名字的容器,
     但「地址栏」这个输入框自己标着有键盘焦点(30008)、值就是里面的路径 → 直接找它。"""
     try:
         for it in uia.elements(win["hwnd"]):
@@ -899,13 +899,13 @@ def _address_el(win):
 
 
 def _in_address(win, field):
-    """要打字 / 按回车的地方是不是资源管理器的地址栏(11-23 C-3.9)。at 点的那个框直接看名字;没给 at 就看地址栏有没有焦点;
+    """要打字 / 按回车的地方是不是资源管理器的地址栏。at 点的那个框直接看名字;没给 at 就看地址栏有没有焦点;
     资源管理器里焦点完全读不出来 = 按地址栏算(宁可多拦)。别的程序一律 False。"""
     if (win.get("exe") or "").lower() != "explorer.exe":
         return False
     if field is not None and safety.is_address(field.get("name") or field.get("text")):
         return True
-    # 11-23 C-4.0 Fable 复查:at 指的控件名字不像地址栏(面包屑、「上一个位置」按钮…)也可能把地址栏点进编辑状态 → 接着看焦点
+    # at 指的控件名字不像地址栏(面包屑、「上一个位置」按钮…)也可能把地址栏点进编辑状态 → 接着看焦点
     if _address_el(win) is not None:
         return True
     try:
@@ -943,9 +943,9 @@ P_IS_SELECTED, P_TOGGLE_STATE, P_HAS_SEL, P_HAS_TOG = 30079, 30086, 30036, 30041
 
 
 def _state_reader(h, e, x, y):
-    """11-23 C-3.9 整体复查(虚拟机实测):单选按钮、勾选框点中了,画面只变一小点(老程序在 200% 缩放下更明显),
+    """虚拟机实测:单选按钮、勾选框点中了,画面只变一小点(老程序在 200% 缩放下更明显),
     截图比对判「没变」→ 换真鼠标再点一次 = 按了两下(勾选框就是勾上又取消)。
-    点的是这两种控件时,改成读它「选没选中」:点前点后不一样就算点成了(照 Mac 11-14 勾选框自我核实)。
+    点的是这两种控件时,改成读它「选没选中」:点前点后不一样就算点成了(照 Mac 勾选框自我核实)。
     按编号点的直接用那个控件;按位置点的问一下那一点上是什么控件(只认这个窗口里的)。不是这两种 → None(照旧比截图)。"""
     try:
         el = (e or {}).get("el")
@@ -984,7 +984,7 @@ DIALOG_BLOCKS = ("挡着,字会打进弹窗、到不了后面的输入区,SeeU �
 def _blocking_dialog(h, field=None):
     """有模态弹窗挡着、而要打字的地方不在弹窗里 → 返回弹窗;否则 None。
     要打字的地方:先点过的输入框(field),没有就看窗口记的焦点。焦点读不出 = 按「不在弹窗里」算(弹窗挡着时字本来就进不去)。
-    11-12 Win10 真机:VS Code 欢迎弹窗挡着,后台打字画面变了报 delivered,文件却是空的。"""
+    Win10 真机:VS Code 欢迎弹窗挡着,后台打字画面变了报 delivered,文件却是空的。"""
     try:
         dlg = uia.blocking_dialog(h)
     except Exception:
@@ -1001,7 +1001,7 @@ def _blocking_dialog(h, field=None):
 
 
 def type(app, text, enter=False, at=None, allow=None):
-    """后台打字。at = 先后台点一下的位置(编号 / 名字 / 屏幕点;Electron 程序打字前要先点,11-11 真机)。
+    """后台打字。at = 先后台点一下的位置(编号 / 名字 / 屏幕点;Electron 程序打字前要先点,真机)。
     核实:读得回文字就看里面有没有打的字,读不回看画面。回车只在核实打进去后单独按。"""
     try:
         win = _win(app)
@@ -1015,15 +1015,15 @@ def type(app, text, enter=False, at=None, allow=None):
         if field is not None and field.get("password"):
             return _refused("光标在密码框里,SeeU 不往里打字(这一步请你自己来)")
         try:
-            _check_name(field, win)  # 11-23 C-4.0 Fable 复查:带 target 打字会先点它,危险名字的按钮同样不点
+            _check_name(field, win)  # 带 target 打字会先点它,危险名字的按钮同样不点
         except safety.Refused as ex:
             return _refused(ex)
-        if field is None:            # at 是截图位置:截图不可信就不点也不打(11-15)
+        if field is None:            # at 是截图位置:截图不可信就不点也不打
             bad = _stale_pixel(h)
             if bad:
                 return bad
         r0 = tap(app, (ax_, ay_), real=False, stale_check=False)
-        if r0["outcome"] in ("refused", "busy"):     # 11-17:排不上队也别接着打(框没点上,字会打到别处)
+        if r0["outcome"] in ("refused", "busy"):     # 排不上队也别接着打(框没点上,字会打到别处)
             return r0
         time.sleep(0.2)
     if _is_browser(win):
@@ -1032,7 +1032,7 @@ def type(app, text, enter=False, at=None, allow=None):
             return _refused(NEED_FIELD)
         if f.get("password"):
             return _refused("光标在密码框里,SeeU 不往里打字(这一步请你自己来)")
-    if _in_address(win, field):            # 11-23 C-3.9:资源管理器地址栏只打已有文件夹的路径(见 safety.check_address_text)
+    if _in_address(win, field):            # 资源管理器地址栏只打已有文件夹的路径(见 safety.check_address_text)
         try:
             safety.check_address_text(text)
         except safety.Refused as ex:
@@ -1046,7 +1046,7 @@ def type(app, text, enter=False, at=None, allow=None):
         return _refused("光标在密码框里,SeeU 不往里打字(这一步请你自己来)")
     read = _reader(h)
     if field is not None and "value" in field.get("actions", []):
-        def read():                     # 读刚点过的那个输入框本身(11-11:按焦点猜,Chrome 里读成了地址栏)
+        def read():                     # 读刚点过的那个输入框本身(按焦点猜,Chrome 里读成了地址栏)
             try:
                 return uia.read_element(field["el"])
             except Exception:
@@ -1072,9 +1072,9 @@ def type(app, text, enter=False, at=None, allow=None):
         got = read()
         t1 = time.time()
         while got is not None and tail and tail not in squash(got) and time.time() - t1 < 1.2:
-            time.sleep(0.3)             # Chrome 的网页结构比打字慢半拍(11-11 真机:字对了却读成「只打进一部分」)
+            time.sleep(0.3)             # Chrome 的网页结构比打字慢半拍(真机:字对了却读成「只打进一部分」)
             got = read()
-        # 读回空串、或跟打字前一模一样 = 网页结构没跟上(11-11 Chrome 真机:一直读成空 / 读成打字前的旧内容),当「不知道」;
+        # 读回空串、或跟打字前一模一样 = 网页结构没跟上(Chrome 真机:一直读成空 / 读成打字前的旧内容),当「不知道」;
         # 只有内容真变了、却缺最后几个字,才报只打进一部分
         if got and squash(got) != squash(before_val) and tail and tail not in squash(got):
             r.update(outcome="partial", reason="读回的文字里找不到最后几个字,可能只打进去一部分;没按回车。先 see 看看")
@@ -1082,8 +1082,8 @@ def type(app, text, enter=False, at=None, allow=None):
         real_read = before_val is not None and (squash(before_val) or any(c in before_val for c in ZERO_W))
         if real_read and got is not None and tail and squash(got) == squash(before_val) and tail not in squash(got) \
                 and not _is_browser(win) and "not accessible" not in got:
-            # 只在打字前确实读到了输入框(有字,或网页编辑框空着时特有的隐形字符)时才判;读不到 / 读回空串退回看画面(11-15 复查)
-            # 11-15 Win10:WorkBuddy 机器满载时字没进输入框,画面却有点小变化 → 原来报「成功」还按了回车。读回跟打字前一样就别说成功
+            # 只在打字前确实读到了输入框(有字,或网页编辑框空着时特有的隐形字符)时才判;读不到 / 读回空串退回看画面
+            # Win10:WorkBuddy 机器满载时字没进输入框,画面却有点小变化 → 原来报「成功」还按了回车。读回跟打字前一样就别说成功
             r.update(outcome="unverified", reason="打了,但读回的内容跟打字前一样,可能没打进去(程序忙、没接住);没按回车。先 see 看一眼,"
                                                    "没进去就等一会儿再打")
             if enter:
@@ -1110,7 +1110,7 @@ def type(app, text, enter=False, at=None, allow=None):
             r = r2
     if enter:
         if r["outcome"] == "delivered" and _in_address(win, field) and not _address_now_folder(win, field):
-            r["enter"] = "skipped"      # 11-23 C-4.0 Fable 复查:地址栏里整串(不只是这次打的字)不是已有文件夹就不按回车
+            r["enter"] = "skipped"      # 地址栏里整串(不只是这次打的字)不是已有文件夹就不按回车
             r["note"] = safety.NOT_FOLDER_ENTER
         elif r["outcome"] == "delivered":
             inputs.key(h, "return", target=target)
@@ -1133,11 +1133,11 @@ def _address_now_folder(win, field):
 
 EM_GETSEL = 0x00B0
 CARET_KEYS = {"left", "right", "up", "down", "home", "end", "pageup", "pagedown"}
-ZERO_W = "\u200b\u200c\u200d\ufeff"     # 看不见的字符:网页编辑框空着时读回来就是这些(11-15 WorkBuddy)
+ZERO_W = "\u200b\u200c\u200d\ufeff"     # 看不见的字符:网页编辑框空着时读回来就是这些(WorkBuddy)
 
 
 def _caret(h, target):
-    """光标位置(起点, 选中长度),读不到 None(11-15)。标准编辑框(老记事本、RichEdit)直接问它选区;别的走 UIA 文本模式。只读。"""
+    """光标位置(起点, 选中长度),读不到 None。标准编辑框(老记事本、RichEdit)直接问它选区;别的走 UIA 文本模式。只读。"""
     try:
         if target and W.cls(target).lower().startswith(("edit", "richedit")):
             out = ctypes.c_size_t(0)
@@ -1154,7 +1154,7 @@ def _caret(h, target):
 
 
 def press(app, key, *mods, at=None):
-    """后台按键。at = 先后台点一下的位置(Chrome / Electron 换了进程或被切过前台后,不先点收不到键,11-11 真机)。"""
+    """后台按键。at = 先后台点一下的位置(Chrome / Electron 换了进程或被切过前台后,不先点收不到键,真机)。"""
     try:
         win = _win(app)
         safety.check_keys(key, mods, win["exe"])
@@ -1165,15 +1165,15 @@ def press(app, key, *mods, at=None):
     if at is not None:
         ax_, ay_, field = _resolve(app, at, h)
         try:
-            _check_name(field, win)  # 11-23 C-4.0 Fable 复查:带 target 按键会先点它,危险名字的按钮同样不点
+            _check_name(field, win)  # 带 target 按键会先点它,危险名字的按钮同样不点
         except safety.Refused as ex:
             return _refused(ex)
-        if field is None:            # at 是截图位置:截图不可信就不点也不打(11-15)
+        if field is None:            # at 是截图位置:截图不可信就不点也不打
             bad = _stale_pixel(h)
             if bad:
                 return bad
         r0 = tap(app, (ax_, ay_), real=False, stale_check=False)
-        if r0["outcome"] in ("refused", "busy"):     # 11-17:排不上队也别接着打(框没点上,字会打到别处)
+        if r0["outcome"] in ("refused", "busy"):     # 排不上队也别接着打(框没点上,字会打到别处)
             return r0
         time.sleep(0.2)
     if _is_browser(win):
@@ -1185,9 +1185,9 @@ def press(app, key, *mods, at=None):
                 return _refused("光标在密码框里,这个键会改里面的内容,SeeU 不按(这一步请你自己来)")
     if (len(str(key)) == 1 or safety.norm_key(key) == "space") and not set(m.lower() for m in mods) - {"shift"} \
             and _in_address(win, field):
-        return _refused(safety.NOT_ADDRESS_KEY)      # 11-23 C-4.0 Fable 复查:一个个按字符拼出命令,再打文件夹路径带回车就绕过去了
+        return _refused(safety.NOT_ADDRESS_KEY)      # 一个个按字符拼出命令,再打文件夹路径带回车就绕过去了
     if safety.norm_key(key) in ("return", "enter") and _in_address(win, field):
-        # 11-23 C-3.9:地址栏里回车 = 运行里面的东西 → 只在地址栏里现在是已有文件夹时才按(读不出来也不按)
+        # 地址栏里回车 = 运行里面的东西 → 只在地址栏里现在是已有文件夹时才按(读不出来也不按)
         cur = None
         try:
             el = _address_el(win)
@@ -1202,15 +1202,15 @@ def press(app, key, *mods, at=None):
     if safety.key_enters(key, mods) and _secret_focus(h, target):
         return _refused("光标在密码框里,这个键会改里面的内容,SeeU 不按(这一步请你自己来)")
     mods = [safety.MOD_ALIAS.get(m.lower(), m.lower()) for m in mods]
-    # 只给不带修饰键的挪光标键读(省时间;Shift+End 这种改的是选区,11-15 复查)
+    # 只给不带修饰键的挪光标键读(省时间;Shift+End 这种改的是选区)
     car0 = _caret(h, target) if safety.norm_key(key) in CARET_KEYS and not mods else None
     r = _ladder(h, [("后台按键", lambda: inputs.key(h, safety.norm_key(key), mods, target=target))], read=_reader(h))
     if safety.moves_focus(key, mods):
-        # 11-23 C-3.9 整体复查:Tab 这类键按完,光标可能已经到了别的框(比如密码框)—— 记住的那个输入框不能再当「光标所在的框」;
+        # Tab 这类键按完,光标可能已经到了别的框(比如密码框)—— 记住的那个输入框不能再当「光标所在的框」;
         # 之后在用户自己的浏览器里不带 target 打字会被要求重新指定输入框(那时会查它是不是密码框)
         _FIELD.pop(h, None)
     if r["outcome"] == "ineffective" and car0 is not None:
-        # 11-15:End / Home / 方向键只挪光标,画面几乎不变 → 读光标位置核实(Win10 验收时各家按 End 全是「核实不了」)
+        # End / Home / 方向键只挪光标,画面几乎不变 → 读光标位置核实(Win10 验收时各家按 End 全是「核实不了」)
         car1 = _caret(h, target)
         if car1 is not None and car1 != car0:
             r.update(outcome="delivered", note=f"光标从第 {car0[0]} 个字挪到了第 {car1[0]} 个字",
@@ -1237,7 +1237,7 @@ def scroll(app, dy=0, dx=0, at=None):
     _cursor(h, "move", at[0], at[1])
     steps = [("后台滚动", lambda: how.append(inputs.scroll(h, round(at[0]), round(at[1]), dy, dx)))]
     if win["class"] == "Chrome_WidgetWin_1":
-        # Chrome 的滚动条消息要真鼠标在它窗口里才认(11-12 Win10 真机),不认就改走辅助功能的滚动接口
+        # Chrome 的滚动条消息要真鼠标在它窗口里才认(Win10 真机),不认就改走辅助功能的滚动接口
         def _uia_scroll():
             if not uia.scroll(h, round(at[0]), round(at[1]), dy, dx):
                 raise RuntimeError("辅助功能里找不到能滚的区域")
@@ -1248,7 +1248,7 @@ def scroll(app, dy=0, dx=0, at=None):
         r["how"] = how[-1]
     if r["outcome"] == "ineffective" and win["class"] == "Chrome_WidgetWin_1" and not any(
             c["class"] == "Chrome_RenderWidgetHostHWND" for c in W.children(h)):
-        r["reason"] = ("这个 Chrome / Edge 窗口现在没开网页内容的辅助功能(没有网页内容子窗口),后台滚动它不认(11-11 真机:Chrome 157 "
+        r["reason"] = ("这个 Chrome / Edge 窗口现在没开网页内容的辅助功能(没有网页内容子窗口),后台滚动它不认(真机实测:Chrome 157 "
                        "平时不建这个子窗口)。网页请改用 SeeU 专用浏览器(seeu_web_open),那条路能滚;或者借用户的鼠标滚")
     return r
 
@@ -1298,7 +1298,7 @@ Several windows of one app: write Notepad「part of the title」."""
 
 
 def _say(s):
-    """命令行出口:英文界面时转英文(用给 AI 的那张对照表;11-14)。"""
+    """命令行出口:英文界面时转英文(用给 AI 的那张对照表)。"""
     try:
         from seeu.win import lang
         if lang.is_en():
@@ -1373,7 +1373,7 @@ def main(argv=None):
         _usage()
         return 2
     cmd, app, rest = a[0], a[1], a[2:]
-    bad = _bad_args(cmd, rest)       # 11-23 C-3.9 整体复查:参数不全 / 不是数字时给用法,不出 traceback
+    bad = _bad_args(cmd, rest)       # 参数不全 / 不是数字时给用法,不出 traceback
     if bad:
         _say(bad)
         _usage()
@@ -1427,7 +1427,7 @@ def main(argv=None):
     return 2
 
 
-# ─────────────────────────────── 多任务调度(11-17 C-2.6,照 Mac act.py 末尾;见 seeu/sched.py) ───────────────────────────────
+# ─────────────────────────────── 多任务调度(照 Mac act.py 末尾;见 seeu/sched.py) ───────────────────────────────
 # 对外动作统一包一层:同一个窗口一次一个任务(排队、动完接着占几秒)、排太久按位置点先核画面、记录用时。
 # Windows 按窗口分(打字、点击直投目标窗口,不同窗口互不干扰);内部互相调用(type 里先点框)按同一进程嵌套只在最外层占 / 让。
 
@@ -1486,8 +1486,8 @@ try:
     long_press = _sched.scheduled("long_press", positional=_by_pos, focus=True)(long_press)
     drag = _sched.scheduled("drag", positional=lambda a, k: (lambda p: tuple(p[0][:2]) if p else True)(a[0] if a else k.get("pts")),
                             focus=True)(drag)
-    # 外部评审 11-17:不带输入框(at)的打字 / 按键往「当前焦点」里送 → 上一步之后别的任务动过焦点就不做;带 at 的一次占用里先点框再打
-    # 11-23 C-3.9 整体复查:at 是屏幕点(按截图位置先点框)的打字 / 按键,排队太久才轮到也先核画面(跟单独按位置点一样;
+    # 不带输入框(at)的打字 / 按键往「当前焦点」里送 → 上一步之后别的任务动过焦点就不做;带 at 的一次占用里先点框再打
+    # at 是屏幕点(按截图位置先点框)的打字 / 按键,排队太久才轮到也先核画面(跟单独按位置点一样;
     # Mac 是 mcp_server 里 sched.hold(app, pt=…) 做的)。at 是编号 / 名字 → None(轮到时重新找控件)
     def _at_pos(v):
         return tuple(v[:2]) if isinstance(v, (tuple, list)) and len(v) >= 2 else None

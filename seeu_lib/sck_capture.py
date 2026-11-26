@@ -9,7 +9,7 @@ sck_capture.py —— 用 ScreenCaptureKit 画面流截一个窗口(不走 scree
 
 两种模式:
   - 常驻(默认):`serve` 进程一直开着流,截图请求直接取最新帧;空闲 IDLE_EXIT_S 秒才关流退出
-    (仿 Codex:菜单栏紫色"窗口共享"图标不会每截一张就闪一次——用户 2026-09-26 反馈闪得眼睛疼)。
+    (仿 Codex:菜单栏紫色"窗口共享"图标不会每截一张就闪一次—— 反馈闪得眼睛疼)。
   - 一次性:常驻进程起不来时退路,"开流→取一帧→关流"。
 
 依赖:系统 Python + `pyobjc-framework-ScreenCaptureKit`(会带上 CoreMedia 绑定);屏幕录制权限。
@@ -32,7 +32,7 @@ import threading
 import time
 
 PORT = 47832
-IDLE_EXIT_S = 180      # 常驻:多久没有截图请求就关流退出(09-26 用户定先试 3 分钟)
+IDLE_EXIT_S = 180      # 常驻:多久没有截图请求就关流退出(先试 3 分钟)
 SETTLE_S = 0.12        # 常驻:取帧前再等一下,让刚发生的画面变化送到
 WAIT_FRAMES = 2        # 一次性/新开流:等到第几帧再取(第一帧偶尔是空白/旧画面)
 FRAME_TIMEOUT_S = 3.0  # 硬上限:这么久还没拿到帧就放弃
@@ -97,15 +97,15 @@ def _output_class():
 
 def _open_stream(window_id, fps=30, max_w=None, background=True, out_cls=None):
     """开一路窗口画面流,返回 (stream, output, (宽px,高px));失败返回 None。
-    10-15 加参数(老调用不变):fps 帧率上限;max_w 画面最宽多少像素(按比例缩小,省 CPU);
+    加参数(老调用不变):fps 帧率上限;max_w 画面最宽多少像素(按比例缩小,省 CPU);
     background=False 给要开自己窗口的进程用(如 watch_window),不改它的应用类型;out_cls 换自己的取帧类。"""
     import CoreMedia
     import ScreenCaptureKit as SCK
     from AppKit import NSApplication
     from Foundation import NSBundle
     # 独立进程里没碰过窗口服务时,ScreenCaptureKit 会断言崩溃(CGS_REQUIRE_INIT),先建立连接
-    # 同时设成"禁止型"App:不在 Dock 出图标、不跳动、不抢焦点(用户 09-26 反馈 Dock 上 Python 火箭一直跳)
-    # 🔴 10-14:光靠 setActivationPolicy 太晚,sharedApplication 一调就先登记成前台,Dock 闪 ~14ms;
+    # 同时设成"禁止型"App:不在 Dock 出图标、不跳动、不抢焦点(反馈 Dock 上 Python 火箭一直跳)
+    # 🔴 光靠 setActivationPolicy 太晚,sharedApplication 一调就先登记成前台,Dock 闪 ~14ms;
     #    先在 Info 里标 LSBackgroundOnly,出生就是后台(lsappinfo listen 实测不再有 Foreground)
     if background:
         NSBundle.mainBundle().infoDictionary()["LSBackgroundOnly"] = "1"
@@ -198,7 +198,7 @@ def _window_px(window_id):
     if not info:
         return None
     b = info[0].get("kCGWindowBounds") or {}
-    # 10-28:窗口点尺寸不变、但显示器换了(真屏 2x ↔ 关屏后的虚拟屏 1x)时也要重开,
+    # 窗口点尺寸不变、但显示器换了(真屏 2x ↔ 关屏后的虚拟屏 1x)时也要重开,
     # 否则流一直按旧缩放出图(显示器开回来截图还是 1x)。把每块屏的像素模式一起比。
     disp = []
     try:
@@ -292,7 +292,7 @@ def serve():
                             # 流可能已经坏了(系统停流等):关掉,下一次请求重开
                             _close_stream(cur["stream"])
                             cur.update(wid=None, pt=None, stream=None, out=None)
-                # 10-20:err 后面带原因(老客户端只比 == "ok",不受影响)
+                # err 后面带原因(老客户端只比 == "ok",不受影响)
                 conn.sendall(b"ok\n" if why is None else f"err {why}\n".encode())
                 if why:
                     _log(f"serve 回 err:{why}")

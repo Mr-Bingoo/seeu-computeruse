@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 动作层(跟 Mac 版 seeu/act.py、Windows 版 seeu/win/act.py 同样的用法和返回格式)。第 1 段:11-18。
+"""SeeU Linux 版 · 动作层(跟 Mac 版 seeu/act.py、Windows 版 seeu/win/act.py 同样的用法和返回格式)。
 
     import seeu
     v = seeu.see("gnome-text-editor")            # 截图 + 编号清单(AT-SPI 控件)
@@ -38,7 +38,7 @@ def _refused(reason, route=None, **kw):
 
 def _win(app, sticky=True):
     """找要操作的窗口。see 现找(前台的优先);别的动作先回到上次 see 这个写法时看的那个窗口 —— 同一个程序开着几个窗口时,
-    看完用户把另一个点到前台,编号也不会对到别的窗口上去(11-20 x86 两个文本编辑器窗口实测;同 Mac / Windows 的 wrong_window 思路)。
+    看完用户把另一个点到前台,编号也不会对到别的窗口上去(x86 两个文本编辑器窗口实测;同 Mac / Windows 的 wrong_window 思路)。
     上次看的那个已经关了 → 现找,并把它的旧清单作废(编号要重新 see)。"""
     safety.check_unlocked()
     wid = _last.get(str(app)) if sticky else None
@@ -57,7 +57,7 @@ def _win(app, sticky=True):
 
 def _origin(w, fr=None):
     """控件「窗口内坐标」的原点在屏幕上哪。GTK4 / Chrome / Electron = 窗口外框左上角;
-    Qt 从它自己画的标题栏下面算起(11-18 FeatherPad 实测竖着差 39 像素)→ 比一下控件报的窗口大小和外框大小,差出来的补上
+    Qt 从它自己画的标题栏下面算起(FeatherPad 实测竖着差 39 像素)→ 比一下控件报的窗口大小和外框大小,差出来的补上
     (标题栏只在上面;左右的边框两边平分)。"""
     if fr is None:
         try:
@@ -73,7 +73,7 @@ def _origin(w, fr=None):
             if 0 < e.width < w["w"] and w["w"] - e.width < 40:
                 dx = (w["w"] - e.width) // 2
             # Chrome / Chromium 没最大化时,自己画的窗口阴影也算进「窗口内坐标」:报的比外框大一圈
-            # (11-20 x86 实测 1265×1420 对外框 1221×1376,上 19 下 25 不对称)→ 原点用小插件给的含阴影画布左上角
+            # (x86 实测 1265×1420 对外框 1221×1376,上 19 下 25 不对称)→ 原点用小插件给的含阴影画布左上角
             # (buf_x / buf_y);老版小插件没给就按四周平分估。不改的话点偏到右下(地址栏点成了网页)
             if w["w"] < e.width and e.width - w["w"] < 160 and w["h"] < e.height and e.height - w["h"] < 160:
                 if w.get("buf_x") is not None and w.get("buf_y") is not None:
@@ -99,7 +99,7 @@ def _shot(w, wins=None):
 
 def _shot_rect(w, wins=None):
     """同 _shot,多返回第 4 项:截图实际对应屏幕上哪一块 (x, y, w, h)(截不了是 None)。
-    11-23 C-3.9 整体复查:窗口有一部分在屏幕外时,裁出来的图比窗口小、左上角也不是窗口左上角;原来把这个范围丢了,
+    窗口有一部分在屏幕外时,裁出来的图比窗口小、左上角也不是窗口左上角;原来把这个范围丢了,
     按截图位置点 / 认字清单都按整窗换算 → 点偏。"""
     cov = W.covered(w, wins)
     try:
@@ -114,7 +114,7 @@ def _shot_rect(w, wins=None):
         return None, cov, str(ex), None
     finally:
         try:
-            os.remove(full)          # 11-20 复查:整屏原图裁完就删(原来最多攒 200 张)
+            os.remove(full)          # 整屏原图裁完就删(原来最多攒 200 张)
         except OSError:
             pass
     note = None
@@ -159,16 +159,16 @@ def see(app):
         items.append(dict(kind="ax", text=_item_text(e), role=atspi.ROLE_ZH.get(e["role"], e["role"]), x=x + ww / 2, y=y + hh / 2,
                           actions=e["actions"], password=e["password"], editable=e["editable"], focused=e["focused"],
                           el=e))
-    # 标题栏上那三个按钮(GNOME 程序都有)不算「读得到控件」:不然游戏、模拟器这类窗口永远凑够 3 个、不认字(11-18 认字实测发现)
+    # 标题栏上那三个按钮(GNOME 程序都有)不算「读得到控件」:不然游戏、模拟器这类窗口永远凑够 3 个、不认字(认字实测发现)
     real = [i for i in items if (i["actions"] or i["editable"]) and not (i["role"] == "按钮" and i["text"].strip().lower() in WIN_BUTTONS)]
     if png and cov < 0.02 and len(real) < 3:       # 读不到控件(游戏、模拟器、自绘界面):截图认字补清单
         try:
             from seeu.linux import ocr
-            # 11-23 C-3.9 整体复查:认出来的字的位置是截图里的 → 加截图实际的左上角(不是窗口左上角,窗口部分在屏幕外时两者不同);
+            # 认出来的字的位置是截图里的 → 加截图实际的左上角(不是窗口左上角,窗口部分在屏幕外时两者不同);
             # win_xy 记下当时窗口在哪,之后按编号点时窗口挪了就跟着挪(见 _resolve)
             ox, oy = (box[0], box[1]) if box else (w["x"], w["y"])
             kx = ky = 1.0
-            if box:                       # 11-23 C-3.9:显示缩放时截图是实际像素(比逻辑大),认字坐标按「范围 ↔ 图尺寸」换回逻辑
+            if box:                       # 显示缩放时截图是实际像素(比逻辑大),认字坐标按「范围 ↔ 图尺寸」换回逻辑
                 from PIL import Image
                 with Image.open(png) as _im:
                     kx, ky = box[2] / float(_im.width), box[3] / float(_im.height)
@@ -251,7 +251,7 @@ def _resolve(app, target, w):
 
 
 def _relocate(it, w):
-    """11-23 C-3.9 整体复查:按编号操作时重读控件现在的位置。原来用 see 时记下的坐标,窗口挪过 / 界面滚过以后
+    """按编号操作时重读控件现在的位置。原来用 see 时记下的坐标,窗口挪过 / 界面滚过以后
     借真鼠标(点没有动作的控件、长按、在某一项上滚、先点进框再打字 / 按键)会点偏。读不到就用旧的(still_there 已经查过它还在)。
     返回 (x, y, 控件 dict 或 None);控件 dict 是带新位置的副本,不改上次 see 的清单。"""
     el = it.get("el")
@@ -319,7 +319,7 @@ OFF_REASON = "后台做不到;按设置(借用鼠标 = 关)没借用户的鼠标
 
 def _gate(r, allow, what, w=None):
     """后台不行时能不能借。能借返回 None;不能借返回填好原因的结果(ask_user / refused)。
-    11-20 复查:先查借不借得成(锁屏、系统弹框、窗口最小化 / 在别的工作区、不碰的程序),再看「借用鼠标」设置 ——
+    先查借不借得成(锁屏、系统弹框、窗口最小化 / 在别的工作区、不碰的程序),再看「借用鼠标」设置 ——
     原来「问我」时先问用户,用户答应了才发现锁着屏借不了。"""
     if w is not None:
         try:
@@ -389,7 +389,7 @@ def tap(app, target, allow=None, real_ok=True, **kw):
     real_ok = kw.get("real", real_ok)          # 跟 Mac 版同名参数 real=False(不借)
     try:
         w = _win(app)
-        _no_user_browser(w)                 # 11-20 复查:用户自己开着的浏览器不碰(绕开网页允许名单)
+        _no_user_browser(w)                 # 用户自己开着的浏览器不碰(绕开网页允许名单)
         x, y, e = _resolve(app, target, w)
     except safety.Refused as ex:
         return _refused(ex)
@@ -398,7 +398,7 @@ def tap(app, target, allow=None, real_ok=True, **kw):
     except RuntimeError as ex:
         return dict(outcome="failed", route=None, tried=[], reason=str(ex))
     try:
-        safety.check_control(e)                  # 11-20 复查:内嵌终端
+        safety.check_control(e)                  # 内嵌终端
         _check_name(e)
     except safety.Refused as ex:
         return _refused(ex)
@@ -439,10 +439,10 @@ def tap(app, target, allow=None, real_ok=True, **kw):
     return out
 
 
-# ─────────────────────────────── 菜单栏(11-18 C-3.0,照 Mac act.menu) ───────────────────────────────
+# ─────────────────────────────── 菜单栏(照 Mac act.menu) ───────────────────────────────
 
 MENU_ITEM_ROLES = ("menu item", "menu", "check menu item", "radio menu item", "tearoff menu item")
-# 11-20 复查:按编号点这些控件前也查危险菜单名(注销、清空回收站、「运行」…);GNOME 程序的菜单在 ≡ 里,只能按编号点
+# 按编号点这些控件前也查危险菜单名(注销、清空回收站、「运行」…);GNOME 程序的菜单在 ≡ 里,只能按编号点
 TAP_CHECK_ROLES = set(MENU_ITEM_ROLES) | {"push button", "button", "toggle button", "list item"}
 PASTE_MENU = re.compile(r"粘贴|貼上|剪切|剪下|^\s*(paste|cut)\b", re.I)
 NO_MENUBAR = ("这个程序没有菜单栏(GNOME 自带程序把菜单放在标题栏右边的「≡」按钮里):用 seeu_see 找到那个按钮按编号点,"
@@ -514,7 +514,7 @@ def menu(app, *path):
     try:
         safety.check_menu(path)
         w = _win(app)
-        _no_user_browser(w)                 # 11-20 复查:用户自己开着的浏览器不碰(绕开网页允许名单)
+        _no_user_browser(w)                 # 用户自己开着的浏览器不碰(绕开网页允许名单)
     except safety.Refused as ex:
         return _refused(ex)
     except RuntimeError as ex:
@@ -539,7 +539,7 @@ def menu(app, *path):
                         reason=f"{where}没有「{want}」(有:{have or '空的'})")
         got.append((hit.get_name() or "").strip())
         cur = hit
-    # 11-20 复查:_pick 按「全等 → 开头 → 包含」挑,AI 写「Ru」会挑中「Run」→ 对挑中的真名字再过一遍拦截
+    # _pick 按「全等 → 开头 → 包含」挑,AI 写「Ru」会挑中「Run」→ 对挑中的真名字再过一遍拦截
     try:
         safety.check_menu(got)
     except safety.Refused as ex:
@@ -574,7 +574,7 @@ def menu(app, *path):
 
 def _keep_front(f0, w=None, before_ids=None):
     """菜单点完盯一会儿:前台被换走(程序自己跳到了前面)就还给原来的窗口。返回一句说明或 None。
-    11-23 C-3.9 整体复查:原来这 1.2 秒里前台换成谁都拽回去,用户自己切窗口也被拽。照 openapp.give_back 的判断:
+    原来这 1.2 秒里前台换成谁都拽回去,用户自己切窗口也被拽。照 openapp.give_back 的判断:
     新前台是目标程序的窗口、或点之前还没有的新窗口,才算「程序自己跳出来」;用户切到别的早就开着的窗口不管。
     w = 目标窗口,before_ids = 点之前的窗口号清单(老调用不带 w = 照旧一律拽回)。"""
     if not f0:
@@ -610,7 +610,7 @@ def _jumped(fg, w, before_ids, wins=None):
     return before_ids is not None and me["id"] not in before_ids
 
 
-# ─────────────────────────────── 长按、拖动(11-18 C-3.0) ───────────────────────────────
+# ─────────────────────────────── 长按、拖动 ───────────────────────────────
 
 BROWSERS = ("chromium", "chrome", "google-chrome", "firefox", "brave", "vivaldi", "opera", "epiphany", "msedge", "microsoft-edge")
 NO_BROWSER = ("浏览器里不长按 / 不拖动(这两样按屏幕位置操作,会绕开网页的允许名单);"
@@ -622,7 +622,7 @@ NO_USER_BROWSER = ("这是你自己开着的浏览器:SeeU 不在里面点、打
 
 
 def _no_user_browser(w):
-    """11-20 复查(第二批 9):用户自己的 Firefox / Chrome 这类窗口,点 / 写 / 按 / 滚 / 菜单一律不做;看(see)照常。"""
+    """用户自己的 Firefox / Chrome 这类窗口,点 / 写 / 按 / 滚 / 菜单一律不做;看(see)照常。"""
     if _is_browser(w):
         raise safety.Refused(NO_USER_BROWSER)
 
@@ -633,7 +633,7 @@ def _is_browser(w):
 
 
 def _check_name(e):
-    """危险名字的按钮 / 菜单项不点(11-20 起 tap 查;11-23 C-4.0 Fable 复查:长按、带 target 的按键 / 打字会先点它,一样查)。"""
+    """危险名字的按钮 / 菜单项不点(tap 查;长按、带 target 的按键 / 打字会先点它,一样查)。"""
     if e is not None and e.get("role") in TAP_CHECK_ROLES and (e.get("name") or "").strip():
         safety.check_menu([e["name"]], run=e.get("role") != "list item")
 
@@ -707,12 +707,12 @@ def _field(app, w, at):
     e = _FIELD.get(w["id"])
     if e is not None and atspi.still_there(e["acc"]):
         cx, cy = _center(e)
-        return _relocate(dict(kind="ax", el=e, x=cx, y=cy), w)[2]      # 11-23 C-3.9 整体复查:上次写过的框也重读现在的位置
+        return _relocate(dict(kind="ax", el=e, x=cx, y=cy), w)[2]      # 上次写过的框也重读现在的位置
     elems, _ = atspi.elements(_frame(w), _origin(w))
     foc = [x for x in elems if x["editable"] and x["focused"]]
     if foc:
         return foc[0]
-    edits = [x for x in elems if x["editable"] and x.get("role") != "terminal"]   # 第三轮复查:终端面板不算,免得编辑区挑不出来
+    edits = [x for x in elems if x["editable"] and x.get("role") != "terminal"]   # 终端面板不算,免得编辑区挑不出来
     if len(edits) == 1:
         return edits[0]
     raise RuntimeError("不知道往哪个输入框写:用 at= 指定 see 清单里的编号或名字" +
@@ -730,7 +730,7 @@ def type(app, text, enter=False, at=None, allow=None):   # noqa: A001   跟 Mac 
     try:
         safety.check_text(text)
         w = _win(app)
-        _no_user_browser(w)                 # 11-20 复查:用户自己开着的浏览器不碰(绕开网页允许名单)
+        _no_user_browser(w)                 # 用户自己开着的浏览器不碰(绕开网页允许名单)
         e = _field(app, w, at)
     except safety.Refused as ex:
         return _refused(ex)
@@ -739,7 +739,7 @@ def type(app, text, enter=False, at=None, allow=None):   # noqa: A001   跟 Mac 
     if e["password"]:
         return _refused("这是密码框,SeeU 不往里写(这一步请你自己来)", route="写字")
     try:
-        safety.check_control(e)                  # 11-20 复查:内嵌终端
+        safety.check_control(e)                  # 内嵌终端
     except safety.Refused as ex:
         return _refused(ex, route="写字")
     if not e["editable"]:
@@ -758,7 +758,7 @@ def type(app, text, enter=False, at=None, allow=None):   # noqa: A001   跟 Mac 
         except Exception as ex:   # noqa: BLE001
             r["tried"].append(("写字", f"error:{ex}"))
     else:
-        # Chrome / Chromium / Electron 在 Linux 上不给「改文字」接口(11-18 实测:网页框、地址栏都没有 EditableText)
+        # Chrome / Chromium / Electron 在 Linux 上不给「改文字」接口(实测:网页框、地址栏都没有 EditableText)
         r["tried"].append(("写字", "框不让辅助功能接口写"))
 
     def read():
@@ -789,7 +789,7 @@ def type(app, text, enter=False, at=None, allow=None):   # noqa: A001   跟 Mac 
     else:
         g = _gate(r, allow, "键盘", w)
         if g:
-            if g["outcome"] == "refused" and not e.get("writable", True) and g.get("code") != "not_borrowable" and real.mode() == "off":   # 复查:锁屏、弹框这类原因别盖掉
+            if g["outcome"] == "refused" and not e.get("writable", True) and g.get("code") != "not_borrowable" and real.mode() == "off":   # 锁屏、弹框这类原因别盖掉
                 g["reason"] = ("这个输入框不让辅助功能接口写字(VS Code 这类 Electron 程序在 Linux 上都这样),"
                                "又没借键盘(借用鼠标 = 关)。网页请用 SeeU 专用浏览器;要借键盘可以改设置")
             return g
@@ -806,7 +806,7 @@ def type(app, text, enter=False, at=None, allow=None):   # noqa: A001   跟 Mac 
                 r["enter"] = res
             elif real.allowed(allow):
                 try:
-                    # 11-23 C-3.9 整体复查:原来直接按回车,不点框也不核焦点(排队 + 等用户停手这几秒焦点可能换了,回车按到别处)。
+                    # 原来直接按回车,不点框也不核焦点(排队 + 等用户停手这几秒焦点可能换了,回车按到别处)。
                     # 照 press 带 at 的写法:先点进这个框、按之前核一遍焦点(在密码框 / 内嵌终端 / 别的框里就不按)。
                     # 多行框不点(点中间会把光标挪走,回车换行换错地方),只核焦点
                     real.key(_fresh_win(w), "return", click_at=None if _multiline(e) else (cx, cy),
@@ -858,7 +858,7 @@ def _enter(e):
 # ─────────────────────────────── 按键 / 滚动 ───────────────────────────────
 
 def _focus_guard(w, e=None, key=None, mods=()):
-    """11-20 复查:借键盘真打 / 真按之前(排完队、点进框以后)再看一眼焦点:
+    """借键盘真打 / 真按之前(排完队、点进框以后)再看一眼焦点:
     在密码框里(要打字、或要按会改内容的键)、在内嵌终端里 → 拒;点进去以后焦点落在别的框上 → 不打,请 AI 重新看。读不到焦点就放行。"""
     def check():
         try:
@@ -905,7 +905,7 @@ def press(app, key, *mods, at=None, allow=None):
     try:
         safety.check_keys(key, mods)
         w = _win(app)
-        _no_user_browser(w)                 # 11-20 复查:用户自己开着的浏览器不碰(绕开网页允许名单)
+        _no_user_browser(w)                 # 用户自己开着的浏览器不碰(绕开网页允许名单)
     except safety.Refused as ex:
         return _refused(ex)
     k = safety.norm_key(key)
@@ -918,7 +918,7 @@ def press(app, key, *mods, at=None, allow=None):
         except (RuntimeError, Stale) as ex:
             return dict(outcome="failed", route=None, tried=[], reason=str(ex))
     try:
-        safety.check_control(e if e is not None else _focused_terminal(w))     # 11-20 复查:内嵌终端不按键
+        safety.check_control(e if e is not None else _focused_terminal(w))     # 内嵌终端不按键
         _check_name(e)
     except safety.Refused as ex:
         return _refused(ex, route="按键")
@@ -938,7 +938,7 @@ def press(app, key, *mods, at=None, allow=None):
             fe = e or _field(app, w, None)
             from gi.repository import Atspi
             n = Atspi.Text.get_character_count(fe["acc"])
-            # 11-23 C-3.9 整体复查:add_selection 返回 False = 没选上(原来不看返回值照报成功)→ 往下走借键盘按 Ctrl+A
+            # add_selection 返回 False = 没选上(原来不看返回值照报成功)→ 往下走借键盘按 Ctrl+A
             if Atspi.Text.add_selection(fe["acc"], 0, n):
                 return dict(outcome="unverified", route="控件选中", tried=[("控件选中", "unverified")], how="用控件接口全选")
             r["tried"].append(("控件选中", "控件没接受"))
@@ -979,7 +979,7 @@ def scroll(app, dy=0, dx=0, at=None, allow=None):
     """滚动:先找窗口里的滚动条直接改它的位置(后台);没有滚动条可改的 → 借真鼠标滚轮(在 at 那一项上、或窗口中间)。"""
     try:
         w = _win(app)
-        _no_user_browser(w)                 # 11-20 复查:用户自己开着的浏览器不碰(绕开网页允许名单)
+        _no_user_browser(w)                 # 用户自己开着的浏览器不碰(绕开网页允许名单)
     except safety.Refused as ex:
         return _refused(ex)
     fr = _frame(w)
@@ -994,7 +994,7 @@ def scroll(app, dy=0, dx=0, at=None, allow=None):
                     continue
                 if st.contains(Atspi.StateType.VERTICAL) or st.contains(Atspi.StateType.HORIZONTAL):
                     vert = st.contains(Atspi.StateType.VERTICAL)
-                else:                      # Qt 不报横竖(11-18 FeatherPad 实测)→ 按形状:高比宽大就是竖的
+                else:                      # Qt 不报横竖(FeatherPad 实测)→ 按形状:高比宽大就是竖的
                     ex = b.get_extents(Atspi.CoordType.WINDOW)
                     vert = ex.height > ex.width
                 if vert != want_v:
@@ -1051,7 +1051,7 @@ USAGE = """SeeU Linux 版(预览)
 
 
 def _report(r):
-    from seeu.linux.lang import say as print   # noqa: A001   打印给人看的走中英文(11-18 C-3.0)
+    from seeu.linux.lang import say as print   # noqa: A001   打印给人看的走中英文
     if isinstance(r, Exception):
         if isinstance(r, safety.Refused):
             print(f"refused  {r}")
@@ -1069,9 +1069,9 @@ def _report(r):
     return 0 if r["outcome"] == "delivered" else (3 if r["outcome"] == "refused" else 1)
 
 
-# ─────────────────────────────── 多任务调度(11-19 C-3.1,照 Windows win/act.py 末尾;见 seeu/sched.py) ───────────────────────────────
+# ─────────────────────────────── 多任务调度(照 Windows win/act.py 末尾;见 seeu/sched.py) ───────────────────────────────
 # 同一个窗口一次一个任务(排队、动完接着占几秒),别的任务排队;不带输入框的打字 / 按键在别的任务动过焦点后不做(code=focus_moved)。
-# 原来 Linux 只有专用浏览器和借鼠标排队,两个会话往同一个窗口写字会写串(Mac 11-16 踩过)。内部互相调用(type 里先点框)只在最外层占 / 让。
+# 原来 Linux 只有专用浏览器和借鼠标排队,两个会话往同一个窗口写字会写串(Mac 踩过)。内部互相调用(type 里先点框)只在最外层占 / 让。
 try:
     from seeu import sched as _sched
 
@@ -1081,7 +1081,7 @@ try:
         return tuple(t[:2]) if isinstance(t, (tuple, list)) and len(t) >= 2 else None
 
     def _at_pos(at):
-        """11-23 C-3.9 整体复查(排队第二条):type / press 的 at 是屏幕点时,排队太久先核窗口挪没挪(同 tap 按位置点、同 Mac
+        """type / press 的 at 是屏幕点时,排队太久先核窗口挪没挪(同 tap 按位置点、同 Mac
         带位置打字)。at 是编号 / 名字 → None:轮到时 _resolve 会重读控件现在的位置。"""
         return tuple(at[:2]) if isinstance(at, (tuple, list)) and len(at) >= 2 else None
 
@@ -1103,7 +1103,7 @@ except Exception:   # noqa: BLE001 —— 调度模块出问题不影响 SeeU �
 def main(argv=None):
     import builtins
     from seeu.linux import lang
-    print = lang.say   # noqa: A001   打印给人看的走中英文(11-18 C-3.0);路径、控件上的字用 builtins.print 原样打
+    print = lang.say   # noqa: A001   打印给人看的走中英文;路径、控件上的字用 builtins.print 原样打
     a = list(sys.argv[1:] if argv is None else argv)
     try:
         if a[:1] == ["windows"]:

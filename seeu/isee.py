@@ -1,18 +1,18 @@
-"""SeeU · I See 模式(我知风险)(SeeU C-0.1,10-20 用户定)
+"""SeeU · I See 模式(我知风险)
 
 看过 README「I See 模式」一节 = 知道风险;开了以后 SeeU 中途不提示、不停,自动换路直到做成,最后出报告。
 放开的:SeeU 自己的允许名单不查(开关这条路)、插件没允许的网站自动换开关/辅助功能、失败自动换下一条路。
 拿不掉的:用户亲手在用键鼠时让路;密码框/新密码框/验证码框/银行卡框不碰(代码层);付款、转账这类(调用方 AI 自己的规矩)——
   这些不中途停,记成「跳过」,报告里统一列。
 
-开法(只让用户自己开,AI 只能关;11-02 用户定):
+开法(只让用户自己开,AI 只能关):
   悬浮窗 / 灵动岛上的 I See 按钮;或用户自己在终端里敲:python3 -m seeu isee on [小时]   /  off  /  status  /  report
-  底层存在 seeu/设置.json 的 "I See",🔴 11-16 起还要带上 on() 写的「I See 凭证」才算开:手改设置文件写「开」不算
-  (防 AI 绕开按钮直接改文件);环境变量 SEEU_ISEE=0 强制关(这一个进程),=1 不再能开(11-16 起,原来给定时任务用,没人用)。
+  底层存在 seeu/设置.json 的 "I See",🔴 还要带上 on() 写的「I See 凭证」才算开:手改设置文件写「开」不算
+  (防 AI 绕开按钮直接改文件);环境变量 SEEU_ISEE=0 强制关(这一个进程),=1 不再能开(原来给定时任务用,没人用)。
 默认 24 小时后自动失效(设置文件里 "I See 到期")。到期后第一次用 SeeU 会弹提示条提醒关浏览器开关。
 日志:~/.seeu/seeu_isee.log(只在本机;7 天前的自动清;打的字只记长度,不记内容)。
 
-10-24 C-0.7 用户定(卡片说明「我已知风险，授权 AI 执行 · 卡住时请立即报告！」):
+卡片说明「我已知风险，授权 AI 执行 · 卡住时请立即报告！」:
   某一项做不了、不影响别的 → skip():记一笔、悬浮标上记数,不弹提示条,做完报告里列;
   真卡住、后面都靠它 → stuck():立刻停,卡片展开写卡在哪/为什么/怎么办 + 提示条,不加声音。
   跳过还是停由调用方判断(SeeU 不知道后面的步骤靠不靠这一步)。
@@ -24,16 +24,16 @@ import json
 import os
 import sys
 import time
-from seeu_lib import home   # 11-01:状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
+from seeu_lib import home   # 状态/日志目录统一取法(SEEU_HOME,没设 = ~/.seeu;开源包里默认 ~/.seeu)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# 11-13:环境变量 SEEU_SETTINGS_FILE 可以把 I See 的开关换到别的文件(只给开发测试用:虚拟机里的代码是共享目录,
+# 环境变量 SEEU_SETTINGS_FILE 可以把 I See 的开关换到别的文件(只给开发测试用:虚拟机里的代码是共享目录,
 # 不换的话在虚拟机里点 I See 会改到这台 Mac 上真的 设置.json)。平时不设。
 from seeu.where import settings_file as _sf
-SETTINGS = _sf()   # 环境变量 SEEU_SETTINGS_FILE 优先(在 where 里);11-22 C-3.7:插件版存用户文件夹
+SETTINGS = _sf()   # 环境变量 SEEU_SETTINGS_FILE 优先(在 where 里);插件版存用户文件夹
 LOG = home("seeu_isee.log")
 KEY, KEY_UNTIL, KEY_PROOF = "I See", "I See 到期", "I See 凭证"
-# 11-16:凭证用的本机密钥(只本用户可读);删了 = 现有的开着作废,关 / 到期时就删(旧凭证抄回去也不算)。
+# 凭证用的本机密钥(只本用户可读);删了 = 现有的开着作废,关 / 到期时就删(旧凭证抄回去也不算)。
 # 🔴 不跟 SEEU_HOME 走(同 seeu_web):各家 MCP 配置可能各设各的 SEEU_HOME,跟着走会找不到同一把、把用户开的当成伪造
 SECRET = os.path.expanduser("~/.seeu/seeu_isee.key")
 DEFAULT_HOURS = 24
@@ -55,9 +55,9 @@ FIXES = {
 
 def _load(strict=False):
     """读 设置.json。strict=True(要改完写回去的地方用):文件在但读不出来就报错。
-    11-06 体检:原来读坏了返回 {},on / off 接着把只剩一个键的内容整份写回,署名、颜色、借用鼠标等全丢。"""
+    原来读坏了返回 {},on / off 接着把只剩一个键的内容整份写回,署名、颜色、借用鼠标等全丢。"""
     try:
-        with open(SETTINGS, encoding="utf-8-sig") as f:       # 11-14:认记事本存的带 BOM 的(Windows)
+        with open(SETTINGS, encoding="utf-8-sig") as f:       # 认记事本存的带 BOM 的(Windows)
             return json.load(f)
     except FileNotFoundError:
         return {}
@@ -67,7 +67,7 @@ def _load(strict=False):
         return {}
 
 
-LOCK = os.path.expanduser("~/.seeu/seeu_isee.lock")    # 11-16:改 I See 那几项时的文件锁(同密钥,不跟 SEEU_HOME)
+LOCK = os.path.expanduser("~/.seeu/seeu_isee.lock")    # 改 I See 那几项时的文件锁(同密钥,不跟 SEEU_HOME)
 LOCK_WAIT_S = 5
 
 
@@ -144,7 +144,7 @@ def _secret(create=False):
     os.makedirs(os.path.dirname(SECRET), exist_ok=True)
     for _ in range(3):
         # 先写满临时文件再 link 到正式位置:正式文件要么没有、要么是完整的一把(写到一半被结束也不会留空文件);
-        # 两个 on() 同时第一次跑,link 失败的那个读先建好的那把(11-16 复查两轮)
+        # 两个 on() 同时第一次跑,link 失败的那个读先建好的那把
         k = os.urandom(32)
         tmp = SECRET + f".{os.getpid()}.{os.urandom(4).hex()}.tmp"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -220,7 +220,7 @@ def status(_again=False):
     if str(d.get(KEY, "关")) not in ("开", "on", "1", "true"):
         return dict(on=False, source="设置文件", until=None)
     if not proof_ok(d):
-        # 11-16:写着开、凭证对不上 = 不是 on() 开的(手改 / 别的程序改的 / 升级前开的)→ 当关,不改文件(复查:改了会把
+        # 写着开、凭证对不上 = 不是 on() 开的(手改 / 别的程序改的 / 升级前开的)→ 当关,不改文件(改了会把
         # 读不到密钥的进程误判的那份也关掉),每个进程只记一次
         global _FORGED_LOGGED
         if not _FORGED_LOGGED:
@@ -231,7 +231,7 @@ def status(_again=False):
     try:
         expired = until and time.time() > time.mktime(time.strptime(until, FMT))
     except ValueError:
-        expired = True          # 11-16:到期时间写坏了按已过期(原来当没过期 = 一直开着)
+        expired = True          # 到期时间写坏了按已过期(原来当没过期 = 一直开着)
     if expired:
         try:
             with _Locked():
@@ -263,7 +263,7 @@ def active():
 
 
 def hours_ok(hours):
-    """0 = 不自动关;否则 1 分钟 ~ 一年(11-16:负数原来开出一个已经过期的,NaN / 无穷大会崩)。"""
+    """0 = 不自动关;否则 1 分钟 ~ 一年(负数原来开出一个已经过期的,NaN / 无穷大会崩)。"""
     try:
         h = float(hours)
     except (TypeError, ValueError):
@@ -272,7 +272,7 @@ def hours_ok(hours):
 
 
 def _tty_confirm(secs=60):
-    """Mac 终端里开的现场确认(11-16 复查,照 Windows):随机一个字母,要人在这个终端的键盘上按。读的是控制终端 /dev/tty,
+    """Mac 终端里开的现场确认(照 Windows):随机一个字母,要人在这个终端的键盘上按。读的是控制终端 /dev/tty,
     AI 的命令行没有控制终端(打不开就算没确认);进程脱离父进程链(后台、launchd)也答不上来。最多等 secs 秒。"""
     import random
     import select
@@ -320,8 +320,8 @@ def _win_console_ok():
 
 def _win_overlay_ok():
     """Windows 悬浮窗那条:本进程就是浮标,而且它刚认出一次手按(GetCurrentInputMessageSource = 硬件)按下。"""
-    # 11-23 C-3.9 整体复查:原来只要本进程里导入过 floatwin、两个变量设上就算(有命令行的 AI 一句 python -c 就能凑出来,
-    # Mac 11-16 堵过同一条)。现在要求本进程就是用 -m 拉起的浮标显示进程(__main__ 就是 floatwin、命令行是 serve)。
+    # 原来只要本进程里导入过 floatwin、两个变量设上就算(有命令行的 AI 一句 python -c 就能凑出来,
+    # Mac 堵过同一条)。现在要求本进程就是用 -m 拉起的浮标显示进程(__main__ 就是 floatwin、命令行是 serve)。
     m = sys.modules.get("__main__")
     if m is None or getattr(getattr(m, "__spec__", None), "name", "") != "seeu.win.floatwin" or "serve" not in sys.argv[1:2]:
         return False
@@ -331,8 +331,8 @@ def _win_overlay_ok():
 
 
 def _linux_overlay_ok():
-    """Linux 悬浮标那条(11-18 C-3.0):本进程就是浮标显示进程,而且小插件刚报过一次来自硬件(/dev/input)的按下。"""
-    m = sys.modules.get("__main__")           # 11-23 C-3.9 整体复查:同 Windows,本进程得是 -m 拉起的浮标显示进程
+    """Linux 悬浮标那条:本进程就是浮标显示进程,而且小插件刚报过一次来自硬件(/dev/input)的按下。"""
+    m = sys.modules.get("__main__")           # 同 Windows,本进程得是 -m 拉起的浮标显示进程
     if m is None or getattr(getattr(m, "__spec__", None), "name", "") != "seeu.linux.floatwin" or "serve" not in sys.argv[1:2]:
         return False
     cands = [m, sys.modules.get("seeu.linux.floatwin")]
@@ -341,7 +341,7 @@ def _linux_overlay_ok():
 
 
 def person_ok(by=None):
-    """这次「开」是不是用户亲手(11-16 复查后:都在这里自己查,不信调用方的话)。
+    """这次「开」是不是用户亲手(都在这里自己查,不信调用方的话)。
     Mac:悬浮窗亲自拉起的(from_overlay),或父进程链里没有 AI 客户端 + 终端里现场按对字母;
     Windows:by="console" 真控制台 + 不是 AI + 现场按键;by="overlay" 浮标进程里刚有一次手按。"""
     if sys.platform == "win32":
@@ -359,7 +359,7 @@ def person_ok(by=None):
 
 def on(hours=DEFAULT_HOURS, by=None):
     """开 I See,hours 小时后自动失效(0 = 不失效)。顺带做一次体检,返回体检结果。
-    11-16:「只让用户自己开」原来只在命令行入口查,`python -c "isee.on()"` 能绕 → 查在这里;不是用户亲手抛 PermissionError。"""
+    「只让用户自己开」原来只在命令行入口查,`python -c "isee.on()"` 能绕 → 查在这里;不是用户亲手抛 PermissionError。"""
     if not hours_ok(hours):
         raise ValueError(_L("小时数不对:0 = 不自动关,其余 1 分钟到一年", "Bad hours: 0 = never turns off by itself, otherwise 1 minute to 1 year"))
     if not person_ok(by):
@@ -396,7 +396,7 @@ def off():
 def checkup():
     """开启时体检:开着的浏览器逐个试一下开关(第一次会弹系统授权框,集中在这时弹掉,跑起来就不再弹)。
     没开的浏览器不碰(不会替你打开)。返回 {浏览器: 状态说明}。"""
-    if sys.platform != "darwin":      # 11-13:Windows 版没有浏览器开关 / 插件这几条路,没什么可体检的
+    if sys.platform != "darwin":      # Windows 版没有浏览器开关 / 插件这几条路,没什么可体检的
         return {}
     from seeu.web import aejs, plugin_ready
     out = {}
@@ -469,7 +469,7 @@ def fix_plan(key):
 
 
 def skip(app, step, why):
-    """某一项做不了、不影响后面的:记一笔 + 计数,不打扰(用户定不弹提示条)。返回本轮已跳过几项。"""
+    """某一项做不了、不影响后面的:记一笔 + 计数,不打扰。返回本轮已跳过几项。"""
     log("skip", app=app, step=step, reason=str(why)[:200])
     return _live(skips=1).get("skips", 0)
 
@@ -542,7 +542,7 @@ def report(since=None):
 
 def _expired_notice():
     log("expired")
-    if sys.platform == "win32":          # 11-14:Windows 上 seeu_lib.cursor_overlay 用不了,用 SeeU 自己的提示条
+    if sys.platform == "win32":          # Windows 上 seeu_lib.cursor_overlay 用不了,用 SeeU 自己的提示条
         try:
             from seeu.win import cursor
             from seeu.i18n import lang
@@ -566,7 +566,7 @@ AI_PROCS = ("claude", "codex", "cursor", "trae", "windsurf", "gemini", "workbudd
 
 
 def from_ai():
-    """11-02:这条命令是不是 AI 客户端在跑(父进程链里有 AI 客户端,或 Claude Code 的环境变量)。"""
+    """这条命令是不是 AI 客户端在跑(父进程链里有 AI 客户端,或 Claude Code 的环境变量)。"""
     if os.environ.get("CLAUDECODE") or os.environ.get("CODEX_SANDBOX") or os.environ.get("CURSOR_TRACE_ID"):
         return True
     import subprocess
@@ -589,10 +589,10 @@ def from_ai():
 
 
 def from_overlay(port=None):
-    """11-06 C-1.1.3:这条命令是不是悬浮窗进程亲自拉起的(= 用户点了悬浮窗 / 岛上的 I See 按钮)。
+    """这条命令是不是悬浮窗进程亲自拉起的(= 用户点了悬浮窗 / 岛上的 I See 按钮)。
     认法:**直接**父进程是 watch_window serve,而且正占着悬浮窗的端口;隔一层(祖父进程)不算。
     原因:悬浮窗常由 AI 客户端里的 SeeU 服务拉起,父进程链上有客户端 → from_ai() 为真 → 按钮一直开不了
-    (v1.1.0 加 from_ai 后没测过按钮,11-06 用真实进程链核对出来)。读不到、超时一律当「不是」。"""
+    (v1.1.0 加 from_ai 后没测过按钮,用真实进程链核对出来)。读不到、超时一律当「不是」。"""
     import subprocess
     if port is None:
         try:
@@ -624,7 +624,7 @@ def main(argv):
         sys.exit(3)
     if cmd == "on":
         hours = argv[1] if len(argv) > 1 else DEFAULT_HOURS
-        if not hours_ok(hours):        # 11-16:原来 `isee on abc` 直接崩、负数开出已过期的
+        if not hours_ok(hours):        # 原来 `isee on abc` 直接崩、负数开出已过期的
             print(_L("用法:python3 -m seeu isee on [小时](0 = 不自动关;最短 1 分钟,最长一年)",
                      "Usage: python3 -m seeu isee on [hours] (0 = never turns off by itself; 1 minute to 1 year)"), file=sys.stderr)
             sys.exit(2)

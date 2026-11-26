@@ -1,7 +1,7 @@
-// SeeU 浏览器助手(C-1.4,10-20)
+// SeeU 浏览器助手
 // 插件只通过 Chrome 官方「本机消息」跟本机中转程序 com.seeu.bridge 说话(不联网);
 // 中转程序再转给 SeeU(seeu/web.py)。只能碰用户在弹窗里点过「允许」的网站(Chrome 自己的可选网站权限)。
-// C-0.5(10-22):网站名单跟开关那条路合成一份(本机 ~/.seeu/seeu_web/allow.json,中转程序读写)。
+// 网站名单跟开关那条路合成一份(本机 ~/.seeu/seeu_web/allow.json,中转程序读写)。
 //   要碰一个网站 = Chrome 授权了 且 在 SeeU 名单里。弹窗里允许/移除 → 两边一起改;
 //   命令行 `python3 -m seeu disallow 网址` 移出名单 → 插件马上不碰,下次连上顺手收回 Chrome 授权;
 //   命令行 allow 只进名单,Chrome 授权还得用户在弹窗里点一次(Chrome 规定只能用户亲手给)。
@@ -260,7 +260,7 @@ function pageSnapshot(max, textMax) {
     return clean(el.getAttribute("placeholder") || el.getAttribute("title") || el.getAttribute("alt") ||
       (el.querySelector("img[alt]") || {}).alt || "");
   };
-  // 不碰的框:返回种类,不是返回 ""(C-0.5)。🔴 跟 seeu/ax.py 的 SECRET_WORDS 同一套词,改一边要改另一边;
+  // 不碰的框:返回种类,不是返回 ""。🔴 跟 seeu/ax.py 的 SECRET_WORDS 同一套词,改一边要改另一边;
   // 本函数被注入网页跑,不能引用外面的变量,pageSnapshot / pageAct 各抄一份
   const secretKind = el => {
     if (el.tagName !== "INPUT") return "";
@@ -348,7 +348,7 @@ function pageAct(i, action, value, mode) {
   el.scrollIntoView({ block: "center", inline: "center" });
   const r = el.getBoundingClientRect();
   const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
-  // has:打字后「整段字在不在框里」在网页里比完只回对错(11-06:原来只回前 200 字让外面比,超过 200 字就误报没生效,AI 重打出重复内容)
+  // has:打字后「整段字在不在框里」在网页里比完只回对错(原来只回前 200 字让外面比,超过 200 字就误报没生效,AI 重打出重复内容)
   const full = () => "value" in el ? String(el.value) : (el.isContentEditable ? el.innerText : undefined);
   const state = () => ({ value: full() === undefined ? undefined : full().slice(0, 200),
     has: (action === "type" && typeof value === "string" && full() !== undefined) ? full().includes(value) : undefined,

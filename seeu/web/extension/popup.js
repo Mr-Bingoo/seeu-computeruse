@@ -8,7 +8,7 @@ async function refreshStatus() {
   if (!ok) chrome.runtime.sendMessage({ reconnect: true }).catch(() => {});
 }
 
-// C-0.5:名单 = SeeU 统一名单(本机 allow.json,开关那条路同一份);能碰 = 在名单里 且 Chrome 授权了
+// 名单 = SeeU 统一名单(本机 allow.json,开关那条路同一份);能碰 = 在名单里 且 Chrome 授权了
 const toOrigin = pat => pat.replace(/\/\*$/, "");
 const toPat = o => o + "/*";
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """SeeU Windows 版 · 后台点击、打字、按键、滚动,和「借前台再还」。
 
-全部是往目标窗口发消息(PostMessage),不动真鼠标、不换前台。依据(探路,见 SeeU-相关要点「11-11 C-1.1.5」):
+全部是往目标窗口发消息(PostMessage),不动真鼠标、不换前台。依据:
   - 点击:发给那一点下最深的子窗口(Chrome 是 Chrome_RenderWidgetHostHWND)。老程序、Chrome、VS Code 都认;WinUI 3 新界面不认。
   - 打字:WM_CHAR 一个字一个字发,中文直接进。WinUI 窗口(新记事本)焦点读出来是外壳,要发给 RichEditD2DPT。
   - 回车这类键:Post「按下 + 抬起」、扫描码带对,对方自己的消息循环会翻出字符;🔴 别再补 WM_CHAR(会换两行)。
@@ -51,7 +51,7 @@ LONG_MAX_MS = 10000      # 长按上限(跟 Mac 版一样)
 
 
 def long_press(top, sx, sy, ms=1000):
-    """后台长按屏幕点:按下 → 停 ms 毫秒 → 松开(11-12)。返回 (收到消息的子窗口, 类名)。"""
+    """后台长按屏幕点:按下 → 停 ms 毫秒 → 松开。返回 (收到消息的子窗口, 类名)。"""
     ms = max(50, min(int(ms), LONG_MAX_MS))
     t, x, y = W.child_at(top, round(sx), round(sy))
     lp = _lp(x, y)
@@ -63,7 +63,7 @@ def long_press(top, sx, sy, ms=1000):
 
 
 def drag(top, pts, hold_ms=0, step_ms=15):
-    """后台拖动(11-12):起点按下 → (停 hold_ms)→ 沿 pts 每段插几个点发「按着键移动」→ 终点松开。
+    """后台拖动:起点按下 → (停 hold_ms)→ 沿 pts 每段插几个点发「按着键移动」→ 终点松开。
     消息都发给起点处的那个子窗口,坐标按它算(拖出它的范围就是负数 / 超出,系统照样这么发)。
     只对认窗口消息的程序有效;自己读真鼠标位置的(很多画布、游戏)不认,交给真鼠标那一档。"""
     pts = [(round(px), round(py)) for px, py in pts]
@@ -86,7 +86,7 @@ def drag(top, pts, hold_ms=0, step_ms=15):
 def type_target(top):
     """往哪个子窗口发字:线程焦点是个真子窗口就用它;读出来是外壳本身(WinUI、后台 Chrome)就找能打字的子窗口。"""
     f = W.focus_of(top)
-    # 🔴 焦点是按「线程」记的:Chrome 好几个窗口共用一个界面线程,读出来的可能是别的窗口里的控件(11-11 真机:字打进了另一个 Chrome 窗口)
+    # 🔴 焦点是按「线程」记的:Chrome 好几个窗口共用一个界面线程,读出来的可能是别的窗口里的控件(真机:字打进了另一个 Chrome 窗口)
     if f != int(top) and W.cls(f) != W.cls(top) and W.top_of(f) == int(top):
         return f
     kids = [c for c in W.children(top) if c["visible"]]
@@ -102,7 +102,7 @@ CHROMIUM_TOPS = ("Chrome_WidgetWin_1",)
 
 
 class fake_active:
-    """Chrome / Electron(VS Code)只在「自认为被激活」时才处理后台发来的按键和字符(11-11 重启后真机:回车、打字时灵时不灵,
+    """Chrome / Electron(VS Code)只在「自认为被激活」时才处理后台发来的按键和字符(重启后真机:回车、打字时灵时不灵,
     之前靠的是被点过、切过之后残留的激活状态)。动手前给目标窗口补发「你被激活了」(不真的切前台),做完补发「你失去激活了」还原。
     真机:前台是别的程序时 Chrome / VS Code 回车、打字都稳,前台一直没动;做完不还原,下一次不补发就又不认 → 还原有效。
     🔴 只补发「拿到焦点」(WM_SETFOCUS)不够。只对 Chromium 系窗口做,别的程序不需要、也别乱发。"""
@@ -143,7 +143,7 @@ def type_text(top, text, target=None, gap=0.01):
     with fake_active(top):
         for ch in text:
             if ch == "\n":
-                _key(top, "return", nl, t)     # 11-23 C-4.0:VS Code / Jupyter / 表格按单独回车(seeu/newline.py)      # 11-23 C-3.9 整体复查(用户定):换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
+                _key(top, "return", nl, t)     # VS Code / Jupyter / 表格按单独回车(seeu/newline.py)      #换行按 Shift+回车,不按单独的回车 —— 微信 / Slack / Teams 这类「回车就发送」的框里,多行字原来第一行打完就发出去了;编辑器里 Shift+回车同样换行。\r\n、单独的 \r 先并成一个换行(原来 \r\n 按两下、空一行)
                 continue
             b = ch.encode("utf-16-le")
             for i in range(0, len(b), 2):
@@ -153,7 +153,7 @@ def type_text(top, text, target=None, gap=0.01):
 
 
 def _vk_shift(name):
-    """键名 → (虚拟键码, 要不要同时按 Shift)。11-23 C-3.9 整体复查:VkKeyScanW 的高位是「要按着哪些修饰键」,
+    """键名 → (虚拟键码, 要不要同时按 Shift)。VkKeyScanW 的高位是「要按着哪些修饰键」,
     原来只取低位,「?」被按成了「/」(「!」按成「1」)。只认 Shift 那一位;字母先转成小写了,不受影响。"""
     n = str(name).strip().lower()
     if n in VK:
@@ -181,7 +181,7 @@ def _key(top, name, mods=(), target=None):
     ⚠️ 带修饰键的组合:有的程序读的是系统键盘状态(发消息改不了),可能不认 —— 调用方要核实。"""
     t = target or type_target(top)
     vk, need_shift = _vk_shift(name)
-    if need_shift and "shift" not in mods:       # 11-23 C-3.9 整体复查:要 Shift 才打得出的符号键(? ! @ …)带上 Shift
+    if need_shift and "shift" not in mods:       # 要 Shift 才打得出的符号键(? ! @ …)带上 Shift
         mods = list(mods) + ["shift"]
     mvk = [MOD_VK[m] for m in mods]
     alt = "alt" in mods
@@ -200,7 +200,7 @@ def _key(top, name, mods=(), target=None):
         for m in reversed(mvk):
             post(t, upm, m, lp(m, True))
     if mvk:
-        # 带修饰键:Post 完把「按着」的状态多留 0.5 秒,等对方处理完再改回去(11-11 真机:留 0.15 秒时 Chrome 时好时坏,
+        # 带修饰键:Post 完把「按着」的状态多留 0.5 秒,等对方处理完再改回去(真机:留 0.15 秒时 Chrome 时好时坏,
         # Ctrl+A 变成打出 a)。🔴 同步发(SendMessage)试过,Chrome 完全不认修饰键,别再试。
         _with_mods(t, mvk, lambda: send(u.PostMessageW), hold=0.5)
     else:
@@ -219,17 +219,17 @@ class wt_MSG(ctypes.Structure):
 
 
 def _with_mods(t, mvk, fn, hold=0.15):
-    """程序判断 Ctrl / Shift / Alt 按没按,看的是它线程的键盘状态,光发消息改不了(11-11 真机:Ctrl+A 变成打出 a)。
+    """程序判断 Ctrl / Shift / Alt 按没按,看的是它线程的键盘状态,光发消息改不了(真机:Ctrl+A 变成打出 a)。
     挂到目标线程上(共用键盘状态),临时把修饰键设成「按着」,发完等它处理掉再改回去、解挂。不碰用户正在用的前台线程。"""
     import ctypes
     _, tt = W.pid_tid(W.top_of(t))
     me = api.kernel32.GetCurrentThreadId()
-    # 🔴 线程要先有自己的消息队列才挂得上别的线程(11-11 真机:每个进程第一次 Ctrl+A 都失败,后面的都成 —— 第一次挂失败了没查)。
+    # 🔴 线程要先有自己的消息队列才挂得上别的线程(真机:每个进程第一次 Ctrl+A 都失败,后面的都成 —— 第一次挂失败了没查)。
     # PeekMessage 一下就会建队列。
     msg = wt_MSG()
     u.PeekMessageW(ctypes.byref(msg), None, 0x0400, 0x0400, 0)     # WM_USER,PM_NOREMOVE
     if (me, tt) not in _WARMED:
-        # 🔴 每个进程第一次挂到某个线程上,键盘状态设了也不生效(11-11 真机:新进程第一次 Ctrl+A 在 Chrome、VS Code 里都打出了 a,
+        # 🔴 每个进程第一次挂到某个线程上,键盘状态设了也不生效(真机:新进程第一次 Ctrl+A 在 Chrome、VS Code 里都打出了 a,
         # 之后的都对);先空挂一次再松开就好了(对照 2/2)。原因没查清,照做就行。
         if u.AttachThreadInput(me, tt, True):
             time.sleep(0.05)
@@ -265,7 +265,7 @@ def scroll(top, sx, sy, dy=0, dx=0):
     t, _, _ = W.child_at(top, sx, sy)
     c = W.cls(t)
     if c in CHROMIUM_CLASSES:
-        # Chrome / Electron:滚轮消息不认,滚动条消息认,一格约 100 像素(11-11 真机)
+        # Chrome / Electron:滚轮消息不认,滚动条消息认,一格约 100 像素(真机)
         for amount, msg in ((dy, api.WM_VSCROLL), (dx, api.WM_HSCROLL)):
             n = max(1, round(abs(amount) / 100)) if amount else 0
             code = api.SB_LINEDOWN if amount < 0 else api.SB_LINEUP
@@ -288,7 +288,7 @@ def scroll(top, sx, sy, dy=0, dx=0):
 def borrow_front(target_top, act, timeout=5.0):
     """做一件会把 target_top 拉到前台的事(act),一被拉上去就把前台还给原来的窗口。
     返回 dict(stolen=被拉上去没有, back=还回去没有, held_ms=占了多久, how=用的办法)。等待有硬上限。"""
-    if W.other_desktop(target_top):     # 11-14:按下会把窗口拉到前台 = 把用户切到那个虚拟桌面
+    if W.other_desktop(target_top):     # 按下会把窗口拉到前台 = 把用户切到那个虚拟桌面
         raise RuntimeError(W.OTHER_DESKTOP)
     fg0 = W.foreground()
     result = dict(stolen=False, back=True, held_ms=0, how="")

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SeeU Linux 版 · 一键接入 / 移除(第 2 段,11-18)。
+"""SeeU Linux 版 · 一键接入 / 移除(第 2 段)。
 
     python3 -m seeu 接入                  # 看接了没有
     python3 -m seeu 接入 claude|codex|cursor|vscode|自动
@@ -30,7 +30,7 @@ _w.write_pointer = lambda: None                # npm 启动包是给千问的(Wi
 
 
 def _codex_app():
-    """装了 ChatGPT 桌面版(内含 Codex,.deb 包名 chatgpt,装在 /usr/lib/chatgpt)就返回版本号。11-19 虚拟机实测:
+    """装了 ChatGPT 桌面版(内含 Codex,.deb 包名 chatgpt,装在 /usr/lib/chatgpt)就返回版本号。虚拟机实测:
     刚装完、没打开过时没有 ~/.codex,也没有 codex 命令,只能这样认。"""
     import subprocess
     try:
@@ -38,7 +38,7 @@ def _codex_app():
                            timeout=10).stdout.strip()
     except Exception:   # noqa: BLE001
         v = ""
-    if not v:   # Fedora 一家(11-21 C-3.4):rpm 包
+    if not v:   # Fedora 一家:rpm 包
         try:
             v = subprocess.run(["rpm", "-q", "--qf", "%{VERSION}", "chatgpt"], capture_output=True, text=True,
                                timeout=10).stdout.strip()
@@ -190,7 +190,7 @@ def main(cmd, args):
     if which in ("千问", "qianwen", "qwen", "trae"):
         _print("这一家没有 Linux 版。" if which != "trae" else "Trae 没有 Linux 版。")
         return 2
-    if cmd in ("接入", "install"):           # 11-21 C-3.3:不满足要求的先说一声,接入照常做(不拦,用户可能先接好再换桌面)
+    if cmd in ("接入", "install"):           # 不满足要求的先说一声,接入照常做(不拦,用户可能先接好再换桌面)
         from seeu.linux.doctor import env_warnings
         from seeu.linux.lang import say
         w = env_warnings()
@@ -203,7 +203,7 @@ def main(cmd, args):
     removing = cmd in ("移除", "uninstall", "remove")
     before = _read_state() if removing else None
     rc = _w.main(cmd, args)
-    # 11-21 C-3.5(两轮复查):这次之前记录读得出、里面有接过的,这次移除成功后记录空了,才删小插件。
+    # 这次之前记录读得出、里面有接过的,这次移除成功后记录空了,才删小插件。
     # 记录读坏(_w.main 会把它改写成 {})、没有记录(只手动接过)、打错名字 / 没带参数(rc=2)都不删。
     if removing and rc == 0 and before and _read_state() == {}:
         _drop_extension()
@@ -222,7 +222,7 @@ def _read_state():
 
 
 def _drop_extension():
-    """11-21 C-3.4:哪家都不接了 → 把 GNOME 小插件也删掉(以前 shell.uninstall() 写了没人调,移除完小插件还留在系统里)。"""
+    """哪家都不接了 → 把 GNOME 小插件也删掉(以前 shell.uninstall() 写了没人调,移除完小插件还留在系统里)。"""
     from seeu.linux import shell
     from seeu.linux.lang import say
     try:
