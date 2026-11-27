@@ -88,14 +88,25 @@ def _key(vk=0, scan=0, flags=0):
     return i
 
 
-def wait_idle():
-    """等用户停手(最多 WAIT_MAX 秒)。一直在用抛 UserBusy。"""
+FRONT_IDLE_NEED = 1.0  # 借前台前用户停手多久。先定 0.5 秒,真机实测打字中间停半秒就被放行 →提到 1 秒(同借真鼠标)
+FRONT_WAIT_MAX = 3.0
+FRONT_BUSY = "用户正在用电脑,SeeU 先不借前台(等用户停手再试)"
+
+
+def wait_idle(need=IDLE_NEED, wait_max=WAIT_MAX, why="用户正在用电脑,SeeU 先不借鼠标键盘(等用户停手再试)"):
+    """等用户停手(最多 wait_max 秒)。一直在用抛 UserBusy(why 要以「用户正在用电脑」开头,act._is_busy 认这个)。"""
     t0 = time.time()
-    while time.time() - t0 < WAIT_MAX:
-        if inputs.idle_seconds() >= IDLE_NEED:
+    while time.time() - t0 < wait_max:
+        if inputs.idle_seconds() >= need:
             return
-        time.sleep(0.1)
-    raise UserBusy("用户正在用电脑,SeeU 先不借鼠标键盘(等用户停手再试)")
+        time.sleep(0.05)
+    raise UserBusy(why)
+
+
+def wait_idle_front():
+    """借前台前等用户停手打字:最近 1 秒没动键盘鼠标才借,最多等 3 秒,还在用报 user_busy。
+    借前台按下那一瞬目标窗口会到前台,用户正打字的话会有一两个字打进目标窗口。"""
+    wait_idle(FRONT_IDLE_NEED, FRONT_WAIT_MAX, FRONT_BUSY)
 
 
 def _bring(top):

@@ -74,8 +74,9 @@ without taking the user's mouse or switching the frontmost app. The user keeps u
 Reply to the user in the user's language.
 
 How to work (look → act → look again):
-1. The first time in a conversation, call seeu_check. If a permission is missing, pass its message to the user
-   word for word and wait for them to enable it. Never open or click System Settings yourself.
+1. The first time in a conversation, call seeu_check. If a permission is missing, seeu_check opens that settings page
+   for the user; pass its message to the user word for word and wait for them to switch it on. Never click or change
+   anything in System Settings yourself, and don't open it any other way.
 2. Before every step, call seeu_see to get the numbered list (and a screenshot). Tapping by number is the most reliable.
    If the target is not in the list, give the pixel position on the screenshot as px, py (don't convert coordinates yourself).
    After acting, call seeu_see again to confirm you reached the screen you wanted. Never guess coordinates from memory.
@@ -142,7 +143,8 @@ def _tool(name, desc, props, required=("app",)):
 
 TOOLS = [
     _tool("seeu_check", "Check whether this Mac has the permissions SeeU needs (Accessibility, Screen Recording, background "
-          "clicking, browser settings / extension). Lists how to enable anything missing. Call it the first time you use SeeU "
+          "clicking, browser settings / extension). Lists how to enable anything missing; if a permission is missing it also opens "
+          "that page of System Settings for the user (it never flips the switch). Call it the first time you use SeeU "
           "in a conversation.", {}, ()),
     _tool("seeu_probe", "Check whether an app can be automated with SeeU, read-only (no clicks, no focus change): where it is "
           "installed, whether it's running, whether a safety rule blocks it, its engine (native / browser / built with web technology (Electron, CEF) / "
@@ -207,7 +209,7 @@ TOOLS = [
 ]
 
 
-# 后台打开 App。只给自己打不开 App 的客户端(千问:跑命令在沙箱里,每次要用户批准),见 openapp.enabled()
+# 后台打开 App。只给自己打不开 App 的客户端(千问:跑命令在沙箱里,每次要用户批准;加 DeepSeek / Kimi Code / ZCode),见 openapp.enabled()
 OPEN_APP_TOOL = _tool(
     "seeu_open_app", "Open a Mac app in the background (its window opens behind the user's current one; the front app is "
     "not switched). Use it instead of running `open -a` yourself. Apps already open are left as they are. Terminals, "
@@ -332,8 +334,10 @@ def _result_text(r):
     lines = [f"outcome: {r.get('outcome')}"]
     for k, label in (("route", "route"), ("code", "code"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("step", "stuck at"),
                      ("xy", "clicked at"), ("state", "page state")):
-        if r.get(k):
+        if r.get(k) and not (k == "xy" and r.get("outcome") in ("refused", "failed")):   # 被拦 / 出错时别写「clicked at」,像是点下去了
             lines.append(f"{label}: {to_en(str(r[k]))}")
+    if r.get("hit"):                 # 按到的是哪个控件(名字照原样,不翻译)
+        lines.append(f"hit: {r['hit']}")
     if r.get("enter") == "skipped":
         lines.append("enter: skipped (Return was NOT pressed)")
     if r.get("texts"):
@@ -352,7 +356,7 @@ def do_check(a):
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         try:
-            doctor.main([])
+            doctor.main(["--auto-open"])   # 缺权限顺手打开那一页设置(只打开)
         except SystemExit:
             pass
     return [buf.getvalue().strip() + "\n\nNote: seeu_see screenshots are sent to the AI service you are using."], False
@@ -686,13 +690,28 @@ HANDLERS = {"seeu_check": do_check, "seeu_probe": do_probe, "seeu_see": do_see, 
             "seeu_web_tabs": do_web_tabs, "seeu_web_read": do_web_read, "seeu_allow_site": do_allow_site, "seeu_manage": do_manage}
 
 
-def _log(name, a, ok, secs):
+def _route_note(parts):
+    """记录里写上这一步走的哪条路(outcome | code | route | tried)。ZCode Windows 实测两次 2 秒的假「送达」,
+    记录里只有 delivered,查不出是哪条路判错。按到的控件名(hit)不记:可能是屏幕上的字,记录只放路线。"""
+    first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")
+    keep = []
+    for ln in first.split("\n"):
+        k, _, v = ln.partition(":")
+        if k == "outcome":
+            keep.insert(0, v.strip())
+        elif k in ("code", "route", "tried"):
+            keep.append(f"{k}={v.strip()}")
+    return " | ".join(keep)
+
+
+def _log(name, a, ok, secs, note=""):
     try:
         safe = {k: (f"<{len(v)} 字>" if k == "text" and isinstance(v, str) else v) for k, v in a.items() if k != "why"}
         os.makedirs(os.path.dirname(LOG), exist_ok=True)
         with open(LOG, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%m-%d %H:%M:%S')} {name} {json.dumps(safe, ensure_ascii=False)} "
-                    f"why={a.get('why', '')!r} {'ok' if ok else 'ERR'} {secs:.1f}s\n")
+                    f"why={a.get('why', '')!r} {'ok' if ok else 'ERR'} {secs:.1f}s"
+                    + (f" | {note[:300]}" if note else "") + "\n")
     except Exception:
         pass
 
@@ -791,7 +810,7 @@ def call_tool(name, a):
         if isinstance(ex, KeyError):
             why = f"a value SeeU needed was missing ({why}) — check this call's parameters, then call seeu_see and try again"
         parts, err = [f"outcome: {out}\nreason: {to_en(why)}" + "".join("\n" + x for x in _tell({"outcome": out, "reason": why})) + _allow_hint({"reason": why})], True
-    _log(name, a, not err, time.time() - t0)
+    _log(name, a, not err, time.time() - t0, _route_note(parts).replace("\n", " "))
     content = [p if isinstance(p, dict) else {"type": "text", "text": str(p)} for p in parts]
     return {"content": content, "isError": bool(err)}
 
@@ -812,6 +831,7 @@ def handle(msg):
             ci = params.get("clientInfo") or {}
             if isinstance(ci, dict) and ci.get("name"):
                 os.environ["SEEU_TASK_CLIENT"] = str(ci["name"])[:40]   # 显示名由 sched 起(Claude、Claude2…,同名自动编号)
+                _log("initialize", {"client": str(ci["name"])[:60], "client_version": str(ci.get("version") or "")[:20]}, True, 0.0)   # 记下客户端报的原名(认不出的显示名照它配)
         except Exception:   # noqa: BLE001
             pass
         res = {"protocolVersion": want if want in PROTOCOLS else PROTOCOLS[-1],

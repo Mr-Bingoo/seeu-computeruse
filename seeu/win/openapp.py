@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """SeeU Windows 版 · 后台打开 App(照 Mac 版 seeu/openapp.py)。
 
-只给自己打不开 App 的客户端用(现在只有千问)。规则跟 Mac 一样:只开不关;终端 / 命令行、系统权限界面、
+只给自己打不开 App 的客户端用(千问;加 DeepSeek / Kimi Code / ZCode)。规则跟 Mac 一样:只开不关;终端 / 命令行、系统权限界面、
 密码程序、「设置」、浏览器(网页走 seeu_web_open)、正在运行 SeeU 的程序都不开;已经开着的不动;
 App 打开时自己抢了前台,就把前台还给用户原来的窗口,结果里照实说。
 
@@ -16,7 +16,16 @@ import subprocess
 import time
 
 # 自己打不开 App 的客户端(程序名,小写)。千问 Windows 版的程序名没实测,先按常见写法列,装上后核对
-NEED_OPEN = {"qianwen.exe", "千问.exe", "qwen.exe", "tongyi.exe"}
+NEED_OPEN = {"qianwen.exe", "千问.exe", "qwen.exe", "tongyi.exe",
+             # 照 Mac:DeepSeek Harness(装在 %LOCALAPPDATA%\\Programs\\DeepSeek Harness)、Kimi Code、ZCode。
+             # Win11 虚拟机核对:DeepSeek Harness.exe、ZCode.exe ✅;千问目录里还有 new_qianwen.exe(一并加);Kimi 没在 Windows 装过、没核对
+             "deepseek harness.exe", "kimi code.exe", "kimicode.exe", "zcode.exe", "new_qianwen.exe"}
+
+# 同一家常有好几个马甲 / 极速版(Kimi Code / Kimi Work、豆包 / 豆包工作、WorkBuddy / CodeBuddy…),
+# 按程序名一个个列会漏 → 名字或包名里带这些品牌字样的一律算「要 SeeU 帮着开 App」的客户端。
+# Claude、Codex、Cursor、Trae、VS Code 这些自己能在后台开 App,不在里面。
+NEED_OPEN_BRANDS = re.compile(r"(tongyi|qianwen|千问|通义|(?<![a-z])qwen(?![a-z])|deepseek|kimi|moonshot|zcode|zhipu|智谱|"
+                              r"doubao|豆包|workbuddy|codebuddy)", re.I)
 
 # 常用系统自带 App 的中文名 → 英文系统里的叫法(照 Mac 版 ax.canon_name:AI 写中文名,英文 Windows 上也认)
 ZH_EN = {"记事本": "Notepad", "计算器": "Calculator", "画图": "Paint", "写字板": "WordPad", "截图工具": "Snipping Tool",
@@ -51,7 +60,7 @@ _BLOCK = [
     # 能被 AI 借来跑命令 / 交出电脑的 —— 别的 AI 客户端、远程协助
     (re.compile(r"(anthropic|claude|openai|chatgpt|codex|cursor|windsurf|codeium|copilot|officehub|workbuddy|doubao|豆包|"
                 r"kimi|moonshot|deepseek|lingma|qoder|\btrae\b|marscode|qianwen|千问|tongyi|通义|\bqwen\b|yuanbao|元宝|"
-                r"perplexity|ollama|lm ?studio|zhipu|智谱|chatglm|\bkiro\b|antigravity|\bvoid\b|"
+                r"perplexity|ollama|lm ?studio|zhipu|智谱|zcode|chatglm|\bkiro\b|antigravity|\bvoid\b|"
                 r"quick ?assist|快速助手|quickassist|mstsc|msrdc|remote ?desktop|远程|遠端|windows365|^windows app$|"
                 r"teamviewer|anydesk|todesk|sunlogin|向日葵|parsec|rustdesk|splashtop|chrome ?remote|\bvnc|realvnc|tightvnc|"
                 r"ultravnc|anyviewer|nomachine|radmin)", re.I),
@@ -90,7 +99,7 @@ def enabled():
         from seeu.win import safety
         table = safety._process_table()
         for p in safety.host_pids():
-            if p in table and table[p][1].lower() in NEED_OPEN:
+            if p in table and (table[p][1].lower() in NEED_OPEN or NEED_OPEN_BRANDS.search(table[p][1])):
                 return True
     except Exception:   # noqa: BLE001
         pass

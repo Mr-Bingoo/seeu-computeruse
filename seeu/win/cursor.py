@@ -121,9 +121,10 @@ def ensure_serve(force=False):
     return False
 
 
-def show(kind, x, y, label="SeeU", color=PURPLE, owner=0, key=None, auto=False):
+def show(kind, x, y, label="SeeU", color=PURPLE, owner=0, key=None, auto=False, suffix=""):
     """kind = move | click。返回光标走到位要多久(秒),调用方可以等这么久再动手(让波纹跟动作对上)。
-    key = 哪个任务的光标(不传 = 跟老调用共用一只);auto = 名牌按规则(只有它一只时写 SeeU,多只时写 label)。"""
+    key = 哪个任务的光标(不传 = 跟老调用共用一只);auto = 名牌按规则(只有它一只时写 SeeU,多只时写 label)。
+    suffix:名牌照规则算完再接在后面(借前台:「SeeU · 借前台」「DeepSeek · 借前台」);没有 key 时直接接在 label 后。"""
     if os.environ.get("SEEU_NO_CURSOR") or sys.platform != "win32":
         return 0.0
     ensure_serve()
@@ -133,7 +134,10 @@ def show(kind, x, y, label="SeeU", color=PURPLE, owner=0, key=None, auto=False):
     prev = _last_xy.get(k)
     t = travel_s(*prev, x, y) if prev else MOVE_S
     _last_xy[k] = (x, y)
-    send(kind, float(x), float(y), label, list(color), int(owner or 0), *([k, "auto" if auto else "fixed"] if key else []))
+    if suffix and not key:
+        label = f"{label}{suffix}"
+    extra = [k, "auto" if auto else "fixed"] + ([suffix] if suffix else []) if key else []
+    send(kind, float(x), float(y), label, list(color), int(owner or 0), *extra)
     return t
 
 
@@ -318,7 +322,7 @@ def serve():
         """一只光标一份状态 + 一个透明窗口(原来全机一份的那些字段,原样搬进来)。"""
         h = u.CreateWindowExW(EX_CUR, "SeeUCursor", "SeeU cursor", 0x80000000, 0, 0, WIN_W, WIN_H, None, None, hinst, None)
         return dict(key=key, hwnd=h, on_screen=False, cur=None, frm=None, to=None, ctl=None, t0=0.0, dur=MOVE_S, ring_t0=None,
-                    press_t0=None, tilt=0.0, last=now, shown=False, alpha=0.0, label="SeeU", label_raw="SeeU", auto=False,
+                    press_t0=None, tilt=0.0, last=now, shown=False, alpha=0.0, label="SeeU", label_raw="SeeU", auto=False, suffix="",
                     color=PURPLE, owner=0, vis=True, last_chk=0.0, s=1.0, arrive=now, waiting=False, wait_t=0.0, wait_fade=0.0)
 
     def get_cur(key, now):
@@ -341,7 +345,7 @@ def serve():
         return c["shown"] and c["vis"] and c["cur"] is not None and now - c["last"] < FADE_AFTER_S
 
     def want_label(c, n):
-        return "SeeU" if (c["auto"] and n <= 1) else c["label_raw"]
+        return ("SeeU" if (c["auto"] and n <= 1) else c["label_raw"]) + (c.get("suffix") or "")
 
     def relabel(now):
         n = sum(1 for c in curs.values() if live(c, now))
@@ -620,14 +624,15 @@ def serve():
         x, y, label, color, owner = m[1], m[2], m[3] if len(m) > 3 else "SeeU", m[4] if len(m) > 4 else PURPLE, m[5] if len(m) > 5 else 0
         key = str(m[6]) if len(m) > 6 and m[6] else "_"          # 第 7/8 段:光标名(哪个任务)、名牌规则 auto / fixed
         auto = len(m) > 7 and m[7] == "auto"
+        suffix = str(m[8])[:16] if len(m) > 8 and m[8] else ""     # 名牌后缀(借前台)
         st["msg"] = now
-        move_cursor(get_cur(key, now), kind, x, y, label, color, owner, auto, now)
+        move_cursor(get_cur(key, now), kind, x, y, label, color, owner, auto, now, suffix)
 
-    def move_cursor(st, kind, x, y, label, color, owner, auto, now):
+    def move_cursor(st, kind, x, y, label, color, owner, auto, now, suffix=""):
         """一只光标收到 move / click(原来 handle 里那一段;st 是这只光标的状态)。"""
         if st["waiting"]:                     # 动了 = 不在排队了(轮到变亮也走 0.25 秒过渡)
             st["waiting"], st["wait_fade"] = False, now + WAIT_FADE_S + 0.15
-        st.update(label_raw=str(label or "SeeU")[:40], auto=auto, color=tuple(color), owner=int(owner or 0), last=now)
+        st.update(label_raw=str(label or "SeeU")[:40], auto=auto, suffix=suffix, color=tuple(color), owner=int(owner or 0), last=now)
         n = sum(1 for c in curs.values() if live(c, now) or c is st)
         st["label"] = want_label(st, n)
         st["s"] = scale_at(x, y)

@@ -260,14 +260,16 @@ def _cursor(h, kind, x, y, mode="bg"):
         from seeu.win import cursor as C
         if W.other_desktop(h):
             return
-        if mode != "real":                     # 借前台时窗口马上会到最上面,不用查挡没挡
+        if mode not in ("real", "front"):     # 借真鼠标 / 借前台时窗口马上会到最上面,不用查挡没挡
             import ctypes.wintypes as _wt
             from seeu.win import api
             top = W.top_of(int(api.user32.WindowFromPoint(_wt.POINT(int(x), int(y))) or 0))
             if top and int(top) != int(h) and W.cls(top) not in ("SeeUFloat", "SeeUCursor", "SeeUToast"):
                 C.hide(_task_key())          # 只藏自己这只(别的任务的光标不受影响)
                 return
-        label, color = _cursor_style(mode)
+        # 借前台(mode="front")不碰用户鼠标 → 光标跟后台一样(名字、颜色都照当前),名牌后面加「 · 借前台」;
+        #   橙色 + 署名只留给借真鼠标(mode="real")。
+        label, color = _cursor_style("bg" if mode == "front" else mode)
         # 照 Mac:一个任务一只光标,key = 任务显示名;后台模式名牌按规则(只剩一只写 SeeU,多只写任务名)、颜色用任务色
         key = _task_key()
         if key and mode != "real":
@@ -276,7 +278,15 @@ def _cursor(h, kind, x, y, mode="bg"):
                 label, color = key, _sc.cursor_color(color)
             except Exception:   # noqa: BLE001
                 pass
-        t = C.show(kind, x, y, label, color, owner=int(h), key=key, auto=mode != "real")
+        suffix = ""
+        if mode == "front":
+            try:
+                from seeu.i18n import lang as _lg
+                suffix = " · borrowing focus" if _lg() == "en" else " · 借前台"
+            except Exception:   # noqa: BLE001
+                suffix = " · 借前台"
+        kw = {"suffix": suffix} if suffix and "suffix" in C.show.__code__.co_varnames else {}
+        t = C.show(kind, x, y, label, color, owner=int(h), key=key, auto=mode != "real", **kw)
         time.sleep(min(1.0, t))
     except Exception:   # noqa: BLE001
         pass
@@ -702,6 +712,66 @@ def _check_name(e, win):
         safety.check_menu([e["name"]], win.get("exe") or "")
 
 
+# (DeepSeek Win11 实测、照 Mac):以按钮自己的回执为准 —— 按钮按下去(UIA 按成功)但画面没变,
+# 不再借真鼠标把同一个键再按一次(计算器显示 0 时按 CE 本来就不变),报 unverified 让 AI 先看;
+# 同一个按钮 PRESS_RETRY_S 秒内 AI 再点 = 它看过了、确实没生效 → 这次跳过「借前台按下」,照老路借真鼠标。
+PRESS_RETRY_S = 20
+_press_no_change = {}          # (窗口, 按钮位置) -> 上次「按到了但画面没变」的时间
+# Windows 是后台点击没效果之后才借前台按这个按钮,所以说法跟 Mac 不同(不能说「没有再换后台点击」)
+PRESS_NO_CHANGE = ("借前台按下了这个按钮,但画面几乎没变(有的按钮按了本来就没变化)。没有再借你的鼠标点一遍(免得按两次);"
+                   "先 see 看一眼:生效了就别再点,没生效再点一次,SeeU 会换别的办法")
+
+
+def _button_at(h, x, y):
+    """按位置点:这一点最上面是目标窗口、而且正好是个能按的按钮 → 那个按钮;否则 None(照老路按位置点)。"""
+    try:
+        import ctypes.wintypes as _wt
+        from seeu.win import api
+        top = W.top_of(int(api.user32.WindowFromPoint(_wt.POINT(int(x), int(y))) or 0))
+        if not top or int(top) != int(h):
+            return None
+        return uia.button_at(x, y)
+    except Exception:   # noqa: BLE001
+        return None
+
+
+import threading as _threading
+_HIT = _threading.local()
+
+
+def _hit_label(e, app, target):
+    """照 Mac act._hit_label:按到的是哪个控件,写进结果(hit),AI 读错编号时当场看得出。名字最多 40 字。"""
+    n = int(target) if isinstance(target, int) or (isinstance(target, str) and target.strip().isdigit()) else None
+    role = name = None
+    if n is not None:
+        it = next((i for i in (_last.get(app) or []) if i["id"] == n), None)
+        if not it:
+            return None
+        role = it.get("role") or ""
+        name = (it.get("uia") or {}).get("name") if it.get("uia") else it.get("text")
+    elif e:
+        role, name = e.get("role") or "", e.get("name")
+    else:
+        return None
+    name = " ".join(str(name or "").split())[:40]
+    return (f'{role} "{name}"' if name else role) + (f" (#{n})" if n is not None else "")
+
+
+def _with_hit(fn):
+    import functools
+
+    @functools.wraps(fn)            # 要带上原签名,sched.scheduled 靠签名取第一个参数当 App 名(不带就成了整个元组)
+    def wrap(*a, **k):
+        _HIT.v = None
+        r = fn(*a, **k)
+        h = getattr(_HIT, "v", None)
+        if h and isinstance(r, dict) and r.get("outcome") not in ("refused", "failed"):
+            r.setdefault("hit", h)
+        return r
+    return wrap
+
+
+@_with_hit
 def tap(app, target, allow=None, real=True, stale_check=True):
     """点:后台点击 → 借前台按下(控件能按时,约 0.03~0.2 秒)→ 真鼠标(让路后约 0.2 秒,点完还原)。后两档归「借用鼠标」设置管。"""
     try:
@@ -710,6 +780,9 @@ def tap(app, target, allow=None, real=True, stale_check=True):
         return _refused(ex)
     h = win["hwnd"]
     x, y, e = _resolve(app, target, h)
+    if e is None and isinstance(target, (tuple, list)):
+        e = _button_at(h, x, y)          # 按位置点到的正好是按钮 → 当成按这个按钮(危险名字照样查)
+    _HIT.v = _hit_label(e, app, target)
     try:
         _check_name(e, win)
     except safety.Refused as ex:
@@ -738,13 +811,17 @@ def tap(app, target, allow=None, real=True, stale_check=True):
     info = {}
     steps = []
     front_lost = []
+    key = (int(h), tuple(round(v) for v in (e.get("rect") or (x, y)))) if e is not None and e.get("type") == 50000 else None
+    if key is not None and time.time() - _press_no_change.get(key, 0) <= PRESS_RETRY_S:
+        e = dict(e, actions=[])          # 刚按过、AI 看了说没生效 → 这次不再借前台按,照老路借真鼠标
     if e is not None and any(a in e["actions"] for a in ("invoke", "toggle", "select", "expand")):
         def borrow():
             if not W.other_desktop(h):
-                _cursor(h, "click", x, y, "real")
+                _cursor(h, "click", x, y, "front")   # 借前台不碰鼠标,光标照当前样子 + 「 · 借前台」
             from seeu.win import real as _rl
             with _rl.slot():                     # 借前台也会动前台窗口,跟借真鼠标一起排队
-                _rl.rebase()                     # 排完队重拍「动作前」
+                _rl.wait_idle_front()            # 先等用户停手打字(1 秒,最多等 3 秒,还在用 → user_busy)
+                _rl.rebase()                     # 排完队、等完停手,重拍「动作前」
                 info.update(inputs.borrow_front(h, lambda: uia.press(e)))
             if info.get("stolen") and not info.get("back"):
                 # 原来在这抛错 → _ladder 当成这条路没走通,换真鼠标把同一个按钮再点一次。
@@ -771,6 +848,10 @@ def tap(app, target, allow=None, real=True, stale_check=True):
             r2.update(tried=tried, xy=r["xy"])
             return _busy(r2, busy[0][1][len("error:"):])
         if r2["outcome"] in ("delivered", "unverified"):
+            break
+        if name == "借前台按下" and key is not None and r2["outcome"] == "ineffective":
+            _press_no_change[key] = time.time()      # 按到了(UIA 没报错)但画面没变:不再借真鼠标重按
+            r2.update(outcome="unverified", note=PRESS_NO_CHANGE)
             break
     r2.update(tried=tried, xy=r["xy"])
     if info:
@@ -807,6 +888,7 @@ def _real_step(r, h, name, fn, near, allow, what):
     return r2
 
 
+@_with_hit
 def long_press(app, target, ms=1000, allow=None):
     """长按:后台按住 ms 毫秒 → 没效果再借真鼠标(归「借用鼠标」设置管)。浏览器里不做(跟 Mac 版一样)。"""
     try:
@@ -817,6 +899,7 @@ def long_press(app, target, ms=1000, allow=None):
         return _refused(NO_BROWSER)
     h = win["hwnd"]
     x, y, _e = _resolve(app, target, h)
+    _HIT.v = _hit_label(_e, app, target)
     try:
         _check_name(_e, win)         # 长按也是点,同样查危险名字
     except safety.Refused as ex:
@@ -1332,7 +1415,7 @@ def _report(r):
     _say(f"{r['outcome']}  route={r.get('route')}  tried={r.get('tried')}" if en else
          f"{r['outcome']}  路线={r.get('route')}  试过={r.get('tried')}")
     print(("screenshot=" if en else "截图=") + str(r.get("png")))        # 路径是数据,不过对照表(中文文件夹名会被换掉)
-    for k in ("note", "reason", "how", "borrow", "enter"):
+    for k in ("hit", "note", "reason", "how", "borrow", "enter"):     # hit:按到的控件
         if r.get(k):
             _say(f"{k}  {r[k]}")
     return 0 if r["outcome"] == "delivered" else (3 if r["outcome"] == "refused" else 1)

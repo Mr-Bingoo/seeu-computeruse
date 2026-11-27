@@ -17,12 +17,12 @@ SeeU lets the AI agent on your device **perform actions and operate apps in the 
 - **SeeU for macOS**
   - **Requirements**: macOS 12.3 or later (some Apple system APIs SeeU relies on start there; most AI clients require about macOS 12 too); **macOS 14 or later recommended** (the ChatGPT / Codex desktop app needs 14; tested on 14 and 27, 12.3–13 untested). Both Apple silicon and Intel work: macOS 27 was tested on an Apple silicon Mac, macOS 14 in a virtual machine on an Intel chip; on a physical Intel Mac, installing, viewing windows and clicking have been tested, typing hasn't yet. Full functionality isn't guaranteed on anything untested (but all the code and logic are open source, so feel free to try and tinker).
   - **iPhone Mirroring**: macOS 15 or later (it's a built-in system feature, only available from that version on).
-  - **AI clients**: connected via MCP and Skill; installing or removing takes one command each. Tested so far with Claude (Code and the desktop chat), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao and Qwen (WorkBuddy, Doubao and Qwen are connected by hand).
+  - **AI clients**: connected via MCP and Skill, in three ways: one command (Claude, Codex, Cursor, Trae, VS Code), added by hand in the client's own settings (WorkBuddy, Doubao, Qwen), or the AI adds SeeU to its own MCP settings (DeepSeek, Kimi Code, Zhipu ZCode and others). For which clients have been tested and how to connect each, see [README "Connect your AI client"](../README.en.md#connect-your-ai-client).
 - **SeeU for Windows** (preview)
   - **Requirements**: Windows 10 or 11, with Python 3.10 or later. Tested in virtual machines running Windows 10 x64 and Windows 11 ARM; on a physical Windows 11 x64 PC, only installing, viewing windows and typing have been tested. There's no test data yet for physical PCs from various makers or for multiple monitors.
   - **What it can do**: the everyday things work: look at windows, click, type, press keys, scroll, long-press and drag (background first, borrowing your mouse for a few seconds if that doesn't work); web pages go through SeeU's background browser (Chrome or Edge); a floating badge, a proxy cursor and small banners show what's going on. It has a few things fewer than the Mac version (for example, no iPhone Mirroring, and apps built with web technology can't be run as a hidden separate instance).
-  - **System permissions**: nothing to turn on, unlike Accessibility and Screen Recording on the Mac.
-  - **AI clients**: tested so far with Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao and Qwen (WorkBuddy, Doubao and Qwen are connected by hand; for Doubao install the x64 build, and Qwen needs updating to a newer build with the "Work" page); Claude can be connected with one command but hasn't been tried in real use yet.
+  - **System permissions**: nothing to turn on, unlike Accessibility and Screen & System Audio Recording on the Mac.
+  - **AI clients**: connected the same way as on the Mac, and DeepSeek and Zhipu ZCode have been tested too; for Doubao install the x64 build, and Qwen needs updating to a newer build with the "Work" page; the Claude desktop app can be connected with one command but hasn't been tested yet. See [README "Connect your AI client"](../README.en.md#connect-your-ai-client).
 - **SeeU for Linux** (preview)
   - **Requirements**: GNOME 45 or later (roughly Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended), with Python 3.10 or later. Tested so far in virtual machines running Ubuntu 26.04 x64 and ARM, Fedora 40, 43 and 45 ARM, and Debian 13 ARM; on KDE and other desktops it can't see windows or click buttons, so it doesn't work.
   - **What it can do**: the everyday things work: look at windows, click by number, type into text boxes, scroll, pick menu items (where the interface can't be read, it borrows your mouse and keyboard for a few seconds; long-press and drag borrow them too); web pages go through SeeU's background browser (Chromium or Chrome); a floating badge, a proxy cursor and small banners show what's going on. It has a few things fewer than the Mac version (for example, no iPhone Mirroring, a covered window can't be seen in screenshots, text boxes in apps like VS Code need your keyboard, your own browser is look-only, and the AI doesn't open apps for you, so open them first).
@@ -30,7 +30,7 @@ SeeU lets the AI agent on your device **perform actions and operate apps in the 
   - **System packages**: git, the accessibility interface and the Pillow image library, installed with apt on Ubuntu / Debian or dnf on Fedora (commands in the README's "Install" section); for web pages you also need Chromium or Chrome.
   - **AI clients**: one command connects Claude Code (the terminal version; the Claude desktop app has no Linux version), Codex (the ChatGPT desktop app or the `codex` command), Cursor and VS Code + Copilot; Trae, WorkBuddy, Doubao and Qwen have no Linux version. Tested so far is Codex inside the ChatGPT desktop app.
 
-In Qwen, SeeU on Mac and Windows can open apps for Qwen in the background; other MCP clients should work in theory too.
+In Qwen, DeepSeek, Kimi, Zhipu ZCode, Doubao and WorkBuddy / CodeBuddy (Mac / Windows), SeeU adds one more tool that opens apps in the background: the app opens behind your current window and the app you are using stays in front. Terminals, script apps, password apps, System Settings, browsers, other AI clients and remote-access apps are not opened for you. It goes by brand, so other editions from the same maker (Work / Code and the like) count too. Other MCP clients should work in theory too.
 
 > 💡 The sections below are written around the Mac version's general abilities; for the differences between Mac, Windows and Linux, see the [README](../README.en.md).
 
@@ -38,7 +38,7 @@ In Qwen, SeeU on Mac and Windows can open apps for Qwen in the background; other
 It isn't picky about apps and needs no per-app setup. Tell it which app to open, which button to click, where to type, and it does it:
 - **Actions**: open apps, look at the screen, click (by finding text, or by screen position), type, scroll, press shortcuts, pick menu items and long-press, all in the background. **Dragging** works too, but can't be done in the background, so it borrows your mouse for a few seconds.
 - **Finds its own targets**: first looks for controls in the interface; if none, it recognizes text on screen; failing that, it clicks by position.
-- **Checks its own work**: after every step it checks whether the screen changed; if the step didn't take effect, it tries another way (for example, if a background click doesn't land, it borrows your mouse for a few seconds).
+- **Checks its own work**: after every step it checks whether the screen changed; if the step didn't take effect, it tries another way (for example, if a background click doesn't land, it borrows your mouse for a few seconds). When it clicks on a button, the button's own response counts: if the screen doesn't change, it doesn't press again, so nothing gets pressed twice. After every click it tells the AI which control it hit, so a misread number is caught right away.
 
 ## Understands you · background and stepping aside
 | | Background mode (most of the time) | Step-aside mode (when borrowing your mouse) |
@@ -47,9 +47,9 @@ It isn't picky about apps and needs no per-app setup. Tell it which app to open,
 | On screen | Purple agent cursor with a "SeeU" name tag | Bright orange agent cursor with the name you set (by default this computer's account name, such as "@UserName"); an orange glow around the screen edges reminds you "the computer is being controlled" |
 | While you're using the computer | No effect on each other | If you keep moving the mouse or typing for more than about 1.5 seconds, it pauses; it resumes about 3 seconds after you stop. If you're typing, it waits until you finish |
 | Afterwards | — | Restores your previous front app and mouse position |
-
-On Linux, it waits until you've stopped for about 1 second before borrowing, for 6 seconds at most; if you keep using the computer, it doesn't borrow and tells the AI to try again shortly.
 | Other | — | Doesn't click when the target app shows a dialog; never types into password fields |
+
+On Linux, it waits until you've stopped for about 1 second before borrowing, for 6 seconds at most; if you keep using the computer, it doesn't borrow and tells the AI to try again shortly. On Windows, when it needs to borrow the foreground for one press, it also waits until you've stopped (about 3 seconds at most); the cursor keeps its color and gets " · borrowing focus" added to its name. Orange is kept for borrowing your real mouse and keyboard.
 
 **You decide whether it borrows**: "on" by default (with a notice on screen before it borrows); you can switch to "ask" (asks every time) or "off" (never borrows, so steps that need the system mouse will get stuck). To change it, just tell the AI (e.g. "set borrow-mouse to ask"), or run `python3 -m seeu set borrow-mouse on|ask|off` yourself.
 
@@ -72,7 +72,7 @@ When SeeU is acting, a floating badge appears at the top right of the screen so 
   - **Live view**: plays the window being operated in real time and marks where it clicks. A stealth browser has nothing to show, so this button is greyed out.
   - **Steps**: tells you in words what it's doing, such as "Clicking 'OK'" or "Typing"; when the click lands next to the text it says "Clicking near 'OK'".
   - You can switch between the two at any time.
-- **Expands at key moments**: when it borrows your mouse, the window expands whether it was collapsed or open, saying "Using your mouse" so you know not to move it for a moment. When it gets stuck it also expands, saying which project, which app, why it's stuck and what you can do.
+- **Expands at key moments**: when it borrows your mouse, it expands whether it's the badge or the open floating window, saying "Using your mouse" ("Using your keyboard" when it borrows the keyboard to type) so you know not to touch them for a moment. When it gets stuck it also expands, saying which project, which app, why it's stuck and what you can do.
 - **Why the AI does it**: when an AI works through SeeU, each step comes with a short reason. The window shows it in grey under "Now…"; in live view the reason appears at the bottom of the picture and fades after a few seconds. Only shown while an AI is using SeeU.
 - **Multitasking island**: when two or more projects use SeeU at once, the badge still just says "SeeU". Opened, it becomes an "island" with one row per task; stuck tasks and tasks borrowing your mouse come first, and you can watch any single task's live view; tasks waiting in the queue are listed there too.
 - **Simple, not simplistic**: hovering over the window shows a few buttons: the screen-edge glow switch (off / only while borrowing the mouse / always on), the live view and steps toggle, and collapse. When working on web pages there's an extra I See button (see "I See · I-know-the-risks mode" below); while an AI is using it there's also a "Reason" switch (on by default).
@@ -86,18 +86,18 @@ On top of the general abilities, the scenarios below get extra handling to stay 
 - **Extension**: SeeU doesn't offer a Safari extension yet!
 - **What the extra permission changes** (meaning Safari's "Allow JavaScript from Apple Events"; turn it on once, but it asks you to verify your Mac identity):
   - **Off (default)**: works on the current tab through Accessibility: it can read, click, type and tick, on any website, even with the window on another desktop. But when the window is minimized it can only read, not type; it can't choose from web drop-downs; it can't read background tabs; forms on modern sites built with React and the like may not register input; no stealth mode.
-  - **On**: everything above becomes possible: the window can be minimized, drop-downs work, background tabs can be read and written without switching, modern forms register input, and it can run "stealthily" (no window at all). For safety, SeeU then only works on sites you've added to the allowlist; when it meets one that isn't, the AI asks you in the chat first and adds it once you agree.
+  - **On**: everything above becomes possible: the window can be minimized, drop-downs work, background tabs can be read and written without switching, modern forms register input, and it can run "stealthily" (no window at all). For safety, SeeU then only works on sites you've added to the allow list; when it meets one that isn't, the AI asks you in the chat first and adds it once you agree.
 - **Stealth Safari**: SeeU starts Safari in the background without ever showing a window (hidden more cleanly than stealth Chrome, which always flashes briefly at startup). Needs the extra permission above. We suggest keeping stealth Safari for SeeU only and using another browser yourself; if Safari is already open, SeeU leaves it alone.
 - **Limits**: on **canvas-based pages** (Tencent Docs, Feishu Sheets and the like) it can only send key presses; for fully background work, use stealth Safari.
 
 ### 2. Chrome (Chromium engine)
 - **Examples**: Chrome; Edge, Brave, Arc, Vivaldi (untested).
 - **Can do**: read pages, click buttons, fill in fields, choose from drop-downs, tick checkboxes, scroll.
-- **Extension**: SeeU offers a Chrome extension that you install in your own Chrome. With the extension you don't need the extra permission below; for safety, the extension only works on sites you've authorized in Chrome and added to the allowlist. Arc doesn't have the extra permission below, so it can only use the extension.
+- **Extension**: SeeU offers a Chrome extension that you install in your own Chrome. With the extension you don't need the extra permission below; for safety, the extension only works on sites you've authorized in Chrome and added to the allow list. Arc doesn't have the extra permission below, so it can only use the extension.
 - **What the extra permission changes** (meaning "Allow JavaScript from Apple Events" under the Chrome menu View → Developer; turn it on once, no Mac identity check needed):
   - **Off (default)**: works on the current tab through Accessibility: it can read, click, type and tick, on any website, even with the window on another desktop. But when the window is minimized it can only read, not type; it can't choose from web drop-downs; it can't read background tabs; forms on modern sites built with React and the like may not register input; no stealth mode.
   - **On**: the window can be minimized, drop-downs work, background tabs can be read and written without switching, and modern forms register input. The only catch: when opening a new tab, Chrome jumps to the front for a moment (not with the extension).
-- **Stealth Chrome** (the README's "background browser" means stealth Safari and stealth Chrome on the Mac): SeeU opens a separate Chrome just for itself and reads and writes pages through the debugging port; neither the extension nor the extra permission is needed.
+- **Stealth Chrome** (called the "background browser" on Windows and Linux; on the Mac, that means stealth Safari and stealth Chrome): SeeU opens a separate Chrome just for itself and reads and writes pages through the debugging port; neither the extension nor the extra permission is needed.
 - **Limits**: on **canvas-based pages** (Tencent Docs, Feishu Sheets and the like) it can't read cell contents or enter data, so use Safari for those; when stealth Chrome opens a new tab the window flashes briefly and is hidden again right away.
 
 ### 3. Native apps
@@ -120,7 +120,7 @@ On top of the general abilities, the scenarios below get extra handling to stay 
   - **The window SeeU opens for itself** (through the debugging port): reads, clicks, fills in, types and presses shortcuts while staying hidden throughout; in VS Code it can also read a whole file, check for unsaved changes and save with ⌘S (tested with VS Code, GitHub Desktop and Chatbox).
   - **The window you're using yourself**: while it's visible, it can recognize controls, read content, and click and type in the background.
 - **How hidden**: the window SeeU opens for itself stays hidden from start to finish. The window you're using must stay visible to be read and typed into; hidden, it can't be operated, and saving briefly brings it to the front.
-- **Needs**: nothing for SeeU's own window; your own window needs the Accessibility and Screen Recording permissions.
+- **Needs**: nothing for SeeU's own window; your own window needs the Accessibility and Screen & System Audio Recording permissions.
 - **Limits**:
   - Hidden work only works in the window SeeU opens for itself. SeeU can't connect to the one you're using, and won't close and reopen it for you.
   - In drawing and editing apps, buttons, menus and features all work normally; only **what's inside the canvas or timeline** (such as moving a shape on a Figma canvas or cutting a clip on a CapCut timeline) can't be recognized, so it can't be operated precisely.
@@ -131,7 +131,7 @@ On top of the general abilities, the scenarios below get extra handling to stay 
 - **We suggest ADB first** (Android's official debugging tool): clicks, swipes and screenshots go straight to the emulator, fully in the background, with accurate coordinates that don't care if the window moves. Use SeeU to fill the gaps where ADB is awkward, such as typing Chinese (ADB's built-in input only handles English letters and numbers) or when ADB isn't enabled in the emulator.
 - **SeeU can do**: recognize text on screen, click and type in the background; when that fails, borrow your mouse for a few seconds.
 - **How hidden**: clicking and typing happen in the background; only dragging borrows your mouse for a few seconds.
-- **Needs**: the Accessibility and Screen Recording permissions.
+- **Needs**: the Accessibility and Screen & System Audio Recording permissions.
 - **Limits**: relies only on recognizing text on screen, so it's less reliable than ADB or reading controls.
 
 ### 6. iPhone Mirroring
@@ -141,14 +141,14 @@ On top of the general abilities, the scenarios below get extra handling to stay 
   - Background clicks use an interface macOS hasn't made public: fast and unobtrusive, but it may stop working after a system update. If it does, SeeU automatically switches to clicking with the system mouse (borrowing your mouse briefly, and still stepping aside while you're using the computer).
   - Buttons are found by recognizing on-screen text, which doesn't depend on that interface, so it keeps working even if the interface breaks.
   - The live view uses frame capture of just the mirroring window rather than a traditional full-screen screenshot, so apps on the phone generally don't treat it as a screenshot and don't show share sheets or other screenshot reactions (none of the apps the author tested triggered it, but there's no guarantee every app can't detect it).
-- **Needs**: the Accessibility and Screen Recording permissions; any window size.
+- **Needs**: the Accessibility and Screen & System Audio Recording permissions; any window size.
 - **Limits**: dragging (icons, sliders) borrows your mouse for a few seconds; swiping up or down on the phone's home screen opens Search, so avoid that on the home screen.
 
 ## System permissions · explained plainly
 - **Accessibility**
   - Used for: clicking and reading interface controls, typing in the background.
   - Without it: controls in native apps and browsers can't be operated.
-- **Screen Recording**
+- **Screen & System Audio Recording** (called "Screen Recording" in older macOS)
   - Used for: **seeing the screen**, including capturing windows, recognizing text and recording what happened; finding windows by title also depends on it.
   - Without it: captures come out black or show only the wallpaper, so text recognition and live view don't work; it also can't read other apps' window titles.
 - **Automation** (**granted app by app**)
@@ -159,7 +159,7 @@ On top of the general abilities, the scenarios below get extra handling to stay 
   - Used for: see the next section.
   - Without them: web pages can only be operated through Accessibility.
 
-- **Who gets them and what's missing — ask the AI**: tell the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant them to (your AI client, or the SeeU helper app) and what's still missing; add `--open` to open the settings pages for whatever is missing. They don't go to Python.
+- **Who gets them and what's missing — ask the AI**: tell the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant them to (your AI client, or the SeeU helper app) and what's still missing; when the AI runs the check, SeeU opens the settings page for whatever is missing (when you check in a terminal yourself, add `--open`); you flip the switch yourself. They don't go to Python.
 - **Restart afterwards**: after turning permissions on or changing them, quit the AI client completely and reopen it, or they won't take effect.
 
 ## Web pages: Safari and Chrome
@@ -173,8 +173,8 @@ Read and write ordinary web pages (read, click, fill in, drop-downs, checkboxes,
 | The "Allow JavaScript from Apple Events" switch | Must be on: Settings → Advanced → tick "Show features for web developers" → Developer → tick the switch, **asks for your password**; macOS also asks once to "allow control of Safari" | Must be on (or install the extension): menu View → Developer, **no password** |
 | Extension | SeeU doesn't offer a Safari extension yet | SeeU offers a developer-mode Chrome extension that you install in your own Chrome (other Chromium-based browsers should take it too, untested). It talks to a local relay program, needs no account and doesn't go online! |
 | For stealth mode | The switch above must be on | Uses the debugging port, **no switches needed** |
-| Which sites it can operate | Switch + website allowlist | Extension: the site must be **authorized in Chrome and on the allowlist**; the allowlist is shared with the switch |
-| Risk of turning the switch on | Any program on your Mac with Automation permission can read and write Safari pages (Safari warns you about this itself) | Switch: any program on your Mac with Automation permission can read and write Chrome pages; extension: only sites authorized in Chrome and on the allowlist |
+| Which sites it can operate | Switch + website allow list | Extension: the site must be **authorized in Chrome and on the allow list**; the allow list is shared with the switch |
+| Risk of turning the switch on | Any program on your Mac with Automation permission can read and write Safari pages (Safari warns you about this itself) | Switch: any program on your Mac with Automation permission can read and write Chrome pages; extension: only sites authorized in Chrome and on the allow list |
 
 ### How "stealthy" it gets
 | | Safari | Chrome |
@@ -209,7 +209,7 @@ Read the tagline "You see SeeU, I know you see. I See." backwards and the first 
 **What it is**: once on, SeeU stops pausing to ask you along the way. When it hits a problem it tries another way and carries on; whatever it can't do it notes down and skips, and at the end you get a report: what got done, what was skipped and why, and which permissions would let it do more. The name pairs with SeeU: SeeU is "watching you operate", I See is "got it, go ahead". For now it only covers web pages.
 
 **Risks first**:
-- It makes its own decisions. For example, it no longer sticks to the website allowlist and will operate sites outside it.
+- It makes its own decisions. For example, it no longer sticks to the website allow list and will operate sites outside it.
 - With fewer questions, if the AI gets led astray by malicious text on a page, you're less likely to notice in time.
 - SeeU can't prevent this; it can only keep logs for you to check afterwards (logs stay on your Mac, typed text is recorded by length only, not content, and logs are cleared after 7 days). Turning it on means you take on these risks.
 - Good for when you know the task well and don't want interruptions; if in doubt, leave it off.
@@ -252,7 +252,7 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 <!-- sync:notes -->
 ### Good to know
 
-- SeeU keeps its state and logs in `~/.seeu` (on Windows, `C:\Users\<your user name>\.seeu`); set the `SEEU_HOME` environment variable to move them (the website allowlist and the extension relay don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allowlist, which on the Mac is also shared with Safari).
+- SeeU keeps its state and logs in `~/.seeu` (on Windows, `C:\Users\<your user name>\.seeu`); set the `SEEU_HOME` environment variable to move them (the website allow list and the extension relay don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allow list, which on the Mac is also shared with Safari).
 - SeeU may take screenshots and read on-screen text while judging and deciding, and these are sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
 
 **Mac only:**
@@ -287,7 +287,7 @@ The "Safety rules", "Good to know" and "Troubleshooting" sections below match th
 - **Pop-up panels**: while you have "Apps" or "Spotlight" open (the only two that a background click would close), SeeU waits up to 15 seconds before clicking so you can finish; Notification Center and Control Center don't need the wait. If the wait times out it clicks anyway and saves a screenshot of the panel on your Mac, so you can check afterwards which one it was.
 - **Pop-up panels in iPhone Mirroring** (such as pop-up lists in mini programs inside an app): after one background click, the panel may stop scrolling. SeeU handles this automatically: on the first scroll after a click it compares the screen, and **only if it really didn't scroll does it add a small drag** (landing on blank space in the list, so nothing gets clicked by mistake).
 - **No typing while the Mac is locked**: SeeU never types while the screen is locked (a safety design, not a failure to type); clicks still work. If the display is off but not locked, typing works as usual. For scheduled tasks, we suggest checking for a locked screen first and skipping if it's locked.
-- **Two more safety details**: other AI apps can be operated (SeeU only stays away from the program that's running it); SeeU never clicks its own floating window buttons either, so the AI can't turn on I See for itself.
+- **Two more safety details**: other AI apps can be operated (SeeU only stays away from the program that's running it, recognized by where the program really lives, so it still knows it even if it renamed its process; it also won't open other AI clients for you); SeeU never clicks its own floating window buttons either, so the AI can't turn on I See for itself.
 - **Device performance**: on very old devices or chips, SeeU can sometimes be fairly slow; running it in a virtual machine on an old computer stacks the two and was clearly slower in testing (whether the network also plays a part isn't clear yet).
 
 ## Little things worth trying

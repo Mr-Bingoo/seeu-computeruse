@@ -384,13 +384,43 @@ def _bg_cursor(x, y, click=False):
 
 # ─────────────────────────────── 点 ───────────────────────────────
 
+def _hit_label(e, w, target):
+    """照 Mac act._hit_label:按到的是哪个控件,写进结果(hit),AI 读错编号时当场看得出。名字最多 40 字。"""
+    st = str(target).strip() if not isinstance(target, (tuple, list)) else ""
+    n = int(st) if st.isdigit() else None
+    if n is not None:
+        items = _last.get(w["id"]) or []
+        if not 1 <= n <= len(items):
+            return None
+        it = items[n - 1]
+        role, name = it.get("role") or "", ((it.get("el") or {}).get("name") if it.get("el") else None) or it.get("text")
+    elif e:
+        role, name = atspi.ROLE_ZH.get(e.get("role"), e.get("role") or ""), e.get("name")
+    else:
+        return None
+    name = " ".join(str(name or "").split())[:40]
+    return (f'{role} "{name}"' if name else role) + (f" (#{n})" if n is not None else "")
+
+
+def _add_hit(r, hit):
+    if hit and isinstance(r, dict) and r.get("outcome") not in ("refused", "failed"):
+        r.setdefault("hit", hit)
+    return r
+
+
 def tap(app, target, allow=None, real_ok=True, **kw):
     """点:先按控件自己的动作(后台、不抢前台);按屏幕位置、或控件没有能按的动作 → 借真鼠标(归「借用鼠标」设置管)。"""
+    hit = []
+    return _add_hit(_tap(app, target, allow, real_ok, hit, **kw), hit[0] if hit else None)
+
+
+def _tap(app, target, allow, real_ok, hit, **kw):
     real_ok = kw.get("real", real_ok)          # 跟 Mac 版同名参数 real=False(不借)
     try:
         w = _win(app)
         _no_user_browser(w)                 # 用户自己开着的浏览器不碰(绕开网页允许名单)
         x, y, e = _resolve(app, target, w)
+        hit.append(_hit_label(e, w, target))
     except safety.Refused as ex:
         return _refused(ex)
     except Stale as ex:
@@ -640,11 +670,17 @@ def _check_name(e):
 
 def long_press(app, target, ms=1000, allow=None):
     """长按:Linux 的辅助功能接口没有「按住」,直接借真鼠标(归「借用鼠标」设置管;同 Mac / Windows 后台不行再借)。浏览器里不做。"""
+    hit = []
+    return _add_hit(_long_press(app, target, ms, allow, hit), hit[0] if hit else None)
+
+
+def _long_press(app, target, ms, allow, hit):
     try:
         w = _win(app)
         if _is_browser(w):
             return _refused(NO_BROWSER)
         x, y, e = _resolve(app, target, w)
+        hit.append(_hit_label(e, w, target))
         safety.check_control(e)
         _check_name(e)
     except safety.Refused as ex:
@@ -1063,7 +1099,7 @@ def _report(r):
         import builtins
         from seeu.linux.lang import tx
         builtins.print(tx("截图=") + str(r.get("png")))        # 路径是数据,不过对照表(中文文件夹名会被换掉)
-    for k in ("reason", "how", "enter", "xy", "borrow"):
+    for k in ("hit", "reason", "how", "enter", "xy", "borrow"):      # hit:按到的控件
         if r.get(k):
             print(f"{k}  {r[k]}")
     return 0 if r["outcome"] == "delivered" else (3 if r["outcome"] == "refused" else 1)

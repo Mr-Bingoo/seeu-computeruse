@@ -9,7 +9,7 @@ description: Use SeeU to see and operate apps on the user's Windows PC in the ba
 > Reply to the user in the user's language; this file is in English only because it is written for you.
 
 ## 0. Tools or command line
-- **If you have tools starting with `seeu_` (MCP is connected), use only the tools**: `seeu_check`, `seeu_windows`, `seeu_see`,
+- **If you have SeeU tools (MCP is connected; their names contain `seeu_`, and some clients add a prefix, e.g. `mcp__seeu__seeu_see`), use only the tools**: `seeu_check`, `seeu_windows`, `seeu_see`,
   `seeu_tap`, `seeu_type`, `seeu_press`, `seeu_scroll`, `seeu_long_press`, `seeu_probe` (read-only check of an unfamiliar program), and for web pages `seeu_web_open`, `seeu_web_tabs`, `seeu_web_read`,
   `seeu_allow_site`, `seeu_manage`. You can tap a pixel on the screenshot (`px`, `py`); give every action a one-sentence `why`.
 - **Only without those tools** use the command line (run from the folder that contains the `seeu` folder):

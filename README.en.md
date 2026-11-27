@@ -116,7 +116,10 @@ Windows:
 python -m pip install comtypes
 ```
 
-Linux (git and the Pillow image library are often missing, so install them first; for web pages you also need Chromium or Chrome — all three distros ship only Firefox):
+<details>
+<summary>System packages to install first on Linux (click to open)</summary>
+
+git and the Pillow image library are often missing, so install them first; for web pages you also need Chromium or Chrome — all three distros ship only Firefox:
 
 ```bash
 # Ubuntu / Debian
@@ -127,6 +130,8 @@ sudo dnf install git python3-gobject at-spi2-core python3-pillow
 ```
 
 On Linux, use the system `python3` (`/usr/bin/python3`); Python from conda or pyenv can't use the system accessibility interface.
+
+</details>
 
 **2. Download and connect it to your AI**
 
@@ -144,19 +149,29 @@ python3 -m seeu install auto      # or name one: claude | codex | cursor | vscod
 python3 -m seeu check             # shows what this computer is still missing and how to fix it
 ```
 
-The Mac needs some permissions turned on (nothing to set up on Windows): on the Mac, ask the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant (your AI client, or the SeeU helper app); turn on **Accessibility** (called **Device Control and Data Access** in newer macOS) and **Screen & System Audio Recording** for it in System Settings → Privacy & Security. Quit the AI client completely and reopen it afterwards, or the new permissions won't take effect.
+The Mac needs some permissions turned on (nothing to set up on Windows): on the Mac, ask the AI to "check what permissions SeeU is missing" (or run `python3 -m seeu check` yourself). It tells you which app to grant (your AI client, or the SeeU helper app); turn on **Accessibility** (called **Device Control and Data Access** in newer macOS) and **Screen & System Audio Recording** for it in System Settings → Privacy & Security. Once connected, when the AI runs the check, SeeU opens the settings page for whatever is missing (when you check in a terminal yourself, add `--open`); you flip the switch yourself. Quit the AI client completely and reopen it afterwards, or the new permissions won't take effect.
 
 Linux needs you to run `python3 -m seeu check --fix`. It installs SeeU's GNOME extension (it draws the floating badge and proxy cursor) and turns on the system's accessibility switch; while it runs, the system pops up two dialogs right away: click "Allow" for the screenshot one; for the remote desktop one, first turn on "Allow Remote Interaction", then click "Share" (SeeU only borrows the mouse and keyboard when the background can't do it). Afterwards, **log out and back in once**, then run `python3 -m seeu check` again; when everything is ✅ you're done. `--fix` doesn't install missing system packages — run the sudo command it shows you.
 
 ## Connect your AI client
 
-Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao, Qwen (Qwen has a few steps of its own, see below for details). Fewer work on Linux; see "Linux only" below.
+Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (China edition), VS Code + Copilot, WorkBuddy, Doubao, Qwen, DeepSeek, Kimi Code, Zhipu ZCode.
 
-- Mac / Windows: Claude, Codex, Cursor, Trae and VS Code are connected by the `install` command above.
-- WorkBuddy, Doubao (Mac / Windows only): create a custom connector (local / STDIO) in their own settings and enter `python3 -m seeu mcp`; the same works for any other MCP client (on Linux too).
-- Windows only: Claude can be connected with one command, but this hasn't been tested yet; for Doubao, install the x64 build for now (as of November 2026), the ARM build can't connect yet.
-- Linux only: one command connects Claude Code (the `claude` command in a terminal, installed first; the Claude desktop app has no Linux version), Codex (inside the ChatGPT desktop app, or the `codex` command), Cursor and VS Code + Copilot; Trae, WorkBuddy, Doubao and Qwen have no Linux version. Tested so far is Codex inside the ChatGPT desktop app. The first time Codex uses SeeU to look at a window, it may say "SeeU blocked it"; that's usually Codex's own "Approve for me" auto-review, so just reply "I approve" in the chat.
-- Mac only: if you prefer skill marketplaces, `npx skills add Mr-Bingoo/seeu-computeruse` also works. It only installs the instructions for the AI; the first time you use it, the AI follows them to install and connect SeeU.
+Different editions from the same maker (such as Kimi Code and Kimi Work, Doubao and Doubao's work edition, WorkBuddy and CodeBuddy) are mostly the same core in a different wrapper: if one works, the other usually does too, though it may install differently, and on the Mac it needs its own permissions.
+
+| Client | How to connect | Systems |
+|---|---|---|
+| Claude (Code, desktop app), Codex, Cursor, VS Code + Copilot | One command: `install` above | Mac / Windows / Linux (on Linux, Claude means Claude Code only) |
+| Trae (China edition) | Same as above | Mac / Windows |
+| WorkBuddy, Doubao | Create a custom connector (local / STDIO) in its own settings and enter `python3 -m seeu mcp` | Mac / Windows |
+| Qwen | A few more steps, see "Qwen" below | Mac / Windows |
+| DeepSeek, Kimi Code, Zhipu ZCode, and other MCP clients | Send it the line from "Easiest"; it adds SeeU to its own MCP settings. Or add a local (STDIO) server in its MCP settings yourself and enter `python3 -m seeu mcp` | Mac / Windows (Kimi Code tested on Mac only); the same works on Linux (not tested yet) |
+
+- **Windows only**: the Claude desktop app can be connected with one command, but this hasn't been tested yet; for Doubao, install the x64 build for now (as of November 2026), the ARM build can't connect yet.
+- **Linux only**: Claude Code needs the `claude` command installed in a terminal first (the Claude desktop app has no Linux version); for Codex, use the one inside the ChatGPT desktop app or the `codex` command in a terminal; Trae, WorkBuddy, Doubao and Qwen have no Linux version. Tested so far is Codex inside the ChatGPT desktop app. The first time Codex uses SeeU to look at a window, it may say "SeeU blocked it"; that's usually Codex's own "Approve for me" auto-review, so just reply "I approve" in the chat.
+- **Mac only**: if you prefer skill marketplaces, `npx skills add Mr-Bingoo/seeu-computeruse` also works. It only installs the instructions for the AI; the first time you use it, the AI follows them to install and connect SeeU.
+- **The clients where the AI adds SeeU itself**: they often download SeeU into the current project / workspace folder, so deleting that folder disconnects SeeU; they may install dependencies without asking you first. On the Mac, grant it permissions as in "3. Check and grant permissions"; if it isn't in the list, click "+" to add it by hand.
+- **Opening apps in the background**: Qwen, DeepSeek, Kimi, Zhipu ZCode, Doubao and WorkBuddy / CodeBuddy can't easily open apps themselves, so in them SeeU adds one more tool that opens apps in the background: the app opens behind your current window and the app you are using stays in front. Terminals, script apps, password apps, System Settings, browsers (use SeeU's web tools for pages), other AI clients and remote-access apps are not opened for you. It goes by brand, so other editions from the same maker (Work / Code and the like) count too.
 
 **Qwen (千问, Mac / Windows only)**: Qwen only accepts tools started with `npx`, so install [Node.js](https://nodejs.org) first.
 
@@ -166,7 +181,6 @@ Tested so far: Claude (Code and the desktop chat page), Codex, Cursor, Trae (Chi
 
 - The first time you add the connection, Qwen often shows "connection failed" (连接失败) or does nothing; restart Qwen and open the Connections page again.
 - Windows only: the installer on Qwen's site (as of November 2026) is an older build without the "Work" page. After installing, click "New version" (新版本) at the top right to update (possibly twice), then restart Qwen until "Daily / Work" (日常 / 工作) appears at the top left.
-- Qwen asks you to click "Allow" every time it opens an app itself, so in Qwen SeeU adds one more tool that opens apps in the background: the app opens behind your current window and the app you are using stays in front. Terminals, script apps, password apps, System Settings, browsers (use SeeU's web tools for pages), other AI clients and remote-access apps are not opened for you.
 
 **Other clients that take a standard config (Mac / Windows only)**: some clients and MCP directories only accept a standard config like the one below. Do step 1 of Qwen above to install SeeU, install [Node.js](https://nodejs.org), then paste this in (it doesn't work on Linux; use `python3 -m seeu mcp` above instead):
 
@@ -229,7 +243,7 @@ Almost every model maker is building stronger "AI operates the computer" abiliti
 <!-- sync:notes -->
 ## Good to know
 
-- SeeU keeps its state and logs in `~/.seeu` (on Windows, `C:\Users\<your user name>\.seeu`); set the `SEEU_HOME` environment variable to move them (the website allowlist and the extension relay don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allowlist, which on the Mac is also shared with Safari).
+- SeeU keeps its state and logs in `~/.seeu` (on Windows, `C:\Users\<your user name>\.seeu`); set the `SEEU_HOME` environment variable to move them (the website allow list and the extension relay don't move and always stay in `~/.seeu/seeu_web`: the extension relay for Chromium-based browsers, and the website allow list, which on the Mac is also shared with Safari).
 - SeeU may take screenshots and read on-screen text while judging and deciding, and these are sent to the AI provider you're using as part of the conversation. That's between you and your model provider, outside what SeeU can control.
 
 **Mac only:**

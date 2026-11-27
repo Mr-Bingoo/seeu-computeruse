@@ -14,7 +14,7 @@
 坐标已换算回原图设备像素。
 """
 import sys, json, objc
-from Foundation import NSURL, NSBundle
+from Foundation import NSURL, NSBundle, NSArray, NSString
 
 # lookUpClass 之前必须先把 framework 载进进程
 for _fw in ('Vision', 'CoreImage'):
@@ -42,19 +42,31 @@ def ocr(path, box=None, langs=('zh-Hans', 'en')):
         ox, oy = 0, 0
         w, h = W, H
 
-    req = VNRecognizeTextRequest.alloc().init()
-    req.setRecognitionLevel_(0)          # 0 = accurate
-    req.setRecognitionLanguages_(list(langs))
-    req.setUsesLanguageCorrection_(True)
+    # 认完字马上退出的短命进程崩过一次(桌面弹「Python quit unexpectedly」)。
+    # 原因:直接传 Python 列表,Vision 拿到的是 PyObjC 的代理数组(OC_PythonArray),
+    # 它会在自己的后台队列里异步释放;那时主线程若已在收尾解释器,代理去拿 GIL → 线程被强退 → 崩。
+    # 改法:传给 Vision 的数组都先转成纯 NSArray(不含 Python 对象),整段包在 autorelease 池里,
+    # 临时代理当场在主线程释放;用完把 req/handler 引用丢掉。
+    with objc.autorelease_pool():
+        req = VNRecognizeTextRequest.alloc().init()
+        req.setRecognitionLevel_(0)          # 0 = accurate
+        # 元素也要转成系统字符串:只转外层,里面的 str 仍是 Python 代理(SeeU 复查查出)
+        req.setRecognitionLanguages_(NSArray.arrayWithArray_([NSString.stringWithString_(str(l)) for l in langs]))
+        req.setUsesLanguageCorrection_(True)
 
-    # 系统更新后(OS 25.6.0→27.0.0)传空字典 {} 会报
-    # "NSInvalidArgumentException - key does not exist",改传 None 才行。
-    handler = VNImageRequestHandler.alloc().initWithCIImage_options_(img, None)
-    # 动态加载的 framework 没有方法签名元数据，error 不是 out 参数，只有一个返回值
-    ok = handler.performRequests_error_([req], None)
-    if not ok:
-        raise SystemExit('识别失败')
+        # 系统更新后(OS 25.6.0→27.0.0)传空字典 {} 会报
+        # "NSInvalidArgumentException - key does not exist",改传 None 才行。
+        handler = VNImageRequestHandler.alloc().initWithCIImage_options_(img, None)
+        # 动态加载的 framework 没有方法签名元数据，error 不是 out 参数，只有一个返回值
+        ok = handler.performRequests_error_(NSArray.arrayWithObject_(req), None)
+        if not ok:
+            raise SystemExit('识别失败')
+        out = _collect(req, ox, oy, w, h)
+        del req, handler, img
+    return out
 
+
+def _collect(req, ox, oy, w, h):
     out = []
     for obs in (req.results() or []):
         cands = obs.topCandidates_(1)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""后台打开 App(只给自己打不开 App 的客户端用,比如千问)。
+"""后台打开 App(只给自己打不开 App 的客户端用,比如千问;加 DeepSeek / Kimi Code / ZCode)。
 
 千问跑命令关在沙箱里,`open -a 备忘录` 每次都要用户点「允许」。SeeU 的 MCP 服务不在那个沙箱里,
 由它用系统接口打开(不激活 = 窗口开在后面,不抢前台)。
@@ -10,14 +10,23 @@
 - 有的 App 一打开就自己跳到最前面,拦不住:跳了就切回用户原来在用的程序,并在结果里照实说。
 - 已经开着的不动它(不拉前台)。
 
-谁能看到这个工具:见 enabled()。别的客户端(Claude、Codex…)自己会开 App,不给,工具清单也不多一项。
+谁能看到这个工具:见 enabled()。别的客户端(Claude、Codex…)自己能在后台开 App,不给,工具清单也不多一项。
 """
 import os
 import re
 import time
 
-# 自己打不开 App 的客户端(包名)。千问 5.2:跑的命令在沙箱里,打开 App 要用户批准
-NEED_OPEN = {"com.alibaba.tongyi": "千问"}
+# 自己打不开 App 的客户端(包名)。千问 5.2:跑的命令在沙箱里,打开 App 要用户批准。
+# DeepSeek Harness / Kimi Code / ZCode 照新用户路子实测时都没有正规工具,只好自己跑 `open -a`
+# (Kimi 不带 -g,App 跳到前台;DeepSeek 违反「只用 seeu_」),也给。包名照本机 /Applications 里的 Info.plist。
+NEED_OPEN = {"com.alibaba.tongyi": "千问", "com.deepseek.dsh": "DeepSeek", "com.kimi.code.desktop": "Kimi Code",
+             "dev.zcode.app": "ZCode"}
+
+# 同一家常有好几个马甲 / 极速版(Kimi Code / Kimi Work、豆包 / 豆包工作、WorkBuddy / CodeBuddy…),
+# 按程序名一个个列会漏 → 名字或包名里带这些品牌字样的一律算「要 SeeU 帮着开 App」的客户端。
+# Claude、Codex、Cursor、Trae、VS Code 这些自己能在后台开 App,不在里面。
+NEED_OPEN_BRANDS = re.compile(r"(tongyi|qianwen|千问|通义|(?<![a-z])qwen(?![a-z])|deepseek|kimi|moonshot|zcode|zhipu|智谱|"
+                              r"doubao|豆包|workbuddy|codebuddy)", re.I)
 
 APP_DIRS = ("/System/Applications", "/System/Applications/Utilities", "/Applications", "/Applications/Utilities",
             os.path.expanduser("~/Applications"), "/System/Library/CoreServices/Applications",
@@ -37,6 +46,9 @@ def enabled():
         from seeu import safety
         if safety.host_bundles() & set(NEED_OPEN):
             return True
+        for p in safety.host_pids():
+            if NEED_OPEN_BRANDS.search(" ".join(safety._info(p)[:2])):
+                return True
     except Exception:
         pass
     # 千问拉起工具时把 HOME 换成它自己的文件夹,npm 启动包把原值放在 SEEU_HOST_HOME(父进程链断了时的兜底)
@@ -108,7 +120,7 @@ def find(name):
 # 能被 AI 借来跑命令 / 交出电脑的 —— 别的 AI 客户端(往对话框里打字让它跑命令)、远程协助 / 屏幕共享
 AI_OR_REMOTE = re.compile(r"(anthropic|claude|openai|chatgpt|codex|cursor|\btrae\b|windsurf|codeium|github copilot|"
                           r"microsoft copilot|^copilot$|com\.microsoft\.copilot|workbuddy|doubao|kimi|moonshot|deepseek|lingma|"
-                          r"qoder|qianwen|千问|tongyi|通义|\bqwen\b|yuanbao|元宝|perplexity|ollama|lm ?studio|lmstudio|zhipu|智谱|"
+                          r"qoder|qianwen|千问|tongyi|通义|\bqwen\b|yuanbao|元宝|perplexity|ollama|lm ?studio|lmstudio|zhipu|智谱|zcode|"
                           r"chatglm|\bkiro\b|antigravity|\bvoid\b|"
                           r"screensharing|screen sharing|屏幕共享|teamviewer|anydesk|todesk|sunlogin|向日葵|parsec|rustdesk|"
                           r"splashtop|chrome ?remote|remote ?desktop|远程|遠端|windows app|com\.microsoft\.rdc|\bvnc|realvnc|"

@@ -11,7 +11,7 @@ description: Use SeeU to see and operate apps on the user's Mac in the backgroun
 > Reply to the user in the user's language; this file is in English only because it is written for you.
 
 ## 0. Tools or command line
-- **If you have tools starting with `seeu_` (MCP is connected), use only the tools**, not the command line. They map one to one:
+- **If you have SeeU tools (MCP is connected; their names contain `seeu_`, and some clients add a prefix, e.g. `mcp__seeu__seeu_see`), use only the tools**, not the command line. They map one to one:
   `check`→`seeu_check`, `probe`→`seeu_probe`, `see`→`seeu_see`, `tap`→`seeu_tap`, `type`→`seeu_type`, `scroll`→`seeu_scroll`, `press`→`seeu_press`,
   `menu`→`seeu_menu`, `home`/`open` (iPhone Mirroring)→`seeu_mirror_home`/`seeu_mirror_open`, web `seeu.web.open/tabs/read`→`seeu_web_open/tabs/read`,
   `allow`→`seeu_allow_site`. Two more have no command of the same name: `seeu_long_press` (press and hold), `seeu_manage` (restart a hidden browser, borrow-mouse setting, Chrome extension, turn I See off).
@@ -19,7 +19,7 @@ description: Use SeeU to see and operate apps on the user's Mac in the backgroun
 - **Only without those tools** use the command line below (you need to be able to run commands). To connect the tools: if `/usr/bin/python3 -c "import Quartz, ScreenCaptureKit, cv2, numpy"` fails, first run `/usr/bin/python3 -m pip install --user --only-binary=:all: "pyobjc-core<12" "pyobjc-framework-Cocoa<12" "pyobjc-framework-Quartz<12" "pyobjc-framework-ScreenCaptureKit<12" "pyobjc-framework-CoreMedia<12" opencv-python-headless numpy`; then `python3 -m seeu install auto` (detects which AI client is running it; start a new conversation afterwards).
 
 ## 1. Before you start (first use in a conversation)
-1. **Check permissions**: `python3 -m seeu check`. It lists anything missing and how to enable it; pass its message to the user word for word and wait. Never open System Settings yourself.
+1. **Check permissions**: `python3 -m seeu check`. It lists anything missing and how to enable it (`python3 -m seeu check --open` opens those settings pages); pass its message to the user word for word and wait for them to switch it on. Never click or change anything in System Settings yourself.
 2. **Before a full-screen screenshot**, check whether iPhone Mirroring is on the current desktop:
    `python3 -c "from seeu_lib import mac_input as m; print(m.win_geo('iPhone Mirroring'))"` — only take a full-screen shot if it prints None.
    SeeU's own `see` only captures the target window and is not affected.

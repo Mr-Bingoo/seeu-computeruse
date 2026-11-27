@@ -64,6 +64,8 @@ TEXT = {
     "card.borrow_at": ("正在用你的鼠标(点「{x}」附近)", "Using your mouse (near “{x}”)"),
     "card.borrow_on": ("正在用你的鼠标(点「{x}」)", "Using your mouse (on “{x}”)"),
     "card.borrow_note": ("别动鼠标,几秒后还你", "Don't move the mouse, back in a few seconds"),
+    "card.borrow_kb": ("正在用你的键盘", "Using your keyboard"),                       # 借真键盘(前台打字)
+    "card.borrow_kb_note": ("别碰键盘,几秒后还你", "Don't touch the keyboard, back in a few seconds"),
     "card.stuck_why": ("卡住了: {why}", "Stuck: {why}"),
     # 步骤名(代码里用中文名流转,显示时再翻)
     "step.点击": ("点击", "Clicking"),

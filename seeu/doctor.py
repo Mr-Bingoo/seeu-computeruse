@@ -3,6 +3,7 @@
 
     python3 -m seeu 检查            # 只查不改;没开着的浏览器不会被打开
     python3 -m seeu 检查 --open     # 另外把缺的那几项的系统设置页打开(只打开,勾选要你亲手)
+    (MCP 的 seeu_check 带 --auto-open:只打开缺的第一项那一页,一分钟内不重复)
 
 查什么:辅助功能、屏幕录制、后台点击私有接口、iPhone 镜像、每个装了的浏览器(开关 / 插件 / 自动化)、隐身 Chrome 专用配置的开关。
 「怎么开」只从 isee.FIXES 固定清单里给(跟卡住时说的一样)。授权是给"运行这条命令的程序"的(Claude 或终端),不是 Python。
@@ -12,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -81,6 +83,43 @@ def _w(s):
 def _fix(key):
     from seeu import isee
     return isee.fix_plan(key)
+
+
+# AI 调检查时(MCP,--auto-open)缺哪项就顺手把那一项的系统设置页打开 —— 只打开,开关仍要用户亲手点。
+# 一次只开一页(第一项缺的,下一次检查再开下一页);同一页 OPEN_AGAIN_S 秒内不重复打开(AI 反复调检查时别一直把设置拽到前面)。
+OPEN_AGAIN_S = 60
+
+
+def _opened_recently(url, now=None):
+    """url 在 OPEN_AGAIN_S 秒内打开过 → True;没有就记下这次、返回 False。记录文件坏了当没开过。"""
+    from seeu_lib import home
+    now = time.time() if now is None else now
+    path = home("seeu_check_open.json")
+    try:
+        d = json.load(open(path, encoding="utf-8"))
+        if not isinstance(d, dict):
+            d = {}
+    except Exception:
+        d = {}
+    if now - float(d.get(url, 0) or 0) < OPEN_AGAIN_S:
+        return True
+    d = {k: v for k, v in d.items() if isinstance(v, (int, float)) and now - v < 3600}
+    d[url] = now
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        json.dump(d, open(path, "w", encoding="utf-8"))
+    except Exception:
+        pass
+    return False
+
+
+def _who_in(text, who, en):
+    """怎么开那句里的「运行 SeeU 的程序」换成真正要授权的程序名(DeepSeek 实测:标题说授权给 DeepSeek Harness,下面却写终端 / Claude)。"""
+    if not who:
+        return text
+    if en:
+        return text.replace("the program running SeeU (Terminal / Claude)", f"“{who}”").replace("the program running SeeU", f"“{who}”")
+    return text.replace("运行 SeeU 的程序(终端 / Claude)", f"「{who}」").replace("运行 SeeU 的程序", f"「{who}」")
 
 
 def _row(rows, ok, name, note="", fix=None, can_fix=True):
@@ -299,18 +338,43 @@ def main(argv=None):
     if not todo:
         return 1
     print("\n" + _t("缺的,照这样开:"))
-    seen = set()
+    seen, en = set(), lang() == "en"
+    name = who if who and who != "python3" else ("python3" if who else None)
+    auto = "--auto-open" in argv and "--open" not in argv and sys.platform == "darwin"
+    opened = None
     for r in todo:
         if r["fix"] in seen:
             continue
         seen.add(r["fix"])
         f = _fix(r["fix"])
-        print(f"  · {_t(f['name'])}: {_t(f['how'])}" if lang() == "en" else f"  · {f['name']}:{f['how']}")
+        how = _who_in(_t(f["how"]), name, en)
+        print(f"  · {_t(f['name'])}: {how}" if en else f"  · {f['name']}:{how}")
         if f["open"]:
-            print("    " + _t("设置页:") + (" " if lang() == "en" else "") + f"open \"{f['open']}\"")
+            print("    " + _t("设置页:") + (" " if en else "") + f"open \"{f['open']}\"")
             if "--open" in argv:
                 subprocess.Popen(["open", f["open"]])
-    if "--open" not in argv and any(_fix(k)["open"] for k in seen):
+            elif auto and opened is None:
+                opened = f
+                if not _opened_recently(f["open"]):
+                    try:
+                        subprocess.Popen(["open", f["open"]])
+                    except Exception:
+                        opened = False
+                else:
+                    opened = "recent"
+    if auto:
+        if isinstance(opened, dict):
+            line = (f"Opened the “{_t(opened['name'])}” settings page for the user: they switch on “{name}” there themselves "
+                    "(don't click inside it). Pages for the other missing items open on the next check."
+                    if en else f"已替用户打开「{opened['name']}」的设置页:请用户在里面亲手打开「{name}」(开关别替用户点)。"
+                    "其余缺的,下一次检查再打开。") if name else (
+                    f"Opened the “{_t(opened['name'])}” settings page; the user switches it on there themselves."
+                    if en else f"已替用户打开「{opened['name']}」的设置页,开关请用户亲手打开。")
+            print("\n" + line)
+        elif opened == "recent":
+            print("\n" + ("That settings page was opened less than a minute ago, so it wasn't opened again."
+                          if en else "这个设置页一分钟内刚打开过,这次没再打开。"))
+    elif "--open" not in argv and any(_fix(k)["open"] for k in seen):
         print("\n" + _t("加 --open 会把上面的设置页直接打开(只打开,勾选要你亲手)。"))
     return 1
 

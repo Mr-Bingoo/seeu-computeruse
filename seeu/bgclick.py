@@ -518,6 +518,7 @@ def tap(app_name, sx, sy, prime=None, auth=False, step=None, verify=False, settl
     if before is not None:
         _verify_tap(app_name, pid, wid, sx, sy, before)
     if split_target(app_name)[0] in PRIME_APPS:
+        _drift_mark(wid, "点完")
         _tapped_mark(pid)   # 点过 → 下次滚动前要先"小拖动"(见 scroll)
     if split_target(app_name)[0] in BROWSERS:     # 记下来,第一次打字前 bgkey 核实焦点进没进(没进就在这再点一次)
         PENDING_TAP[pid] = (app_name, sx, sy, time.time())
@@ -687,6 +688,87 @@ def _wait_mouse_up(timeout=3.0):
     return False
 
 
+# 🔴 (另一个项目转告、只读查过):镜像在当前桌面时窗口又飘了一次,而且是上一下点完约 1.4 秒、下一下还没开始时才走,
+# 日志里没有真鼠标位置和按键状态,判断不了是不是跟着用户的鼠标走。所以:镜像上每次动作开始 / 做完都把「记录」延到 2 秒后,
+# 后台线程每 0.05 秒记一次 窗口位置、真鼠标位置、鼠标键、修饰键;这段时间里窗口挪过 > 1pt 才整段写进 DRIFT_LOG,没动不写。
+# 只记不改,出错一律吞掉(不能影响点击)。调用方进程提前退出 = 这段丢了,无所谓。
+DRIFT_LOG = home("seeu_drift.log")
+DRIFT_WATCH_S = 2.0
+DRIFT_GAP_S = 0.05
+DRIFT_LOG_MAX = 1_000_000          # 超过就砍掉前一半
+_DRIFT = {"until": 0.0, "wid": None, "th": None, "marks": []}
+_DRIFT_LOCK = _th.Lock()
+
+
+def _drift_sample(wid):
+    import Quartz
+    info = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionIncludingWindow, int(wid)) or []
+    b = info[0]["kCGWindowBounds"] if info else None
+    ev = Quartz.CGEventCreate(None)
+    loc = Quartz.CGEventGetLocation(ev) if ev is not None else None
+    st = Quartz.kCGEventSourceStateCombinedSessionState
+    btn = "".join("1" if Quartz.CGEventSourceButtonState(st, i) else "0" for i in (0, 1, 2))
+    flags = int(Quartz.CGEventSourceFlagsState(st)) & 0x00FF0000      # 只留 Shift / Ctrl / Option / Cmd / Fn 那几位
+    return (time.time(), (round(b["X"]), round(b["Y"])) if b else None,
+            (round(loc.x), round(loc.y)) if loc is not None else None, btn, flags)
+
+
+def _drift_run():
+    rows = []
+    try:
+        while True:
+            with _DRIFT_LOCK:
+                wid, until = _DRIFT["wid"], _DRIFT["until"]
+            if time.time() > until:
+                break
+            try:
+                rows.append(_drift_sample(wid))
+            except Exception:
+                pass
+            time.sleep(DRIFT_GAP_S)
+        with _DRIFT_LOCK:
+            marks, _DRIFT["marks"], _DRIFT["th"] = _DRIFT["marks"], [], None
+        pos = [r[1] for r in rows if r[1]]
+        if not pos or all(abs(x - pos[0][0]) <= 1 and abs(y - pos[0][1]) <= 1 for x, y in pos):
+            return
+        f = lambda t: time.strftime("%m-%d %H:%M:%S", time.localtime(t)) + f".{int(t % 1 * 1000):03d}"
+        out = [f"===== 窗口挪了 wid={wid} 起点{pos[0]} 终点{pos[-1]}"]
+        out += [f"{f(t)} 动作 {m}" for t, m in marks]
+        last = None
+        for t, w, c, btn, fl in rows:
+            key = (w, c, btn, fl)
+            if key != last:                       # 一样的行不重复写
+                out.append(f"{f(t)} 窗口{w} 鼠标{c} 键{btn} 修饰{fl:#x}")
+                last = key
+        os.makedirs(os.path.dirname(DRIFT_LOG), exist_ok=True)
+        if os.path.exists(DRIFT_LOG) and os.path.getsize(DRIFT_LOG) > DRIFT_LOG_MAX:
+            old = open(DRIFT_LOG, encoding="utf-8", errors="replace").read()
+            open(DRIFT_LOG, "w", encoding="utf-8").write(old[len(old) // 2:])
+        with open(DRIFT_LOG, "a", encoding="utf-8") as fh:
+            fh.write("\n".join(out) + "\n")
+        print(f"[SeeU] 镜像窗口在动作前后挪了 {pos[0]}→{pos[-1]},已记到 {DRIFT_LOG}", file=sys.stderr, flush=True)
+    except Exception:
+        with _DRIFT_LOCK:
+            _DRIFT["th"] = None
+
+
+def _drift_mark(wid, what):
+    """镜像上的动作开始 / 做完时调:把记录延到 DRIFT_WATCH_S 秒后,没在记就开一个后台线程。"""
+    try:
+        with _DRIFT_LOCK:
+            now = time.time()
+            if _DRIFT["wid"] != wid and _DRIFT["th"] is not None:
+                _DRIFT["marks"].append((now, f"(换窗口 {_DRIFT['wid']}→{wid})"))
+            _DRIFT["wid"] = wid
+            _DRIFT["until"] = now + DRIFT_WATCH_S
+            _DRIFT["marks"].append((now, what))
+            if _DRIFT["th"] is None:
+                _DRIFT["th"] = _th.Thread(target=_drift_run, name="seeu-drift", daemon=True)
+                _DRIFT["th"].start()
+    except Exception:
+        pass
+
+
 def _prepare(app_name, sx, sy, prime=None):
     """找窗口 + 聚焦(+ PRIME_APPS 里的再在窗口左上角外面垫一下)。返回 (pid, wid, 窗口左上角)。"""
     if prime is None:
@@ -698,6 +780,8 @@ def _prepare(app_name, sx, sy, prime=None):
     check_called_out(pid)
     _safety(pid)
     _watch(wid)
+    if split_target(app_name)[0] in PRIME_APPS:
+        _drift_mark(wid, f"开始 ({sx:.0f},{sy:.0f}) 窗口({xy[0]:.0f},{xy[1]:.0f})" + (" 垫一下" if prime else ""))
     if prime and not _wait_mouse_up():
         # 🔴 (用户报:拖悬浮标时镜像窗口被一起拖走):用户按着鼠标 3 秒还没松 = 多半在拖东西,
         # 这时垫一下会被系统混成"拖标题栏"(当时垫在标题栏;现在垫在窗口外,照旧保守)→ 不垫了,只聚焦(第一下点击可能被吃掉,调用方核实会重试)
@@ -751,6 +835,8 @@ def drag(app_name, pts, hold_ms=0, step_ms=280, prime=None):
         cx, cy = nx, ny
     time.sleep(0.08)
     P(LUP, cx, cy)
+    if split_target(app_name)[0] in PRIME_APPS:
+        _drift_mark(wid, "拖完")
     return pid, wid
 
 
@@ -758,10 +844,20 @@ def long_press(app_name, sx, sy, ms=900, prime=None):
     """后台长按。"""
     pid, wid, xy = _prepare(app_name, sx, sy, prime)
     click(pid, wid, xy, sx, sy, hold=max(0.0, float(ms)) / 1000.0)   # 负数原来按下后抛异常、不抬起
+    if split_target(app_name)[0] in PRIME_APPS:
+        _drift_mark(wid, "长按完")
     return pid, wid
 
 
 def scroll(app_name, sx, sy, dy, dx=0, steps=6, prime=None, prime_at=None):
+    """见 _scroll。镜像上滚完也给「点完记 2 秒」记一笔。"""
+    pid, wid = _scroll(app_name, sx, sy, dy, dx, steps, prime, prime_at)
+    if split_target(app_name)[0] in PRIME_APPS:
+        _drift_mark(wid, "滚完")
+    return pid, wid
+
+
+def _scroll(app_name, sx, sy, dy, dx=0, steps=6, prime=None, prime_at=None):
     """后台在 (sx,sy) 处滚动,dy 像素(负数 = 内容往上走 = 往下翻)。分 steps 次发,像触控板。
     🔴 镜像被切到前台过、再切走之后,某些 App 里的弹出面板滚动会卡死:后台发的、往系统发的、借真光标瞬移过去发的全不动,
     等两分钟也不好;用户亲手滚能滚,而且滚过之后后台也恢复。查清:缺的是"鼠标从窗口外移进来"——

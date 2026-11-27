@@ -198,6 +198,20 @@ def _info(pid):
 _host = []
 
 
+def _exe_path(pid, comm=""):
+    """进程的真实程序路径。ZCode 拉起 SeeU 的进程改了显示名(ps 的 comm 只剩「zcode-cli」「ZCode」,
+    不带 .app/),按 comm 认不出宿主 → seeu_see 看 ZCode 自己没被拦。改用 proc_pidpath 拿真实路径,拿不到再用 comm。"""
+    try:
+        import ctypes
+        lib = ctypes.CDLL("/usr/lib/libproc.dylib")
+        buf = ctypes.create_string_buffer(4096)
+        if lib.proc_pidpath(int(pid), buf, 4096) > 0:
+            return buf.value.decode("utf-8", "replace")
+    except Exception:
+        pass
+    return comm
+
+
 def host_pids():
     """运行 SeeU 的程序:往上找父进程里所有 .app 的 pid(Claude 里跑:Claude 自带的 claude.app 和 Claude.app 都算)。"""
     if _host:
@@ -214,7 +228,7 @@ def host_pids():
         if not out:
             break
         ppid, comm = out.split(None, 1)
-        if ".app/" in comm:
+        if ".app/" in _exe_path(pid, comm):
             pids.add(pid)
         if ppid in ("0", "1"):
             break
@@ -224,7 +238,8 @@ def host_pids():
     try:
         outer = set()
         for p in list(pids):
-            out = subprocess.run(["ps", "-o", "comm=", "-p", str(p)], capture_output=True, text=True, timeout=3).stdout
+            out = _exe_path(p) or subprocess.run(["ps", "-o", "comm=", "-p", str(p)], capture_output=True, text=True,
+                                                 timeout=3).stdout
             i = out.find(".app/")
             if i > 0:
                 outer.add(out[:i + 4].strip())

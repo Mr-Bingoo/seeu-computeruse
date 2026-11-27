@@ -14,11 +14,11 @@
 
 Mac 演示 :
 
-https://github.com/user-attachments/assets/e754a8b9-577b-4f68-bebc-b42a90bb33c1
+https://github.com/user-attachments/assets/6dcef22d-3f14-40f2-8174-b5d851329ee3
 
 Windows 演示 :
 
-https://github.com/user-attachments/assets/4935c0db-eee5-4006-97e5-1e42d2427b42
+https://github.com/user-attachments/assets/965c5354-771a-4a05-bbd6-8e4605b101b8
 
 Linux 演示 :
 
@@ -130,7 +130,10 @@ Windows :
 python -m pip install comtypes
 ```
 
-Linux(git 和图片处理库 Pillow 常常没装，先装上；要操作网页还得有 Chromium 或 Chrome，三家默认只带 Firefox) :
+<details>
+<summary>Linux 要先装的系统软件(点开)</summary>
+
+git 和图片处理库 Pillow 常常没装，先装上；要操作网页还得有 Chromium 或 Chrome，三家默认只带 Firefox :
 
 ```bash
 # Ubuntu / Debian
@@ -141,6 +144,8 @@ sudo dnf install git python3-gobject at-spi2-core python3-pillow
 ```
 
 Linux 上请用系统自带的 `python3`(`/usr/bin/python3`)，conda、pyenv 里的 Python 用不了系统的辅助功能接口。
+
+</details>
 
 **2. 下载并接入到 AI 里**
 
@@ -158,19 +163,29 @@ python3 -m seeu install auto      # 或指定:claude | codex | cursor | vscode(M
 python3 -m seeu check             # 看这台电脑上还缺什么，缺的会写怎么办
 ```
 
-Mac 需要打开相关授权(Windows 无需单独设置) : 在 Mac 里跟 AI 说「检查一下 SeeU 还缺什么授权」(或自己运行 `python3 -m seeu check`)，它会告诉你该给谁开(可能是你的 AI 客户端，也可能是 SeeU 小程序)，照着在系统设置 → 隐私与安全性里打开**辅助功能**(新版 macOS 英文界面里叫 Device Control and Data Access)和**屏幕与系统录音**就行。开完授权要完全退出 AI 客户端再打开，才会生效。
+Mac 需要打开相关授权(Windows 无需单独设置) : 在 Mac 里跟 AI 说「检查一下 SeeU 还缺什么授权」(或自己运行 `python3 -m seeu check`)，它会告诉你该给谁开(可能是你的 AI 客户端，也可能是 SeeU 小程序)，照着在系统设置 → 隐私与安全性里打开**辅助功能**(新版 macOS 英文界面里叫 Device Control and Data Access)和**屏幕与系统录音**就行。接上以后由 AI 检查时，缺哪项 SeeU 会直接打开那一页设置(自己在终端检查要加 `--open`)，开关要你亲手打开。开完授权要完全退出 AI 客户端再打开，才会生效。
 
 Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME 小插件(画悬浮标、代理光标用)、打开系统的辅助功能总开关，运行时系统会当场弹两个框:截图那个点「允许」；远程桌面那个先打开「允许远程操作」，再点「共享」(SeeU 只在后台做不到时才借一下鼠标键盘)。装完要**注销重新登录一次**，再运行一次 `python3 -m seeu check`，全是 ✅ 就好了。缺的系统软件 `--fix` 不会替你装，照提示运行那条 sudo 命令。
 
 ## 接入 AI 客户端
 
-已测试过的 : Claude(Code 以及桌面版聊天页)、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问(千问有几项它独有的操作，详细见下方)。Linux 上能接的少一些，见下面「仅 Linux」。
+已测试过的 : Claude(Code 以及桌面版聊天页)、Codex、Cursor、Trae 国内版、VS Code + Copilot、WorkBuddy、豆包、千问、DeepSeek、Kimi Code、智谱 ZCode。
 
-- Mac / Windows : Claude、Codex、Cursor、Trae、VS Code 用上面的 `install` 一条命令接好。
-- WorkBuddy、豆包(仅 Mac / Windows) : 在它们自己的界面里新建一个自定义连接器(本机 / STDIO)，把 `python3 -m seeu mcp` 填进去；其他支持 MCP 的客户端(Linux 上也一样)也是这个办法。
-- 仅 Windows : Claude 能一键接入，这块还没实测；豆包现阶段(2026 年 11 月)请装 x64 版，ARM 版暂时接不了。
-- 仅 Linux : 能一键接入 Claude Code(终端里的 `claude` 命令，要先装好；Claude 桌面版没有 Linux 版)、Codex(ChatGPT 桌面版里的，或终端的 `codex` 命令)、Cursor、VS Code + Copilot；Trae、WorkBuddy、豆包、千问没有 Linux 版。目前实测过的是 ChatGPT 桌面版里的 Codex。Codex 第一次用 SeeU 看窗口时，可能会说「被 SeeU 拦了」，其实多半是 Codex 自己的「Approve for me」自动审核拦的，在对话里回一句「同意」就行。
-- 仅 Mac : 习惯用技能市场的，也可以 `npx skills add Mr-Bingoo/seeu-computeruse`。它装的只是给 AI 看的使用说明，第一次用时 AI 会照着说明把 SeeU 装好、接上。
+同一家的不同版本(比如 Kimi Code 和 Kimi Work、豆包和豆包的工作版、WorkBuddy 和 CodeBuddy)大多是同一个内核换了个包装 : 测通一个，另一个一般也能用，只是装法可能不同，Mac 上权限也要给它另开一次。
+
+| 客户端 | 怎么接 | 能用的系统 |
+|---|---|---|
+| Claude(Code、桌面版)、Codex、Cursor、VS Code + Copilot | 一条命令 : 上面的 `install` | Mac / Windows / Linux(Linux 上 Claude 只有 Code) |
+| Trae 国内版 | 同上 | Mac / Windows |
+| WorkBuddy、豆包 | 在它的界面里新建自定义连接器(本机 / STDIO)，填 `python3 -m seeu mcp` | Mac / Windows |
+| 千问 | 步骤多一些，见下面「千问」一段 | Mac / Windows |
+| DeepSeek、Kimi Code、智谱 ZCode，以及其他支持 MCP 的 | 把「最省事」那句发给它，它会把 SeeU 加进自己的 MCP 设置；也可以自己在它的 MCP 设置里加一个本机(STDIO)服务，填 `python3 -m seeu mcp` | Mac / Windows(Kimi Code 只测了 Mac)；Linux 上也能这样加(还没实测) |
+
+- **仅 Windows** : Claude 桌面版能一键接入，还没实测；豆包现阶段(2026 年 11 月)请装 x64 版，ARM 版暂时接不了。
+- **仅 Linux** : Claude Code 要先装好终端里的 `claude` 命令(Claude 桌面版没有 Linux 版)，Codex 用 ChatGPT 桌面版里的或终端的 `codex` 命令；Trae、WorkBuddy、豆包、千问没有 Linux 版。目前实测过的是 ChatGPT 桌面版里的 Codex。Codex 第一次用 SeeU 看窗口时，可能会说「被 SeeU 拦了」，其实多半是 Codex 自己的「Approve for me」自动审核拦的，在对话里回一句「同意」就行。
+- **仅 Mac** : 习惯用技能市场的，也可以 `npx skills add Mr-Bingoo/seeu-computeruse`。它装的只是给 AI 看的使用说明，第一次用时 AI 会照着说明把 SeeU 装好、接上。
+- **让 AI 自己加的那几家** : 常把 SeeU 下载到当前的项目 / 工作区文件夹里，删了这个文件夹 SeeU 就断了；装依赖时可能不先问你就装。Mac 上照「3. 检查和授权」给它开权限，列表里没有它时点「+」手动加上。
+- **后台打开 App** : 千问、DeepSeek、Kimi、智谱 ZCode、豆包、WorkBuddy / CodeBuddy 自己打开 App 不方便，在它们里面 SeeU 会多一个「后台打开 App」的工具 : App 开在你当前窗口后面，不切走你正在用的程序；终端、能跑脚本的 App、密码类 App、系统设置、浏览器(开网页请用 SeeU 的网页工具)、别的 AI 客户端和远程协助程序不替你打开。按品牌认，同一家的其他版本(Work / Code 之类)也算。
 
 **千问(仅 Mac / Windows)** : 千问只认用 `npx` 启动的工具，要先装 [Node.js](https://nodejs.org)。
 
@@ -180,7 +195,6 @@ Linux 需要运行 `python3 -m seeu check --fix`，它会装上 SeeU 的 GNOME �
 
 - 千问第一次加连接常会显示「连接失败」或没反应，重启千问、再进一次「连接」页就好。
 - 仅 Windows : 千问官网(2026 年 11 月)给的安装包版本较旧，没有「工作」页。装好后要在右上角点「新版本」升级(可能要升两次)，升完重启千问，直到左上角出现「日常 / 工作」。
-- 千问自己打开 App 每次都要你点「允许」，所以在千问里 SeeU 多一个「后台打开 App」的工具 : App 开在你当前窗口后面，不切走你正在用的程序；终端、能跑脚本的 App、密码类 App、系统设置、浏览器(开网页请用 SeeU 的网页工具)、别的 AI 客户端和远程协助程序不替你打开。
 
 **其他用标准配置的客户端(仅 Mac / Windows)** : 有的客户端或 MCP 广场只收下面这种标准配置。照千问的第 1 步装好 SeeU，再装好 [Node.js](https://nodejs.org)，把这段填进去就行(Linux 上用不了，请用上面的 `python3 -m seeu mcp`) :
 

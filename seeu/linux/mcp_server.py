@@ -466,6 +466,9 @@ def _result(r):
                      ("enter", "return key"), ("how", "how")):
         if r.get(k):
             lines.append(f"{label}: {en(r[k])}")
+    if r.get("hit"):                 # 按到的是哪个控件(种类翻成英文,名字照原样)
+        role, _, rest = str(r["hit"]).partition(" ")
+        lines.append(f"hit: {en(role)} {rest}".rstrip())
     if r.get("borrow"):
         b = r["borrow"]
         lines.append(f"borrowed the real mouse/keyboard: held ~{b.get('held_ms', '?')} ms, focus given back: {b.get('back', True)}")
@@ -755,13 +758,27 @@ HANDLERS = {"seeu_check": do_check, "seeu_windows": do_windows, "seeu_see": do_s
             "seeu_long_press": do_long_press, "seeu_menu": do_menu, "seeu_probe": do_probe, "seeu_open_app": do_open_app}
 
 
+def _route_note(parts):
+    """记录里写上这一步走的哪条路(outcome | code | route | tried)。ZCode Windows 实测两次 2 秒的假「送达」,
+    记录里只有 delivered,查不出是哪条路判错。按到的控件名(hit)不记:可能是屏幕上的字,记录只放路线。"""
+    first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")
+    keep = []
+    for ln in first.split("\n"):
+        k, _, v = ln.partition(":")
+        if k == "outcome":
+            keep.insert(0, v.strip())
+        elif k in ("code", "route", "tried"):
+            keep.append(f"{k}={v.strip()}")
+    return " | ".join(keep)
+
+
 def _log(name, a, ok, secs, note=""):
     try:
         safe = {k: (f"<{len(v)} 字>" if k == "text" and isinstance(v, str) else v) for k, v in a.items() if k != "why"}
         os.makedirs(os.path.dirname(LOG), exist_ok=True)
         with open(LOG, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%m-%d %H:%M:%S')} {name} {json.dumps(safe, ensure_ascii=False)} "
-                    f"why={a.get('why', '')!r} {'ok' if ok else 'ERR'} {secs:.1f}s" + (f" | {note[:150]}" if note else "") + "\n")
+                    f"why={a.get('why', '')!r} {'ok' if ok else 'ERR'} {secs:.1f}s" + (f" | {note[:300]}" if note else "") + "\n")
     except Exception:   # noqa: BLE001
         pass
 
@@ -855,8 +872,7 @@ def call_tool(name, a):
         parts, err = [f"outcome: {out}\nreason: {en(why)}" + "".join("\n" + x for x in _tell({"outcome": out, "reason": why}))], True
         note = f"{type(ex).__name__}: {why}"
     else:
-        first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")
-        note = first.split("\n", 1)[0].replace("outcome:", "").strip()
+        note = _route_note(parts)          # 连同走的哪条路一起记
     _log(name, a, not err, time.time() - t0, note.replace("\n", " "))
     return {"content": [p if isinstance(p, dict) else {"type": "text", "text": str(p)} for p in parts], "isError": bool(err)}
 
@@ -874,6 +890,7 @@ def handle(msg):
         ci = params.get("clientInfo") or {}
         if isinstance(ci, dict) and ci.get("name"):
             os.environ["SEEU_TASK_CLIENT"] = str(ci["name"])[:40]
+            _log("initialize", {"client": str(ci["name"])[:60], "client_version": str(ci.get("version") or "")[:20]}, True, 0.0)   # 记下客户端报的原名(认不出的显示名照它配)
         res = {"protocolVersion": want if want in PROTOCOLS else PROTOCOLS[-1], "capabilities": {"tools": {}},
                "serverInfo": {"name": "seeu", "version": VERSION}, "instructions": INSTRUCTIONS}
     elif method == "ping":

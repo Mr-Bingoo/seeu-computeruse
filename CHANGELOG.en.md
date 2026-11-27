@@ -4,6 +4,22 @@
 
 Plain talk about each release, no scapegoats to sacrifice here! What's new, what changed, and whether you need to do anything. To update or check your version, just tell the AI "update SeeU" or "check SeeU's version", or run it yourself (`python3` on the Mac and Linux, `python` on Windows): update with `python3 -m seeu update`, check the version with `python3 -m seeu version`.
 
+## v1.7.0 (2026-11-27)
+
+This release is mainly about connecting more AI clients: DeepSeek, Kimi and Zhipu ZCode are all tested and connected; along the way, the AI presses the wrong thing less often and borrows your mouse less.
+
+- **DeepSeek, Kimi and Zhipu ZCode connected** (Mac / Windows; Kimi Code only tested on Mac so far): send them the "Install SeeU for me" line and they install it themselves. When SeeU can't tell which client it's in, it tells the AI directly to add SeeU to its own MCP settings, instead of having it come back to ask you which client to connect.
+- **"Open apps in the background" in more clients** (Mac, Windows): it used to be Qwen only; now in DeepSeek, Kimi, Zhipu ZCode, Doubao and WorkBuddy / CodeBuddy, SeeU can also open apps in the background without switching away from the app you're using. It goes by brand, so other editions from the same maker (Work / Code and the like) count too. Tested with DeepSeek, Kimi Code (Mac) and ZCode.
+- **Tells the AI what it pressed** (Mac, Windows, Linux): the result has one more line naming the control it hit (for example "minus"), so when the AI misreads a number it notices right away.
+- **A click on a button presses that button** (Mac, Windows): when a click by position lands right on a button, it's treated as pressing that button. If the screen barely changes after the press (for example pressing Clear when the calculator shows 0), SeeU goes by the button's response and no longer borrows your mouse to press it again, so nothing gets pressed twice; clicking a button by number works the same way. On the Mac it presses in the background; on Windows it first clicks once in the background, and if that has no effect, borrows the foreground for one press, and stops there.
+- **Opens the settings page during the check** (Mac): once connected, when the AI runs the check, SeeU opens the System Settings page for any missing permission (when you check in a terminal yourself, add `--open`); the instructions name the actual program that needs the permission (for example DeepSeek Harness) instead of a vague "Terminal / Claude". You still flip the switch yourself.
+- **Recognizes the program running SeeU more reliably** (Mac): some clients (ZCode, for example) rename their own process, so SeeU didn't recognize it as the program running SeeU, and the AI could see its own window; now it's blocked as it should be. Clicking or long-pressing it is blocked up front too, and a blocked result no longer says "where the click landed".
+- **More polite when borrowing your things** (Mac, Windows): before Windows borrows the foreground for one press, it waits until you've stopped (about 3 seconds at most); while borrowing the foreground, the cursor keeps its color and gets " · borrowing focus" added to its name, and orange is kept for when it borrows your real mouse or keyboard. On the Mac, when it borrows your keyboard to type, the badge says "Using your keyboard".
+- **A few small improvements**: on Windows without Chrome, the web tools use Edge instead (with a separate profile, so installing Chrome later won't interfere; SeeU's Edge no longer signs in to your Microsoft account automatically or turns on sync); in the island, DeepSeek, Kimi, ZCode and Claude show up under their own names (instead of things like dshmcp, KimiCo, zcodec, locala); whether each step was done in the background, by borrowing the foreground or by borrowing your mouse is written to the local log, so problems are easier to track down.
+- **What you need to do**: after updating, fully quit your AI client and open it again.
+
+**Thanks** : ＠WangJL ＠ZhangM ＠DengXG ＠HaoZSL ＠Pigeon ＠A股匿名韭菜一枚 (contributors to this release · in no particular order)
+
 ## v1.6.3 (2026-11-26)
 
 A small update: AI clients are now told which tools only look and which can change things, and SeeU is listed on the ModelScope MCP Plaza and the official MCP Registry.

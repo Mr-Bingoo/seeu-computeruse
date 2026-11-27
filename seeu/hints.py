@@ -12,9 +12,11 @@ def _act(destructive, idempotent=False):
     return {"readOnlyHint": False, "destructiveHint": destructive, "idempotentHint": idempotent, "openWorldHint": True}
 
 
+import sys
+
 HINTS = {
-    # 只看、不动东西
-    "seeu_check": ("Check SeeU's permissions", _RO),
+    # 只看、不动东西(Mac 上 seeu_check 缺权限时会打开系统设置那一页 → Mac 不标只读;Windows / Linux 的检查只看)
+    "seeu_check": ("Check SeeU's setup", _act(False, True) if sys.platform == "darwin" else _RO),
     "seeu_probe": ("Probe an app", _RO),
     "seeu_see": ("Look at an app's screen", _RO),
     "seeu_windows": ("List open windows", _RO),

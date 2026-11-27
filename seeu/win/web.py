@@ -44,12 +44,28 @@ def _exe(browser):
     return None
 
 
+def _via_edge(browser):
+    """要的是 Chrome、可本机没装 Chrome、有 Edge → 实际用 Edge 顶上。"""
+    return browser == "chrome" and not _exe("chrome") and bool(_exe("edge"))
+
+
 def _profile(browser):
-    return os.path.normpath(home("cdp", f"win-{browser}"))
+    # Edge 顶替 Chrome 时用自己的配置文件夹(win-chrome-edge);原来共用 win-chrome,
+    # 以后装上 Chrome 会去开 Edge 写过的配置(版本可能对不上,起不来)。
+    return os.path.normpath(home("cdp", f"win-{browser}" + ("-edge" if _via_edge(browser) else "")))
 
 
 def _state_file(browser):
     return os.path.normpath(home("cdp", f"win-{browser}.json"))
+
+
+def _extra_args(exe):
+    """Edge 第一次起专用配置时会自动登录这台 Windows 的微软账号、开同步(「隐式登录」),
+    SeeU 的隐藏浏览器就带上了用户的账号 → Edge 加 msImplicitSignin 关掉 + --disable-sync(Win11 虚拟机实测:加了账号 0 条)。
+    只管 SeeU 自己这份;用户自己开的浏览器不受影响。Chrome 照旧。"""
+    if (exe or "").replace("\\", "/").rsplit("/", 1)[-1].lower() == "msedge.exe":
+        return ["--disable-features=Translate,msImplicitSignin", "--disable-sync"]
+    return ["--disable-features=Translate"]
 
 
 def _free_port():
@@ -110,13 +126,13 @@ def start(browser="chrome", visible=False):
         return d
     if d:
         stop(browser)
-    exe = _exe(browser)
+    exe = _exe(browser) or (_exe("edge") if _via_edge(browser) else None)   # 没装 Chrome 退用 Edge(朋友 Win11 只有 Edge,web_open 报「没找到 chrome」;检查早就说「Chrome 或 Edge 都行」)。配置文件夹见 _profile
     if not exe:
         raise WebError(f"没找到 {browser}(Chrome / Edge 没装?)", "no_app")
     _kill_profile(browser)
     port = _free_port()
     args = [exe, f"--remote-debugging-port={port}", f"--user-data-dir={_profile(browser)}",
-            "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"]
+            "--no-first-run", "--no-default-browser-check"] + _extra_args(exe)
     if not visible:
         args += ["--headless=new", "--window-size=1280,900"]
     args.append("about:blank")
@@ -131,7 +147,7 @@ def start(browser="chrome", visible=False):
     while time.time() - t0 < LAUNCH_WAIT:          # 硬上限
         try:
             cdp._http(port, "/json/version", timeout=1)
-            d = dict(port=port, pid=p.pid, visible=bool(visible), browser=browser)
+            d = dict(port=port, pid=p.pid, visible=bool(visible), browser=browser, exe=os.path.basename(exe))   # exe:诊断里写实际是哪个
             _save(browser, d)
             return d
         except Exception:

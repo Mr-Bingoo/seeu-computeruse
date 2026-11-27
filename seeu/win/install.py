@@ -701,6 +701,19 @@ def _pl(zh, en):
     print(lang.L(zh, en), flush=True)
 
 
+def _other_client_hint():
+    """ZCode Windows 实测:认不出客户端时只列一键接入的几家,模型照字面列成选项问用户 →
+    补一段:别的 MCP 客户端直接把 SeeU 加进自己的 MCP 设置(给出 command / args)。带路径,不过对照表。"""
+    snip = json.dumps({"mcpServers": {"seeu": {"command": _python(), "args": [SERVER]}}}, ensure_ascii=False)
+    _pl("不在这几家(别的支持 MCP 的 AI 客户端,如 ZCode、DeepSeek、Kimi):不用问用户接哪家,直接把 SeeU 加进"
+        "你自己这家的 MCP 设置(本机 stdio 服务,用户级),再按你那家的规矩重新加载或新开对话:\n"
+        f"  {snip}\n  设置文件在哪、外层键名叫什么以你那家的说明为准;只加 seeu 这一条,别动别的。",
+        "Not one of these (another MCP client, e.g. ZCode, DeepSeek, Kimi)? Don't ask the user which one: add SeeU to "
+        "your own client's MCP settings (a local stdio server, user level), then reload or start a new conversation:\n"
+        f"  {snip}\n  Where the settings file is and what the outer key is called follow your client's docs; "
+        "add only the seeu entry and leave everything else alone.")
+
+
 def _stop_running(procs):
     """停掉这家拉起的 SeeU 服务(设置删了它察觉不到,会一直挂着;同 Mac 版)。
     只停:命令行里指着这份 mcp_server.py 的 Python 进程,而且上级进程链上有这家的程序。问不到命令行就不停(返回 0)。"""
@@ -877,6 +890,7 @@ def main(cmd, args):
         which = _auto() or ""
         if not which:
             _p("认不出是在哪家 AI 里运行的,请写明:python -m seeu 接入 claude|codex|cursor|trae|vscode")
+            _other_client_hint()
             return 2
     if cmd in ("接入", "install"):
         if not args:

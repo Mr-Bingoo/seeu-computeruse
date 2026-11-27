@@ -207,6 +207,30 @@ def at_point(x, y):
         return None
 
 
+def button_at(x, y):
+    """屏幕这一点正好是个能按(invoke)的按钮 → 返回跟控件清单一样的一项;不是 / 问不到返回 None。只读,不抢前台。
+    按位置点时用(照 Mac 的 act._button_at)。调用方自己核对这一点最上面是不是目标窗口。"""
+    try:
+        e = _auto().ElementFromPoint(_U().tagPOINT(int(round(x)), int(round(y))))
+        if not e or e.CurrentControlType != 50000 or not e.CurrentIsEnabled:
+            return None
+        try:
+            p = e.GetCurrentPattern(PAT_INVOKE)
+        except Exception:   # noqa: BLE001
+            p = None
+        if not p:
+            return None
+        r = e.CurrentBoundingRectangle
+        w, h = r.right - r.left, r.bottom - r.top
+        if w <= 0 or h <= 0 or not (r.left <= x <= r.right and r.top <= y <= r.bottom):
+            return None
+        return dict(name=(e.CurrentName or "").strip(), role=TYPES.get(50000, "按钮"), type=50000, rect=(r.left, r.top, w, h),
+                    enabled=True, password=False, focused=False, actions=["invoke"], value=None,
+                    autoid=e.CurrentAutomationId or "", el=e)
+    except Exception:   # noqa: BLE001
+        return None
+
+
 def find(hwnd, name):
     """按名字找控件:先全等,再包含。找不到抛 RuntimeError。"""
     items = elements(hwnd)

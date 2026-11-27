@@ -236,6 +236,8 @@ WIN_PHRASES = [
      "the cursor is in a password field and this key would change it; SeeU won't press it (please do this step yourself)"),
     ("用户正在用电脑,SeeU 先不借鼠标键盘(等用户停手再试)",
      "the user is using the computer right now; SeeU won't borrow the mouse/keyboard (try again when they pause)"),
+    ("用户正在用电脑,SeeU 先不借前台(等用户停手再试)",
+     "the user is using the computer right now; SeeU won't briefly take the foreground (try again when they pause)"),
     ("后台打了,画面和文字都没变:多半是输入框没有焦点(Chrome、VS Code 这类被切过前台后会丢焦点)。带上 at=输入框的编号 / 名字再打一次(会先后台点一下),别不带 at 重打",
      "typed in the background but nothing changed: the field probably has no focus. Call again with target = the field's number "
      "(SeeU clicks into it first); don't just retype without a target"),
@@ -400,8 +402,11 @@ def _result(r):
     lines = [f"outcome: {r.get('outcome')}"]
     for k, label in (("route", "route"), ("code", "code"), ("tried", "tried"), ("reason", "reason"), ("note", "note"), ("xy", "clicked at"),
                      ("enter", "return key"), ("how", "how")):
-        if r.get(k):
+        if r.get(k) and not (k == "xy" and r.get("outcome") in ("refused", "failed")):   # 被拦 / 出错时别写「clicked at」(同 Mac)
             lines.append(f"{label}: {en(r[k])}")
+    if r.get("hit"):                 # 按到的是哪个控件(种类翻成英文,名字照原样)
+        role, _, rest = str(r["hit"]).partition(" ")
+        lines.append(f"hit: {en(role)} {rest}".rstrip())
     if r.get("borrow"):
         b = r["borrow"]
         lines.append(f"borrowed: held ~{b.get('held_ms', '?')} ms, given back: {b.get('back', True)}")
@@ -647,7 +652,7 @@ def do_manage(a):
     return [f"unknown action: {act_}"], True
 
 
-# 后台打开 App,只给自己打不开 App 的客户端(千问),见 openapp.enabled()(照 Mac 版)
+# 后台打开 App,只给自己打不开 App 的客户端(千问;加 DeepSeek / Kimi Code / ZCode),见 openapp.enabled()(照 Mac 版)
 OPEN_APP_TOOL = _tool(
     "seeu_open_app", "Open a Windows app in the background (its window is shown without taking the foreground; if the app "
     "grabs the foreground anyway, SeeU gives it back to the user's window). Use it instead of starting programs yourself. "
@@ -699,6 +704,20 @@ HANDLERS = {"seeu_open_app": do_open_app, "seeu_check": do_check, "seeu_windows"
             "seeu_manage": do_manage, "seeu_long_press": do_long_press, "seeu_probe": do_probe}
 
 
+def _route_note(parts):
+    """记录里写上这一步走的哪条路(outcome | code | route | tried)。ZCode Windows 实测两次 2 秒的假「送达」,
+    记录里只有 delivered,查不出是哪条路判错。按到的控件名(hit)不记:可能是屏幕上的字,记录只放路线。"""
+    first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")
+    keep = []
+    for ln in first.split("\n"):
+        k, _, v = ln.partition(":")
+        if k == "outcome":
+            keep.insert(0, v.strip())
+        elif k in ("code", "route", "tried"):
+            keep.append(f"{k}={v.strip()}")
+    return " | ".join(keep)
+
+
 def _log(name, a, ok, secs, note=""):
     try:
         safe = {k: (f"<{len(v)} 字>" if k == "text" and isinstance(v, str) else v) for k, v in a.items() if k != "why"}
@@ -706,7 +725,7 @@ def _log(name, a, ok, secs, note=""):
         with open(LOG, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%m-%d %H:%M:%S')} {name} {json.dumps(safe, ensure_ascii=False)} "
                     f"why={a.get('why', '')!r} {'ok' if ok else 'ERR'} {secs:.1f}s"
-                    + (f" | {note[:150]}" if note else "") + "\n")   # 出错时记一句原因(以前只记 ERR,查不了)
+                    + (f" | {note[:300]}" if note else "") + "\n")   # 出错时记一句原因(以前只记 ERR,查不了)
     except Exception:
         pass
 
@@ -812,8 +831,7 @@ def call_tool(name, a):
         note = f"{type(ex).__name__}: {why}"
     else:
         # 结果(delivered / ineffective / …)也记下来;以前只记 ok,Codex 点错标签页那次事后分不清是谁错
-        first = next((p for p in parts if isinstance(p, str) and p.startswith("outcome:")), "")
-        note = first.split("\n", 1)[0].replace("outcome:", "").strip()
+        note = _route_note(parts)          # 连同走的哪条路一起记
     _log(name, a, not err, time.time() - t0, note.replace("\n", " "))
     return {"content": [p if isinstance(p, dict) else {"type": "text", "text": str(p)} for p in parts], "isError": bool(err)}
 
@@ -833,6 +851,7 @@ def handle(msg):
             ci = params.get("clientInfo") or {}
             if isinstance(ci, dict) and ci.get("name"):
                 os.environ["SEEU_TASK_CLIENT"] = str(ci["name"])[:40]   # 显示名由 sched 起(Claude、Claude2…,同名自动编号)
+                _log("initialize", {"client": str(ci["name"])[:60], "client_version": str(ci.get("version") or "")[:20]}, True, 0.0)   # 记下客户端报的原名(认不出的显示名照它配)
         except Exception:   # noqa: BLE001
             pass
         res = {"protocolVersion": want if want in PROTOCOLS else PROTOCOLS[-1], "capabilities": {"tools": {}},

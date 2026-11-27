@@ -4,6 +4,22 @@
 
 版本变化的直白表述，反正没法找锅「祭天」！加了什么、改了什么、是否需要你做点什么。更新或查版本号，可以直接跟 AI 说「更新 SeeU」「查询 SeeU 版本」，或者自己运行(Mac 和 Linux 用 `python3`，Windows 用 `python`) : 更新 `python3 -m seeu update`，查版本 `python3 -m seeu version`。
 
+## v1.7.0(2026-11-27)
+
+这版主要是接上更多 AI 客户端 : DeepSeek、Kimi、智谱 ZCode 都实测接通了；顺带让 AI 少按错、少借你的鼠标。
+
+- **DeepSeek、Kimi、智谱 ZCode 已接通**(Mac / Windows；Kimi Code 目前只测了 Mac) : 把「帮我装上 SeeU」那句发给它们，它们自己就能装好。SeeU 认不出是哪家客户端时，会直接告诉 AI 把 SeeU 加进它自己的 MCP 设置，不再让它回头问你接哪家。
+- **更多客户端有「后台打开 App」**(Mac、Windows) : 原来只有千问有；现在 DeepSeek、Kimi、智谱 ZCode、豆包、WorkBuddy / CodeBuddy 里，SeeU 也能在后台打开 App，不切走你正在用的程序。按品牌认，同一家的其他版本(Work / Code 之类)也算。实测过 DeepSeek、Kimi Code(Mac)、ZCode。
+- **点完告诉 AI 按到了什么**(Mac、Windows、Linux) : 结果里多一行，写明按到的是哪个控件(比如「减号」)，AI 读错编号时当场能发现。
+- **点在按钮上就按这个按钮**(Mac、Windows) : 按位置点正好落在按钮上时，当成按这个按钮。按下去画面没怎么变(比如计算器显示 0 时按清除)，SeeU 以按钮的回应为准，不再借你的鼠标重按一遍，免得按两次；按编号点按钮也一样。Mac 上直接在后台按；Windows 上先在后台点一下，没效果再借前台按一下，就此为止。
+- **检查时帮你打开设置页**(Mac) : 接上以后 AI 检查时，缺权限 SeeU 会直接打开那一页系统设置(自己在终端检查要加 `--open`)；说明里写的是要授权的那个程序的名字(比如 DeepSeek Harness)，不再笼统写「终端 / Claude」。开关还是要你亲手打开。
+- **运行 SeeU 的程序认得更准**(Mac) : 有的客户端(比如 ZCode)改了自己进程的名字，原来 SeeU 认不出它就是运行自己的程序，AI 能看到它自己的窗口；现在照样拦住。点、长按它时也先拦，被拦时结果里不再写「点在了哪里」。
+- **借你的东西时更客气**(Mac、Windows) : Windows 要借前台按一下之前，先等你停手(最多约 3 秒)，借前台时光标颜色不变，名字后面加「 · 借前台」，橙色只留给要借你的真鼠标、真键盘的时候；Mac 要借你的键盘打字时，悬浮标会写「正在用你的键盘」。
+- **几处小改进** : Windows 没装 Chrome 时网页工具改用 Edge(用单独的配置，以后装上 Chrome 也互不影响；SeeU 这份 Edge 不再自动登录你的微软账号、不开同步)；灵动岛上 DeepSeek、Kimi、ZCode、Claude 显示成自己的名字(原来是 dshmcp、KimiCo、zcodec、locala 这类)；每一步是后台做的、借前台做的还是借了你的鼠标，都记进本机记录，出问题好查。
+- **要你做的** : 更新后完全退出 AI 客户端再打开。
+
+**致谢名单** : ＠WangJL ＠ZhangM ＠DengXG ＠HaoZSL ＠Pigeon ＠A股匿名韭菜一枚 （当前版本协助人员 · 排名不分先后）
+
 ## v1.6.3(2026-11-26)
 
 小更新：告诉 AI 客户端哪些工具只是看、哪些会动东西；SeeU 上了魔搭 MCP 广场和 MCP 官方登记处。

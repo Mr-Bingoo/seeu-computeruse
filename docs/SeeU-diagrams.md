@@ -18,7 +18,7 @@ block-beta
   columns 6
   H1["① Who calls it"]:6
   U1["Your Python programs<br/>scheduled tasks, automation"]:2
-  U2["AI (Claude, Codex, Qwen…)<br/>MCP tools + Skill instructions<br/>one-step setup · npx launcher"]:2
+  U2["AI (Claude, Codex, Qwen, DeepSeek…)<br/>MCP tools + Skill instructions<br/>one-step setup · npx launcher · AI adds it itself"]:2
   U3["Command line<br/>permission check, evidence, I See"]:2
   D1<["&nbsp;"]>(down):6
   H2["② SeeU"]:6
@@ -27,7 +27,7 @@ block-beta
   FB["Seeing and feedback<br/>screenshots + text recognition<br/>floating window · island · agent cursor<br/>glow · toast · permission check · evidence"]:2
   D2<["&nbsp;"]>(down):6
   H3["③ System abilities it relies on"]:6
-  P1["Accessibility permission<br/>Screen Recording permission"]:2
+  P1["Accessibility permission<br/>Screen & System Audio Recording permission"]:2
   P3["Private background-click interface<br/>falls back to the real mouse"]:2
   P4["AppleScript, granted per app<br/>debugging port (Chromium)"]:2
   D3<["&nbsp;"]>(down):6
@@ -44,7 +44,7 @@ block-beta
   columns 6
   H1["① Who calls it"]:6
   U1["Your Python programs<br/>scheduled tasks, automation"]:2
-  U2["AI (Claude, Codex, Qwen…)<br/>MCP tools + Skill instructions<br/>one-step setup · npx launcher"]:2
+  U2["AI (Claude, Codex, Qwen, DeepSeek…)<br/>MCP tools + Skill instructions<br/>one-step setup · npx launcher · AI adds it itself"]:2
   U3["Command line<br/>check, evidence, settings"]:2
   D1<["&nbsp;"]>(down):6
   H2["② SeeU"]:6
@@ -99,13 +99,13 @@ Legend: ✅ background, no disturbance · ⚡ briefly borrows the front window o
 |---|---|---|---|---|---|---|
 | Safari | ✅ | ✅ | ✅ | ✅ | ✅ stealth Safari | Accessibility, the Safari switch (asks for your password), control of Safari |
 | Chrome etc. | ✅ | ✅ | ✅ | ✅ | ✅ stealth Chrome (flashes 0.2–0.4 s at startup) | Accessibility, extension or switch; stealth Chrome uses the debugging port and needs nothing turned on |
-| Electron apps (desktop software built with web tech; Electron, CEF and the like all count; e.g. VS Code) | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ❌ your own copy | None for SeeU's copy; yours needs Accessibility and Screen Recording |
+| Electron apps (desktop software built with web tech; Electron, CEF and the like all count; e.g. VS Code) | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ⚠️ yours needs the window visible | ✅ SeeU's own copy; ❌ your own copy | None for SeeU's copy; yours needs Accessibility and Screen & System Audio Recording |
 | Native apps (Notes…) | ✅ | ✅ | ✅ | ✅ | ✅ (opening a specific note flashes briefly) | Accessibility; control of that app when AppleScript is used |
-| Emulators (e.g. BlueStacks) | ✅ text recognition | ✅ background click (private interface) | ✅ | ✅ | ❌ (window must be there) | Accessibility, Screen Recording |
-| iPhone Mirroring | ✅ text recognition | ✅ background click (private interface) | ✅ | ✅ (adds a small drag when stuck) | ❌ (window must be there, any size) | Accessibility, Screen Recording |
+| Emulators (e.g. BlueStacks) | ✅ text recognition | ✅ background click (private interface) | ✅ | ✅ | ❌ (window must be there) | Accessibility, Screen & System Audio Recording |
+| iPhone Mirroring | ✅ text recognition | ✅ background click (private interface) | ✅ | ✅ (adds a small drag when stuck) | ❌ (window must be there, any size) | Accessibility, Screen & System Audio Recording |
 | Dragging (any scenario) | — | ⚡ borrows the real mouse | — | — | — | Same as above |
 
-Every scenario goes through the safety rules first: Terminal, system permission prompts, the Privacy & Security part of System Settings, password apps (Keychain, Passwords, 1Password and so on), the AI client running SeeU itself (such as Claude or Codex), SeeU's own floating window buttons (so the AI can't turn on I See for itself), and dangerous shortcuts / commands / menu items are all blocked; password, verification-code and bank card fields are never touched. When opening apps in the background for Qwen, terminals, script apps, password apps, System Settings, browsers, other AI clients and remote-access apps are never opened.
+Every scenario goes through the safety rules first: Terminal, system permission prompts, the Privacy & Security part of System Settings, password apps (Keychain, Passwords, 1Password and so on), the AI client running SeeU itself (such as Claude or Codex), SeeU's own floating window buttons (so the AI can't turn on I See for itself), and dangerous shortcuts / commands / menu items are all blocked; password, verification-code and bank card fields are never touched. When opening apps in the background (a tool that only exists in clients such as Qwen, DeepSeek, Kimi, ZCode, Doubao and WorkBuddy), terminals, script apps, password apps, System Settings, browsers, other AI clients and remote-access apps are never opened.
 
 "Background click (private interface)" = posting the click straight to the window through an interface macOS hasn't made public. It may stop working after a system update, and then SeeU automatically falls back to the real mouse (see 3.3).
 
@@ -174,7 +174,9 @@ sequenceDiagram
     F-->>U: Purple agent cursor "SeeU" moves onto the button
     E->>E: Verify by reading back / comparing screenshots
     alt Took effect
-      E-->>AI: delivered
+      E-->>AI: delivered<br/>(the result names the control it hit)
+    else It's a button and it was pressed, but the screen barely changed
+      E-->>AI: unverified<br/>(the button's response counts, no re-press with the real mouse,<br/>so nothing is pressed twice, the AI looks first)
     else No effect
       E->>R: Route 2: background click<br/>(compare screenshots after the click,<br/>no change = record the scene, next route)
       E->>R: Route 3: borrow the real mouse
@@ -255,6 +257,7 @@ sequenceDiagram
     else It didn't go in<br/>(emulators skip this and report no effect)
       E->>R: Route 2: foreground typing
       R->>S: Step-aside check + mouse queue
+      F-->>U: Badge expands:<br/>"Using your keyboard<br/>/ don't touch the keyboard,<br/>back in a few seconds"
       S->>A: Bring to front and type
       S->>A: Restore the front app
       E-->>AI: Success / no effect<br/>(the caller decides what's next)
@@ -423,7 +426,7 @@ sequenceDiagram
     R->>A: Mouse messages to the child window under that point<br/>(no front switch, mouse untouched)
     E->>E: Verify (picture, window title,<br/>control contents, text read back,<br/>any change counts)
     alt Took effect
-      E-->>AI: delivered
+      E-->>AI: delivered<br/>(the result names the control it hit)
     else No effect
       E->>S: May it borrow?
       alt Window on another virtual desktop
@@ -435,11 +438,16 @@ sequenceDiagram
         F-->>U: Orange toast: needs to borrow
         E-->>AI: ask_user (the AI retries once you agree)
       else Borrow mouse = on (default)
-        opt The control can be "pressed"
+        opt The control can be "pressed" (a button)
+          loop You're moving the mouse or typing (waits about 3 s at most)
+            S->>S: Wait until you stop
+          end
+          F-->>U: Cursor keeps its color, " · borrowing focus" added to its name
           E->>R: Step 2: borrow the front and press
           R->>A: Front for about 0.03–0.2 s,<br/>then handed straight back
+          E-->>AI: Once pressed, the button's response counts<br/>(unverified if the screen didn't change,<br/>no going on to the real mouse)
         end
-        E->>R: Step 3: borrow the real mouse
+        E->>R: Step 3: borrow the real mouse<br/>(when it's not a button,<br/>or the press didn't work)
         R->>S: Are you using the computer?
         loop Mouse or keyboard used in the last second (waits up to 6 s)
           S->>S: Wait until you stop
@@ -768,6 +776,9 @@ mindmap
     Who uses it
       Python programs
       AI · MCP plus Skill
-      One-step setup for Claude, Codex and more · add Qwen and others by hand
+      One command for five, Claude, Codex and more
+      Add WorkBuddy, Doubao, Qwen by hand
+      AI adds it itself · DeepSeek, Kimi, ZCode and more
+      Opens apps in the background · Qwen, DeepSeek and more
       Command line
 ```

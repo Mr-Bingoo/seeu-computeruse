@@ -84,6 +84,19 @@ def _p(s):
     print(s, flush=True)
 
 
+def other_client_hint():
+    """install auto 认不出客户端时补的那段。ZCode Windows 实测:原来只列一键接入的几家,模型照字面
+    把这几家列成选项去问用户;Mac 那次是模型自己想到改配置。→ 直接告诉 AI 把 SeeU 加进它自己这家的 MCP 设置。"""
+    import json as _json
+    snip = _json.dumps({"mcpServers": {"seeu": {"command": _python(), "args": [SERVER]}}}, ensure_ascii=False)
+    return ("不在这几家(别的支持 MCP 的 AI 客户端,如 ZCode、DeepSeek、Kimi):不用问用户接哪家,直接把 SeeU 加进"
+            "你自己这家的 MCP 设置(本机 stdio 服务,用户级),再按你那家的规矩重新加载或新开对话:\n"
+            f"  {snip}\n"
+            "  设置文件在哪、外层键名叫什么以你那家的说明为准;只加 seeu 这一条,别动别的。\n"
+            "Not one of these (another MCP client)? Don't ask the user which one: add SeeU to your own client's MCP settings "
+            "(a local stdio server, user level) with the command and args above, then reload or start a new conversation.")
+
+
 def _toml_norm(path, drop=None):
     """粗略把 toml 拆成 {(节, 键): 值},不管顺序;空 args、120 / 120.0 这类写法差别抹平。drop = 不比较的节(如 SeeU 自己那节)。
     Codex App 实测:接入后 App 会把整份设置重排一遍,按逐字比就误判成「用户改过」,不敢整份还原。"""
@@ -637,7 +650,8 @@ def main(cmd, args):
     if names[0] in ("自动", "auto"):      # 给 AI 自己装用:认出是哪家在运行这条命令,就接哪家
         cur = current_client()
         if not cur:
-            _p(f"认不出是在哪家 AI 里运行的,请写明:python3 -m seeu 接入 {'|'.join(ALL)}")
+            _p(f"认不出是在哪家 AI 里运行的。是这几家就写明:python3 -m seeu 接入 {'|'.join(ALL)}")
+            _p(other_client_hint())
             return 2
         return install_json(cur) if cur in JSON_CLIENTS else install(cur, local)
     if names[0] not in ALL:

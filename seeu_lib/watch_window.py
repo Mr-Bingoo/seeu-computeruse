@@ -206,7 +206,9 @@ def show(window_id, mode="bg", who=None):
     who = 项目名(不传读环境变量 SEEU_PROJECT):悬浮窗顶上写「项目名 · iPhone Mirroring」,窄了只写项目名。"""
     ensure_serve()
     w = who_name(who)
-    send("show", int(window_id), "real" if mode == "real" else "bg", *([w] if w else []))
+    # mode = keyboard(借真键盘,前台打字)→ 跟借鼠标一样变橙、弹开,字写「正在用你的键盘」
+    m = "realkb" if mode == "keyboard" else ("real" if mode == "real" else "bg")
+    send("show", int(window_id), m, *([w] if w else []))
 
 
 def mark(kind, fx, fy, who=None):
@@ -536,6 +538,9 @@ def serve():
 
     def card_info():
         """文字卡的内容:dict(app, step, stuck?)。镜像没有步骤信息,按最近一次点击标记写「正在点击」/「等下一步」。"""
+        if (st.get("borrow_auto") or borrowing()) and st.get("borrow_kind") == "keyboard":   # 借真键盘
+            return dict(app=(st.get("browser") or {}).get("app") or st.get("title") or "SeeU",
+                        step="__borrow__", line=tr("card.borrow_kb", "正在用你的键盘"))
         if st.get("borrow_auto") or borrowing():     # 借鼠标(自动弹开;展开着也写):「正在用你的鼠标」+「别动鼠标」
             lm = st.get("last_mark")
             # 实测:借鼠标在空白处拖动解卡(没发点击标记),卡片却写了十几秒前后台点的「取消」→ 只认 ACTIVE_S 内的点击
@@ -605,7 +610,8 @@ def serve():
         b = st.get("browser") or {}
         out = []
         if st.get("borrow_auto") or borrowing():
-            out.append(tr("card.borrow_note", "别动鼠标,几秒后还你"))
+            out.append(tr("card.borrow_kb_note", "别碰键盘,几秒后还你") if st.get("borrow_kind") == "keyboard"
+                       else tr("card.borrow_note", "别动鼠标,几秒后还你"))
             return out
         if b.get("hidden"):
             out.append(tr("card.hidden_note", "{app} 在后台隐身干活,别点开它", app=b.get("app") or "浏览器"))
@@ -2499,6 +2505,9 @@ def serve():
                 if len(msg) in (2, 3, 4) and msg[0] == "show":
                     wid = int(msg[1])
                     mode = msg[2] if len(msg) >= 3 else "bg"
+                    st["borrow_kind"] = "keyboard" if mode == "realkb" else ("mouse" if mode == "real" else st.get("borrow_kind", "mouse"))
+                    if mode == "realkb":                   # 借真键盘 = 借用(橙、弹开),只是字不同
+                        mode = "real"
                     st["who"] = msg[3] if len(msg) == 4 else ""
                     set_pass(now + PASS_S if mode == "real" else 0)
                     if mode == "real":                     # 借鼠标时自动弹开卡片写清楚;借完自动收回(只收自己弹开的)

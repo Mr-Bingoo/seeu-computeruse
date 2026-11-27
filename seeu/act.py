@@ -365,6 +365,17 @@ def _still_there(app, it):
     raise Stale(f"画面变了:第 {it['id']} 项「{(it.get('text') or '')[:20]}」已经不在 see 时的位置,先 see 一次再操作")
 
 
+def _host_refused(app):
+    """DeepSeek 实测:按名字点宿主时,原来先读宿主的控件、报「没找到」才停,没走到安全底线。
+    找目标之前先过一遍,被拦就返回 refused 结果(跟 _ladder 一样),没被拦返回 None。"""
+    from seeu import safety
+    try:
+        safety.check_app(app)
+    except safety.Refused as ex:
+        return dict(outcome="refused", route=None, tried=[], png=None, reason=str(ex))
+    return None
+
+
 def _resolve(app, target):
     """target → (x, y, ax项或None)。"""
     if isinstance(target, (tuple, list)) and len(target) == 2:
@@ -1134,6 +1145,8 @@ def _watch(app, kind=None, x=None, y=None):
         if not g:
             return
         mode = "real" if kind is not None else "bg"     # 只有真鼠标那条路会带 kind 进来(见 _cursor)
+        if kind == "keyboard":                          # 借真键盘(_front_type)→ 浮标写「正在用你的键盘」
+            mode = "keyboard"
         try:
             ww.show(g["id"], mode)
         except TypeError:                               # 长进程里是旧版 watch_window
@@ -1197,16 +1210,87 @@ def _shown(app, kind, rx, ry, fn):
 
 # ---------------------------------------------------------------- 动作
 
+# (DeepSeek 实测):按位置点原生 App,点下去正好是个按钮 → 改成按这个按钮(跟按编号点一样)。
+# 而且按钮按完画面几乎没变(计算器「789 +」时按 C 只变 0.24%)不再往下换后台点击 / 借真鼠标(那样会把同一个键再按一次),
+# 报 unverified 让 AI 先看;同一个按钮 PRESS_RETRY_S 秒内 AI 再点 = 它看过了、确实没生效 → 这次跳过「按控件」,照老路走。
+PIXEL_PRESS_ROLES = ("AXButton",)
+PRESS_RETRY_S = 20
+_press_no_change = {}          # (App, 按钮位置) -> 上次「按了但画面没变」的时间
+PRESS_NO_CHANGE = ("按下了这个按钮,但画面几乎没变(有的按钮按了本来就没变化)。没有再换后台点击 / 借鼠标点一遍(免得按两次);"
+                   "先 see 看一眼:生效了就别再点,没生效再点一次,SeeU 会换别的办法")
+
+
+def _button_at(app, x, y):
+    """按位置点时,(x, y) 处正好是个能按的按钮 → 返回跟 see 清单同样的控件字典;不是 / 问不到返回 None(照老路按位置点)。"""
+    try:
+        el = ax.element_at(ax.app_element(_pid(app))[0], x, y)
+        if el is None or (ax.attr(el, "AXRole") or "") not in PIXEL_PRESS_ROLES:
+            return None
+        acts = ax.action_names(el)
+        f = ax.frame(el)
+        if "AXPress" not in acts or not f or ax.attr(el, "AXEnabled") is False:
+            return None
+        if not (f[0] <= x <= f[0] + f[2] and f[1] <= y <= f[1] + f[3]):
+            return None
+        return dict(el=el, role=ax.attr(el, "AXRole"), title=ax._short(ax.attr(el, "AXTitle") or ""),
+                    desc=ax._short(ax.attr(el, "AXDescription") or ""), value="", path="", frame=f, actions=acts,
+                    enabled=True)
+    except Exception:   # noqa: BLE001
+        return None
+
+
+_HIT = threading.local()
+
+
+def _hit_label(e, app, target):
+    """按到的是哪个控件,写进结果(hit)。Kimi 实测把清单里的 14(减号)当成「4」按,SeeU 照清单按对了,
+    但结果里只有坐标,AI 看不出读错 → 回显控件种类和名字(按编号的带上编号),AI 当场能发现。名字最多 40 字。"""
+    n = int(target) if isinstance(target, int) or (isinstance(target, str) and target.isdigit()) else None
+    if e:
+        role = (e.get("role") or "")[2:] or "?"
+        name = " ".join(t for t in (e.get("title"), e.get("desc")) if t) or (e.get("value") or "")
+    elif n is not None:
+        it = next((i for i in (_last.get(app) or []) if i["id"] == n), None)
+        if not it:
+            return None
+        role, name = "text", it.get("text") or ""
+    else:
+        return None
+    name = " ".join(str(name).split())[:40]
+    return (f'{role} "{name}"' if name else role) + (f" (#{n})" if n is not None else "")
+
+
+def _with_hit(fn):
+    import functools
+
+    @functools.wraps(fn)            # 要带上原签名,sched.scheduled 靠签名取第一个参数当 App 名(不带就成了整个元组)
+    def wrap(*a, **k):
+        _HIT.v = None
+        r = fn(*a, **k)
+        h = getattr(_HIT, "v", None)
+        if h and isinstance(r, dict) and r.get("outcome") not in ("refused", "failed"):
+            r.setdefault("hit", h)
+        return r
+    return wrap
+
+
+@_with_hit
 def tap(app, target, real=True, allow=None):
     from seeu import web
     app = web.canon(app)
     if web.is_browser(app) or web.is_cdp(app):     # 浏览器 / SeeU 专用那份网页壳 App:按网页里的编号/名字点,见 seeu/web
         return web.tap(app, target)
+    ref = _host_refused(app)
+    if ref:
+        return ref
     x, y, e = _resolve(app, target)
     if e is None:                 # 按截图位置点(不是控件):Chrome / Electron 窗口看不见时截图是旧的,不点
         bad = _stale_pixel(app)
         if bad:
             return bad
+        if not _is_canvas(app):
+            e = _button_at(app, x, y)       # 点的正好是按钮 → 按这个按钮
+    _HIT.v = _hit_label(e, app, target)
     blocked = _tap_secret_block(app, e, x, y)      # 点「粘贴」按钮 / 右键菜单里的粘贴项 = 粘贴,光标在密码框里就不点
     if blocked:
         return blocked
@@ -1214,8 +1298,22 @@ def tap(app, target, real=True, allow=None):
     if blocked:
         return blocked
     rx, ry = _rel(app, x, y)   # 窗口被挪了也点得准:每条路动手前按窗口当时位置重算(跨桌面实测窗口被挪过)
-    steps = []
-    if e is not None and ("AXPress" in e["actions"] or "AXPick" in e["actions"]):
+    steps, pre_tried = [], []
+    can_press = e is not None and ("AXPress" in e["actions"] or "AXPick" in e["actions"])
+    if can_press and e.get("role") in PIXEL_PRESS_ROLES and not _is_canvas(app):
+        key = (app, tuple(round(v) for v in (e.get("frame") or (x, y))))
+        if time.time() - _press_no_change.get(key, 0) > PRESS_RETRY_S:
+            r0 = _ladder(app, [("辅助功能按下", lambda: _press_seen(app, e))], expect_factory=_fine_expect(app, (rx, ry)))
+            r0["xy"] = (round(x), round(y))
+            if r0["outcome"] == "ineffective":
+                _press_no_change[key] = time.time()
+                r0.update(outcome="unverified", note=PRESS_NO_CHANGE)
+                return r0
+            if r0["outcome"] != "failed":
+                return r0
+            pre_tried = r0["tried"]           # 按不了(控件没了 / 不支持)→ 照老路按位置点
+        can_press = False                     # 刚按过、AI 看了说没生效 → 这次不再按控件,换后台点击 / 借鼠标
+    if can_press:
         steps.append(("辅助功能按下", lambda: _press_seen(app, e)))
     steps.append(("后台点击", lambda: _shown(app, "click", rx, ry, lambda x, y: bg.tap(app, x, y))))
     if _is_canvas(app) and isinstance(target, str) and not target.isdigit():
@@ -1225,6 +1323,8 @@ def tap(app, target, real=True, allow=None):
     factory = _fine_expect(app, (rx, ry))     # 镜像、模拟器读不到控件,光标、高亮这种小变化靠看点击处附近
     r = _ladder(app, steps, expect_factory=factory)
     r["xy"] = (round(x), round(y))
+    if pre_tried:
+        r["tried"] = pre_tried + r["tried"]
     # 后台那几条路全部「出错」(私有接口失效时 bgclick 抛错)原来直接报 failed,不借真鼠标,
     # 跟「私有接口只当加速层、失效有退路」不符 → 出错跟没生效一样往下走。
     #   「那个位置没有窗口」(按编号点了滚出窗口的控件)、隐身浏览器被叫出来,不算接口失效:借真鼠标也点不到,只会白抢一次前台。
@@ -1264,6 +1364,7 @@ def tap(app, target, real=True, allow=None):
     return r
 
 
+@_with_hit
 def long_press(app, target, ms=1000):
     from seeu import web
     app = web.canon(app)
@@ -1274,7 +1375,11 @@ def long_press(app, target, ms=1000):
         # 按编号长按浏览器原来是 KeyError(网页清单里没有屏幕位置),现在也是这句。
         return dict(outcome="refused", route=None, tried=[], png=None,
                     reason="浏览器里不能长按(长按是按屏幕位置点,会绕开网页的允许名单);点网页上的东西用 tap,按编号")
+    ref = _host_refused(app)
+    if ref:
+        return ref
     x, y, e = _resolve(app, target)
+    _HIT.v = _hit_label(e, app, target)
     if e is None:                 # 同 tap
         bad = _stale_pixel(app)
         if bad:
@@ -2044,11 +2149,13 @@ def _front_type(app, ig, text, enter):
     wcheck = _focus_window_check(app)
     if wcheck:
         wcheck(pid)
+    _watch(app, "keyboard")           # 借真键盘 → 浮标变橙、弹开「正在用你的键盘 / 别碰键盘」(照 Windows)
     try:
         bk.type_unicode(pid, text)
         if enter:
             time.sleep(0.3)
             bk.press(pid, "return")
+        _watch(app, "keyboard")       # 打得久时续一下,打完再留 BORROW_HOLD_S 秒
     finally:
         ig.note_injected()
 
@@ -2612,6 +2719,8 @@ def _report(r):
         print(f"failed  {r}")
         return 1
     print(f"{r['outcome']}  路线={r.get('route')}  试过={r.get('tried')}  截图={r.get('png')}")
+    if r.get("hit"):                    # 按到的是哪个控件
+        print(f"按到  {r['hit']}")
     if r.get("reason"):                 # Skill:被拦/做不到时把「卡在…原因…怎么办」也打出来,给 AI 照着转述
         print(f"原因  {r['reason']}")
     return 0 if r["outcome"] == "delivered" else (3 if r["outcome"] == "refused" else 1)

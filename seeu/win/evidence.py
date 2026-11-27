@@ -157,18 +157,19 @@ def web_state():
     from seeu.win import web
     out = []
     for b in ("chrome", "edge"):
-        if not web._exe(b):
+        if not (web._exe(b) or (b == "chrome" and web._via_edge(b))):   # 只有 Edge 时 Chrome 那份由 Edge 顶着
             continue
         d = web._load(b)
         if not d:
             out.append(_t("- 专用浏览器(") + b + _t("):没开"))
             continue
+        label = "chrome → Edge" if (d.get("exe") and b == "chrome" and d["exe"].lower() == "msedge.exe") else b
         shown = _t("露着(登录用)" if d.get("visible") else "无界面")
         try:
-            n = len(web.tabs(b))
+            n = len(web.tabs(b))            # 复查第二轮:查标签页用原名(状态文件按它找),显示才用 label
         except Exception:
             n = "?"
-        out.append(_t("- 专用浏览器(") + b + _t("):开着,") + shown + _t(",端口 ") + str(d.get("port")) + _t(",标签页 ") + str(n))
+        out.append(_t("- 专用浏览器(") + label + _t("):开着,") + shown + _t(",端口 ") + str(d.get("port")) + _t(",标签页 ") + str(n))
     return out or [_t("- 没装 Chrome / Edge")]
 
 

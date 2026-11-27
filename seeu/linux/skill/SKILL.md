@@ -10,7 +10,7 @@ description: Use SeeU to see and operate apps on the user's Linux desktop (GNOME
 > Preview: GNOME 45 or later only (Ubuntu 24.04+, Fedora 39+, Debian 13+; Wayland recommended). KDE and other desktops don't work.
 
 ## 0. Tools or command line
-- **If you have tools starting with `seeu_` (MCP is connected), use only the tools**: `seeu_check`, `seeu_windows`, `seeu_see`,
+- **If you have SeeU tools (MCP is connected; their names contain `seeu_`, and some clients add a prefix, e.g. `mcp__seeu__seeu_see`), use only the tools**: `seeu_check`, `seeu_windows`, `seeu_see`,
   `seeu_tap`, `seeu_type`, `seeu_press`, `seeu_scroll`, `seeu_long_press`, `seeu_menu`, `seeu_probe`, and for web pages `seeu_web_open`, `seeu_web_tabs`, `seeu_web_read`,
   `seeu_allow_site`, `seeu_manage`. Give every action a one-sentence `why` (it shows on SeeU's status badge).
 - **Only without those tools** use the command line (run from the folder that contains the `seeu` folder):

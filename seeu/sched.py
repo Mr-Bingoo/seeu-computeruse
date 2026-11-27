@@ -50,15 +50,20 @@ def _state_path():
 
 CLIENT_NAMES = (("claude", "Claude"), ("codex", "Codex"), ("chatgpt", "Codex"), ("cursor", "Cursor"), ("trae", "Trae"),
                 ("copilot", "VSCode"), ("visual studio", "VSCode"), ("vscode", "VSCode"), ("workbuddy", "Buddy"),
-                ("qwen", "千问"), ("千问", "千问"), ("doubao", "豆包"), ("豆包", "豆包"), ("chatbox", "Chatbox"))
+                ("qwen", "千问"), ("千问", "千问"), ("doubao", "豆包"), ("豆包", "豆包"), ("chatbox", "Chatbox"),
+                ("deepseek", "DeepSeek"),
+                ("dshmcp", "DeepSeek"),     # DeepSeek Harness 报 dsh-mcp-client,原来显示成 dshmcp(原来只比 dsh,cmd-shell 也会被认成 DeepSeek)
+                ("kimi", "Kimi"), ("zcode", "ZCode"), ("codebuddy", "Buddy"),   # 原来显示成 KimiCo、zcodec
+                ("localagent", "Claude"))   # Claude 桌面版(Code 页)报的名字以 local-agent 开头,原来显示成 locala(按截出来的样子推的,没见过原名)
 
 
 def pretty_client(raw):
     """客户端报的名字 → 短名(灵动岛一行最多 4 个汉字 / 8 个字母,留位置给编号)。认不出取前 6 个字母。"""
     r = str(raw or "").strip()
     low = r.lower()
+    flat = "".join(ch for ch in low if ch.isalnum())        # 去掉 - _ 空格再比一次(local-agent / local_agent 都认)
     for k, v in CLIENT_NAMES:
-        if k in low:
+        if k in low or k in flat:
             return v
     return "".join(ch for ch in r if ch.isalnum())[:6] or "AI"
 
